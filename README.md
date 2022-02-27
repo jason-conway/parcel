@@ -34,16 +34,6 @@ Note that, by default, the binaries will be installed at %HOMEPATH%\parcel
 
 Alternatively, download [prebuilt binaries](https://github.com/jason-conway/parcel/releases/) from Github. Please note, however, that these builds are cross-compiled for x86_64 Windows from an AArch64 MacBook Pro and only **minimally tested** using Wine through Rosetta 2 on an unsupported version of macOS.
 
-## Windows Considerations
-
-`parcel` uses standard [ANSI X3.64 (ISO 6429)](https://nvlpubs.nist.gov/nistpubs/Legacy/FIPS/fipspub86.pdf) escape sequences for in-band signaling. Despite having been standardized since 1979, they lacked proper support in Windows until the Windows 10 Anniversery Update in 2016. If you're running this version or newer, parcel *should* properly configure the console automatically. In the unlikely case that parcel is unable to configure the console, you can try adding the following registry key to [globally enable Virtual Terminal Processing](https://superuser.com/questions/413073/windows-console-with-ansi-colors-handling).
-
-```ps1
-REG ADD HKCU\CONSOLE /f /v VirtualTerminalLevel /t REG_DWORD /d 1
-```
-
-If an earlier version of Windows is being used or if parcel is being run from a different shell, the extra console configuration will fail silently and parcel will continue as normal.
-
 ## Usage
 
 Print usage information with `-h`:
@@ -71,6 +61,15 @@ Curve25519 is used to perform the [Elliptic-curve Diffie-Hellmans](https://en.wi
 
 > But why though?
 
+## Windows Considerations
+
+`parcel` uses standard [ANSI X3.64 (ISO 6429)](https://nvlpubs.nist.gov/nistpubs/Legacy/FIPS/fipspub86.pdf) escape sequences for in-band signaling. Despite having been standardized since 1979, they lacked proper support in Windows until the Windows 10 Anniversery Update in 2016. If you're running this version or newer, parcel *should* properly configure the console automatically. In the unlikely case that parcel is unable to configure the console, you can try adding the following registry key to [globally enable Virtual Terminal Processing](https://superuser.com/questions/413073/windows-console-with-ansi-colors-handling).
+
+```ps1
+REG ADD HKCU\CONSOLE /f /v VirtualTerminalLevel /t REG_DWORD /d 1
+```
+
+If an earlier version of Windows is being used or if parcel is being run from a different shell, the extra console configuration will fail silently and parcel will continue as normal.
 
 ## Encryption/decryption algorithm
 
