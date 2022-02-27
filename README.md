@@ -1,4 +1,4 @@
-[<img align="left" src="./resources/parcel_logo.png" width="300"/>](https://user-images.githubusercontent.com/52170171/155866095-645d9e43-57d8-4d77-b193-ba1618b75ce5.png)
+[<img align="left" src="https://user-images.githubusercontent.com/52170171/155866095-645d9e43-57d8-4d77-b193-ba1618b75ce5.png" width="300"/>](https://user-images.githubusercontent.com/52170171/155866095-645d9e43-57d8-4d77-b193-ba1618b75ce5.png)
 
 # `parcel`: An ultra-lightweight, cross-platform, end-to-end encrypted, terminal-based group messaging application
 
