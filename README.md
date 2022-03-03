@@ -61,12 +61,7 @@ Curve25519 is used to perform the [Elliptic-curve Diffie-Hellmans](https://en.wi
 
 > But why though?
 
-## Answers to Questions You Didn't Ask
-
 > Don't you know _t types are reserved?
-
-Reserved for meeee
-
 
 ## Windows Considerations
 
@@ -78,15 +73,11 @@ REG ADD HKCU\CONSOLE /f /v VirtualTerminalLevel /t REG_DWORD /d 1
 
 If an earlier version of Windows is being used or if parcel is being run from a different shell, the extra console configuration will fail silently and parcel will continue as normal.
 
-## Encryption/decryption algorithm
-
-parcel uses AES-128, SHA-256, and Curve25519
-
 ## Wire Format
 
 The wire consists of 4 sections: mac, iv, length, data
 
-`mac` contains the 16-byte MAC (Message Authentication Code) of the IV, length, and data sections. 
+`mac` contains the 16-byte MAC of the IV, length, and data sections. 
 
 `iv` contains the 16-byte Initialization Vector. required for ciper block chaining. Since `data` is encrypted in CBC mode, the IV only needs to be random- not secret, so it is sent as plaintext.
 
