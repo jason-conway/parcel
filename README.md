@@ -61,6 +61,13 @@ Curve25519 is used to perform the [Elliptic-curve Diffie-Hellmans](https://en.wi
 
 > But why though?
 
+## Answers to Questions You Didn't Ask
+
+> Don't you know _t types are reserved?
+
+Reserved for meeee
+
+
 ## Windows Considerations
 
 `parcel` uses standard [ANSI X3.64 (ISO 6429)](https://nvlpubs.nist.gov/nistpubs/Legacy/FIPS/fipspub86.pdf) escape sequences for in-band signaling. Despite having been standardized since 1979, they lacked proper support in Windows until the Windows 10 Anniversery Update in 2016. If you're running this version or newer, parcel *should* properly configure the console automatically. In the unlikely case that parcel is unable to configure the console, you can try adding the following registry key to [globally enable Virtual Terminal Processing](https://superuser.com/questions/413073/windows-console-with-ansi-colors-handling).
