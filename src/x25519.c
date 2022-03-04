@@ -18,7 +18,7 @@
 
 #include "x25519.h"
 
- // Galois field working type
+// Galois field working type
 typedef union field_t {
 	int64_t q[16];
 } field_t;
@@ -168,7 +168,7 @@ void x25519(uint8_t *public, const uint8_t *secret, const uint8_t *basepoint)
 
 	// Infamous Montgomery ladder
 	for (ssize_t i = 0xfe; i >= 0; i--) {
-		const uint8_t bit = (private_key[i >> 0x03] >> (i & 0x07)) & 0x01; // Clamp 
+		const uint8_t bit = (private_key[i >> 0x03] >> (i & 0x07)) & 0x01; // Clamp
 
 		// Swap the values in [0] with [1] and [2] with [3] when bit == 1
 		swap(&inputs[0], &inputs[1], bit);

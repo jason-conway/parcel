@@ -50,6 +50,20 @@ static void compute_shared(uint8_t *shared_key, const uint8_t *secret_key, const
 	sha256_digest(shared_secret, shared_key);
 }
 
+
+int master_key_exchange(const sock_t socket, uint8_t *key, uint8_t *fingerprint)
+{
+
+}
+
+int slave_key_exchange(const sock_t socket, uint8_t *key, uint8_t *fingerprint)
+{
+	uint8_t secret_key[KEY_LEN];
+	uint8_t public_key[KEY_LEN];
+	generate_secret(secret_key);
+	compute_public(secret_key, public_key, fingerprint);
+}
+
 int client_key_exchange(const sock_t socket, uint8_t *key, uint8_t *fingerprint)
 {
 	// Diffie-Hellman keys

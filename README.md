@@ -4,11 +4,11 @@
 
 ## Supported Platforms
 
-Linux, BSD, Darwin/macOS, Windows
+Linux, BSD, Darwin/macOS, Windows, and iOS (*kind of*)
 
 ## Installation
 
-### Linux, BSD, Darwin/macOS 
+### Linux, BSD, Darwin/macOS
 
 After cloning the repository, simply
 
@@ -24,9 +24,13 @@ Optionally, `PREFIX` can be set in order to change the install location.
 $ make PREFIX=~/.parcel install
 ```
 
+#### iOS
+
+The parcel client works without modification on iOS devices using [ish](https://github.com/ish-app/ish). `parceld` does not work as of this version.
+
 ### Windows
 
-The simplest way to build parcel on Windows is using [w64devkit](https://github.com/skeeto/w64devkit). The pre-built `mini` release variant is just over 50 MB and contains everything needed to build from source following the same steps shown above.
+The simplest way to build parcel on Windows is using [w64devkit](https://github.com/skeeto/w64devkit). The [pre-built *mini* release](https://github.com/skeeto/w64devkit/releases/) variant is just over 50 MB and contains everything needed to build from source following the same steps shown above.
 
 Note that, by default, the binaries will be installed at %HOMEPATH%\parcel
 
@@ -60,8 +64,6 @@ Curve25519 is used to perform the [Elliptic-curve Diffie-Hellmans](https://en.wi
 ## Frequently Asked Questions
 
 > But why though?
-
-> Don't you know _t types are reserved?
 
 ## Windows Considerations
 
