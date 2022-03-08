@@ -18,3 +18,6 @@
 void fprint(const char *str, const uint8_t *fingerprint);
 int client_key_exchange(const sock_t socket, uint8_t *key, uint8_t *fingerprint);
 int server_key_exchange(const sock_t socket, const uint8_t *server_key);
+
+int two_party_client(const sock_t socket, uint8_t *key, uint8_t *fingerprint);
+int two_party_server(const sock_t socket, const uint8_t *session_key);

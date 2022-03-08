@@ -11,20 +11,6 @@
 
 #include "key-exchange.h"
 
-// fprint (finger-print) - Print the fingerprint
-void fprint(const char *str, const uint8_t *fingerprint)
-{
-	printf("\033[33m%s", str); // In yellow :D
-	for (size_t i = 0; i < 16; i += 4) {
-		uint64_t chunk = (((uint64_t)fingerprint[i + 0] << 0x18) |
-						  ((uint64_t)fingerprint[i + 1] << 0x10) |
-						  ((uint64_t)fingerprint[i + 2] << 0x08) |
-						  ((uint64_t)fingerprint[i + 3] << 0x00));
-
-		printf("%s%" PRIx64, i ? "-" : "", chunk);
-	}
-	printf("\033[0m\n");
-}
 
 static void generate_secret(uint8_t *dest)
 {
@@ -47,24 +33,18 @@ static void compute_shared(uint8_t *shared_key, const uint8_t *secret_key, const
 {
 	uint8_t shared_secret[KEY_LEN] = { 0 };
 	x25519(shared_secret, secret_key, public_key);
-	sha256_digest(shared_secret, shared_key);
 }
 
 
-int master_key_exchange(const sock_t socket, uint8_t *key, uint8_t *fingerprint)
-{
-
-}
-
-int slave_key_exchange(const sock_t socket, uint8_t *key, uint8_t *fingerprint)
-{
-	uint8_t secret_key[KEY_LEN];
-	uint8_t public_key[KEY_LEN];
-	generate_secret(secret_key);
-	compute_public(secret_key, public_key, fingerprint);
-}
-
-int client_key_exchange(const sock_t socket, uint8_t *key, uint8_t *fingerprint)
+/**
+ * @brief Client-side DHKE with server
+ * 
+ * @param socket 
+ * @param key 
+ * @param fingerprint 
+ * @return int 
+ */
+int two_party_client(const sock_t socket, uint8_t *key, uint8_t *fingerprint)
 {
 	// Diffie-Hellman keys
 	uint8_t secret_key[KEY_LEN];
@@ -101,12 +81,13 @@ int client_key_exchange(const sock_t socket, uint8_t *key, uint8_t *fingerprint)
 		return -1;
 	}
 
-	memcpy(key, wire->data, KEY_LEN);
+	sha256_digest(wire->data, key);
+	// memcpy(key, wire->data, KEY_LEN);
 	free(wire);
 	return 0;
 }
 
-int server_key_exchange(const sock_t socket, const uint8_t *session_key)
+int two_party_server(const sock_t socket, const uint8_t *session_key)
 {
 	uint8_t shared_secret[KEY_LEN];
 	uint8_t server_public_key[KEY_LEN];
@@ -138,4 +119,111 @@ int server_key_exchange(const sock_t socket, const uint8_t *session_key)
 
 	free(wire);
 	return 0;
+}
+
+// fprint (finger-print) - Print the fingerprint
+void fprint(const char *str, const uint8_t *fingerprint)
+{
+	printf("\033[33m%s", str); // In yellow :D
+	for (size_t i = 0; i < 16; i += 4) {
+		uint64_t chunk = (((uint64_t)fingerprint[i + 0] << 0x18) |
+						  ((uint64_t)fingerprint[i + 1] << 0x10) |
+						  ((uint64_t)fingerprint[i + 2] << 0x08) |
+						  ((uint64_t)fingerprint[i + 3] << 0x00));
+
+		printf("%s%" PRIx64, i ? "-" : "", chunk);
+	}
+	printf("\033[0m\n");
+}
+
+int key_exchange_router(fd_set *connections, sock_t server_socket, size_t connection_count, uint8_t *key)
+{
+	// "Ratchet" hash forward once
+	sha256_self_digest(key);
+
+	uint8_t *intermediate_values = malloc(32 * connection_count);
+	if (!intermediate_values) {
+		return -1;
+	}
+	memset(intermediate_values, 0, sizeof(*intermediate_values));
+	
+	for (size_t i = 0; i < connection_count; i++) {
+		sock_t fd;
+		if ((fd = xfd_inset(&connections, i)) != server_socket) {
+			if (xsend(fd, key, KEY_LEN, 0) < 0) {
+				fatal("xsend() ctrl key");
+			}
+		}
+	}
+
+	for (size_t i = 0; i < connection_count; i++) {
+		for (size_t j = 0; j < connection_count; j++) {
+			sock_t fd;
+			if ((fd = xfd_inset(&connections, j)) != server_socket) {
+				if (xrecv(fd, &intermediate_values[32 * j], 32, 0) != KEY_LEN) {
+					fatal("xrecv() ctrl key");
+				}
+			}
+		}
+		for (size_t j = 0; j < connection_count; j++) {
+			sock_t right_node = xfd_inset(&connections, (j + 1) % connection_count);
+			if (right_node != server_socket) {
+				if (xsend(right_node, &intermediate_values[32 * j], 32, 0) < 0) {
+					fatal("xsend() ctrl key");
+				}
+			}
+		}
+	}
+
+	sha256_self_digest(key);
+	for (size_t i = 0; i < connection_count; i++) {
+		sock_t fd;
+		if ((fd = xfd_inset(&connections, i)) != server_socket) {
+			if (xsend(fd, key, KEY_LEN, 0) < 0) {
+				fatal("xsend() ctrl key");
+			}
+		}
+	}
+}
+
+
+// An N-Party Diffie-Hellman Key Exchange
+int node_key_exchange(const sock_t socket, uint8_t *key, uint8_t *fingerprint)
+{
+	uint8_t secret_key[KEY_LEN];
+	generate_secret(secret_key);
+	
+	uint8_t public_key[KEY_LEN];
+	compute_public(secret_key, public_key, fingerprint);
+
+	// Send our public key to the client on our right
+	if (xsend(socket, public_key, KEY_LEN, 0) != KEY_LEN) {
+		return -1;
+	}
+
+	// Receive the public key from the client to our left
+	uint8_t left_public_key[KEY_LEN];
+	if (xrecv(socket, left_public_key, KEY_LEN, 0) != KEY_LEN) {
+		return -1;
+	}
+
+	// Calculate shared secret with the client on our left
+	uint8_t left_shared_key[KEY_LEN];
+	compute_shared(left_shared_key, secret_key, left_public_key);
+	
+	// Send previously calculated shared secret to the client on our right
+	if (xsend(socket, public_key, KEY_LEN, 0) != KEY_LEN) {
+		return -1;
+	}
+
+	// Recieve a shared-secret from the client on our left
+	uint8_t intermediate_shared_key[KEY_LEN];
+	if (xrecv(socket, intermediate_shared_key, KEY_LEN, 0) != KEY_LEN) {
+		return -1;
+	}
+
+	// Compute the session key using our secret key
+	uint8_t session_key[KEY_LEN];
+	compute_shared(session_key, secret_key, intermediate_shared_key);
+	sha256_digest(session_key, key);
 }

@@ -53,3 +53,10 @@ void sha256_finish(sha256_t *ctx, uint8_t *hash);
  * @param[out] hash destination
  */
 void sha256_digest(const uint8_t *key, uint8_t *hash);
+
+/**
+ * @brief In-place variant of sha256_digest()
+ * 
+ * @param[inout] digest 32-byte key to hash, contents are overwritten
+ */
+void sha256_self_digest(uint8_t *digest);
