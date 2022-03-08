@@ -16,8 +16,7 @@
 #include <inttypes.h>
 
 void fprint(const char *str, const uint8_t *fingerprint);
-int client_key_exchange(const sock_t socket, uint8_t *key, uint8_t *fingerprint);
-int server_key_exchange(const sock_t socket, const uint8_t *server_key);
-
 int two_party_client(const sock_t socket, uint8_t *key, uint8_t *fingerprint);
 int two_party_server(const sock_t socket, const uint8_t *session_key);
+int node_key_exchange(const sock_t socket, uint8_t *ctrl_key, uint8_t *session_key, uint8_t *fingerprint);
+int key_exchange_router(fd_set *connections, sock_t server_socket, size_t connection_count, uint8_t *key);

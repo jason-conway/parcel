@@ -11,7 +11,6 @@
 
 #include "key-exchange.h"
 
-
 static void generate_secret(uint8_t *dest)
 {
 	xgetrandom(dest, KEY_LEN);
@@ -31,18 +30,17 @@ static void compute_public(const uint8_t *secret_key, uint8_t *public_key, uint8
 
 static void compute_shared(uint8_t *shared_key, const uint8_t *secret_key, const uint8_t *public_key)
 {
-	uint8_t shared_secret[KEY_LEN] = { 0 };
-	x25519(shared_secret, secret_key, public_key);
+	x25519(shared_key, secret_key, public_key);
 }
 
 
 /**
  * @brief Client-side DHKE with server
- * 
- * @param socket 
- * @param key 
- * @param fingerprint 
- * @return int 
+ *
+ * @param socket
+ * @param key
+ * @param fingerprint
+ * @return int
  */
 int two_party_client(const sock_t socket, uint8_t *key, uint8_t *fingerprint)
 {
@@ -136,63 +134,64 @@ void fprint(const char *str, const uint8_t *fingerprint)
 	printf("\033[0m\n");
 }
 
+static int send_ctrl_key(fd_set *connections, sock_t server, size_t count, uint8_t *key)
+{
+	for (size_t i = 0; i < count; i++) {
+		sock_t fd; 
+		if ((fd = xfd_inset(connections, i))) {
+			if (fd != server) { 
+				if (xsend(fd, key, KEY_LEN, 0) < 0) {
+					return -1;
+				}
+			}
+		}
+	}
+	return 0;
+}
+
 int key_exchange_router(fd_set *connections, sock_t server_socket, size_t connection_count, uint8_t *key)
 {
-	// "Ratchet" hash forward once
-	sha256_self_digest(key);
-
 	uint8_t *intermediate_values = malloc(32 * connection_count);
 	if (!intermediate_values) {
 		return -1;
 	}
 	memset(intermediate_values, 0, sizeof(*intermediate_values));
 	
-	for (size_t i = 0; i < connection_count; i++) {
-		sock_t fd;
-		if ((fd = xfd_inset(&connections, i)) != server_socket) {
-			if (xsend(fd, key, KEY_LEN, 0) < 0) {
-				fatal("xsend() ctrl key");
-			}
-		}
-	}
+	// "Ratchet" hash forward once
+	sha256_self_digest(key);
+	send_ctrl_key(connections, server_socket, connection_count, key);
 
-	for (size_t i = 0; i < connection_count; i++) {
+	for (size_t i = 0; i < connection_count - 1; i++) {
 		for (size_t j = 0; j < connection_count; j++) {
-			sock_t fd;
-			if ((fd = xfd_inset(&connections, j)) != server_socket) {
-				if (xrecv(fd, &intermediate_values[32 * j], 32, 0) != KEY_LEN) {
-					fatal("xrecv() ctrl key");
+			sock_t fd = xfd_inset(connections, (j + 1) % connection_count);
+			if (fd != server_socket) {
+				if (xrecv(fd, &intermediate_values[32 * j], 32, 0) < 0) {
+					return -1;
 				}
 			}
 		}
 		for (size_t j = 0; j < connection_count; j++) {
-			sock_t right_node = xfd_inset(&connections, (j + 1) % connection_count);
-			if (right_node != server_socket) {
-				if (xsend(right_node, &intermediate_values[32 * j], 32, 0) < 0) {
-					fatal("xsend() ctrl key");
+			sock_t fd = xfd_inset(connections, (j + 1) % connection_count);
+			if (fd != server_socket) {
+				if (xsend(fd, &intermediate_values[32 * j], 32, 0) < 0) {
+					return -1;
 				}
 			}
 		}
 	}
 
 	sha256_self_digest(key);
-	for (size_t i = 0; i < connection_count; i++) {
-		sock_t fd;
-		if ((fd = xfd_inset(&connections, i)) != server_socket) {
-			if (xsend(fd, key, KEY_LEN, 0) < 0) {
-				fatal("xsend() ctrl key");
-			}
-		}
-	}
+	send_ctrl_key(connections, server_socket, connection_count, key);
+	return 0;
 }
 
 
 // An N-Party Diffie-Hellman Key Exchange
-int node_key_exchange(const sock_t socket, uint8_t *key, uint8_t *fingerprint)
+int node_key_exchange(const sock_t socket, uint8_t *ctrl_key, uint8_t *session_key, uint8_t *fingerprint)
 {
 	uint8_t secret_key[KEY_LEN];
 	generate_secret(secret_key);
-	
+
 	uint8_t public_key[KEY_LEN];
 	compute_public(secret_key, public_key, fingerprint);
 
@@ -201,29 +200,27 @@ int node_key_exchange(const sock_t socket, uint8_t *key, uint8_t *fingerprint)
 		return -1;
 	}
 
-	// Receive the public key from the client to our left
-	uint8_t left_public_key[KEY_LEN];
-	if (xrecv(socket, left_public_key, KEY_LEN, 0) != KEY_LEN) {
-		return -1;
-	}
+	uint8_t intermediate[KEY_LEN];
+	while (1) {
+		if (xrecv(socket, intermediate, KEY_LEN, 0) != KEY_LEN) {
+			return -1;
+		}
+		// CTRL message received
+		if (memcmp(intermediate, ctrl_key, 32)) {
+			break;
+		}
+		
+		uint8_t intermediate_shared[KEY_LEN];
+		compute_shared(intermediate_shared, secret_key, intermediate);
 
-	// Calculate shared secret with the client on our left
-	uint8_t left_shared_key[KEY_LEN];
-	compute_shared(left_shared_key, secret_key, left_public_key);
+		if (xsend(socket, intermediate_shared, KEY_LEN, 0) != KEY_LEN) {
+			return -1;
+		}
+	}
 	
-	// Send previously calculated shared secret to the client on our right
-	if (xsend(socket, public_key, KEY_LEN, 0) != KEY_LEN) {
-		return -1;
-	}
-
-	// Recieve a shared-secret from the client on our left
-	uint8_t intermediate_shared_key[KEY_LEN];
-	if (xrecv(socket, intermediate_shared_key, KEY_LEN, 0) != KEY_LEN) {
-		return -1;
-	}
-
-	// Compute the session key using our secret key
-	uint8_t session_key[KEY_LEN];
-	compute_shared(session_key, secret_key, intermediate_shared_key);
-	sha256_digest(session_key, key);
+	uint8_t shared_key[KEY_LEN];
+	compute_shared(shared_key, secret_key, intermediate);
+	sha256_digest(session_key, shared_key);
+	sha256_self_digest(ctrl_key);
+	return 0;
 }

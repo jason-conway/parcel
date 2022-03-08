@@ -37,7 +37,7 @@ bool add_client(server_t *srv)
 		srv->connection_count = xfd_count(new_client, srv->connection_count);
 	}
 
-	if (server_key_exchange(new_client, srv->server_key)) {
+	if (two_party_server(new_client, srv->server_key)) {
 		return false;
 	}
 	return true;
@@ -130,6 +130,7 @@ static void recv_client(server_t *srv, sock_t client_socket)
 		}
 		FD_CLR(client_socket, &srv->connections);
 		(void)xclose(client_socket);
+		key_exchange_router(&srv->connections, srv->socket, srv->connection_count, srv->server_key);
 	}
 	else {
 		transfer_message(srv, client_socket, &msg);
@@ -156,6 +157,7 @@ int main_thread(void *ctx)
 				if (fd == server->socket) {
 					printf("> Attempting to add new connection...\n");
 					printf("> Connection %s\n", add_client(server) ? "successful" : "failed");
+					key_exchange_router(&server->connections, server->socket, server->connection_count, server->server_key);
 				}
 				else {
 					recv_client(server, fd);

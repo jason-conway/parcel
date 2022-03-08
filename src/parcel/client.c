@@ -123,8 +123,13 @@ static int recv_handler(client_t *ctx)
 	if (bytes_recv < 0) {
 		error(ctx->socket, "recv()");
 	}
+	if (bytes_recv == 32) {
+		if (!memcmp(wire, ctx->ctrl_key, 32)) {
+			return node_key_exchange(ctx->socket, ctx->ctrl_key, ctx->session_key, ctx->fingerprint);
+		}
+	}
 	
-	if (decrypt_wire(wire, ctx->key)) {
+	if (decrypt_wire(wire, ctx->session_key)) {
 		return -1;
 	}
 
@@ -144,7 +149,7 @@ void send_connection_status(client_t *ctx, bool leave)
 	if (snprintf(msg, sizeof(msg), template, leave ? 5 : 2, ctx->username, leave ? "left" : "joined") < 0) {
 		error(ctx->socket, "send()");
 	}
-	send_encrypted_message(ctx->socket, msg, strlen(msg) + 1, ctx->key);
+	send_encrypted_message(ctx->socket, msg, strlen(msg) + 1, ctx->session_key);
 
 	if (leave) {
 		if (xclose(ctx->socket)) {
@@ -156,7 +161,7 @@ void send_connection_status(client_t *ctx, bool leave)
 void connect_server(client_t *client, const char *ip, const char *port)
 {
 	if (xstartup()) {
-		printf("damnn\n");
+		fatal("xstartup()");
 	}
 	
 	struct addrinfo hints = {
@@ -173,7 +178,6 @@ void connect_server(client_t *client, const char *ip, const char *port)
 		if (xsocket(&client->socket, node->ai_family, node->ai_socktype, node->ai_protocol) < 0) {
 			continue;
 		}
-
 		if (connect(client->socket, node->ai_addr, node->ai_addrlen)) {
 			(void)xclose(client->socket);
 			continue;
@@ -187,12 +191,12 @@ void connect_server(client_t *client, const char *ip, const char *port)
 
 	freeaddrinfo(srv_addr);
 
-	if (client_key_exchange(client->socket, client->key, client->fingerprint)) {
+	if (two_party_client(client->socket, client->ctrl_key, client->fingerprint)) {
 		error(client->socket, "key_exchange()");
 	}
 
-	send_connection_status(client, false);
 	printf("\033[32mConnected to server\033[0m\n");
+	send_connection_status(client, false);
 }
 
 void *recv_thread(void *ctx)
@@ -214,8 +218,8 @@ void *recv_thread(void *ctx)
 		memcpy(client_ctx, &client, sizeof(client_t));
 		pthread_mutex_unlock(&client_ctx->mutex_lock);
 
-		struct timespec ts = { .tv_sec = 0, .tv_nsec = 1000000 };
-		xsleep(&ts);
+		struct timespec ts = { .tv_nsec = 1000000 };
+		(void)nanosleep(&ts, NULL);
 	}
 }
 
@@ -257,7 +261,7 @@ int send_thread(void *ctx)
 				goto NO_SEND;
 		}
 
-		send_encrypted_message(client.socket, plaintext, length, client.key);
+		send_encrypted_message(client.socket, plaintext, length, client.session_key);
 	NO_SEND:
 		free(plaintext);
 
@@ -266,7 +270,7 @@ int send_thread(void *ctx)
 		pthread_mutex_unlock(&client_ctx->mutex_lock);
 
 		struct timespec ts = { .tv_sec = 0, .tv_nsec = 1000000 };
-		xsleep(&ts);
+		(void)nanosleep(&ts, NULL);
 	}
 
 	send_connection_status(&client, true);

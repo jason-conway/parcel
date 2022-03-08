@@ -46,7 +46,8 @@ typedef struct client_t
 	sock_t socket;
 	char username[USERNAME_MAX_LENGTH];
 	uint8_t fingerprint[FINGERPRINT_LENGTH];
-	uint8_t key[KEY_LENGTH];
+	uint8_t session_key[KEY_LENGTH];
+	uint8_t ctrl_key[KEY_LENGTH];
 	pthread_mutex_t mutex_lock;
 } client_t;
 
