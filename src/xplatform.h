@@ -62,7 +62,6 @@ typedef struct xgetopt_t
 } xgetopt_t;
 
 void xgetrandom(void *dest, size_t len);
-void xsleep(struct timespec *ts);
 
 int xsocket(sock_t *xsocket, int domain, int type, int protocol);
 int xaccept(sock_t *connection_socket, sock_t listening_socket, struct sockaddr *address, socklen_t *len);

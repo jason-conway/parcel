@@ -250,15 +250,6 @@ void xgetrandom(void *dest, size_t len)
 #endif
 }
 
-void xsleep(struct timespec *ts)
-{
-#if __unix__ || __APPLE__
-	nanosleep(ts, NULL);
-#elif _WIN32
-	Sleep(ts->tv_nsec / 1000000);
-#endif
-}
-
 int xgetopt(xgetopt_t *x, int argc, char **argv, const char *optstr)
 {
 	char *arg = argv[!x->index ? (x->index += !!argc) : x->index];
