@@ -11,6 +11,21 @@
 
 #include "key-exchange.h"
 
+// fprint (finger-print) - Print the fingerprint
+void fprint(const char *str, const uint8_t *fingerprint)
+{
+	printf("\033[33m%s", str); // In yellow :D
+	for (size_t i = 0; i < 16; i += 4) {
+		uint64_t chunk = (((uint64_t)fingerprint[i + 0] << 0x18) |
+						  ((uint64_t)fingerprint[i + 1] << 0x10) |
+						  ((uint64_t)fingerprint[i + 2] << 0x08) |
+						  ((uint64_t)fingerprint[i + 3] << 0x00));
+
+		printf("%s%" PRIx64, i ? "-" : "", chunk);
+	}
+	printf("\033[0m\n");
+}
+
 static void generate_secret(uint8_t *dest)
 {
 	xgetrandom(dest, KEY_LEN);
@@ -119,24 +134,9 @@ int two_party_server(const sock_t socket, const uint8_t *session_key)
 	return 0;
 }
 
-// fprint (finger-print) - Print the fingerprint
-void fprint(const char *str, const uint8_t *fingerprint)
+static int send_ctrl_key(sock_t server, fd_set *connections, size_t count, uint8_t *key)
 {
-	printf("\033[33m%s", str); // In yellow :D
-	for (size_t i = 0; i < 16; i += 4) {
-		uint64_t chunk = (((uint64_t)fingerprint[i + 0] << 0x18) |
-						  ((uint64_t)fingerprint[i + 1] << 0x10) |
-						  ((uint64_t)fingerprint[i + 2] << 0x08) |
-						  ((uint64_t)fingerprint[i + 3] << 0x00));
-
-		printf("%s%" PRIx64, i ? "-" : "", chunk);
-	}
-	printf("\033[0m\n");
-}
-
-static int send_ctrl_key(fd_set *connections, sock_t server, size_t count, uint8_t *key)
-{
-	for (size_t i = 0; i < count; i++) {
+	for (size_t i = 0; i < count + 1; i++) {
 		sock_t fd; 
 		if ((fd = xfd_inset(connections, i))) {
 			if (fd != server) { 
@@ -149,9 +149,55 @@ static int send_ctrl_key(fd_set *connections, sock_t server, size_t count, uint8
 	return 0;
 }
 
-int key_exchange_router(fd_set *connections, sock_t server_socket, size_t connection_count, uint8_t *key)
+static int from_left_node(sock_t server, fd_set *connections, size_t max_in_set, uint8_t *intermediate_values, size_t *active)
 {
-	uint8_t *intermediate_values = malloc(32 * connection_count);
+	fd_set read_fds;
+	FD_ZERO(&read_fds);
+
+	size_t recv_count = 0;
+	do {
+		read_fds = *connections;
+		if (select(max_in_set + 1, &read_fds, NULL, NULL, NULL) < 0) {
+			return -1;
+		}
+		for (size_t i = 0; i < max_in_set + 1; i++) {
+			sock_t fd;
+			if ((fd = xfd_isset(connections, &read_fds, i))) {
+				if (fd != server) {
+					if (xrecv(fd, &intermediate_values[32 * recv_count], 32, 0) <= 0) {
+						FD_CLR(fd, connections);
+						(void)xclose(fd);
+						(*active)--;
+					}
+					else {
+						recv_count++;
+					}
+
+				}
+			}
+		}
+	} while (recv_count < (*active));
+	return 0;
+}
+
+static int to_right_node(sock_t server, fd_set *connections, size_t max_in_set, uint8_t *intermediate_values)
+{
+	for (size_t i = 0; i < max_in_set; i++) {
+		sock_t fd; 
+		if ((fd = xfd_inset(connections, (i + 1) % max_in_set))) {
+			if (fd != server) { 
+				if (xsend(fd, &intermediate_values[32 * i], 32, 0) < 0) {
+					return -1;
+				}
+			}
+		}
+	}
+	return 0;
+}
+
+int key_exchange_router(sock_t server, fd_set *connections, size_t max_in_set, size_t *active, uint8_t *key)
+{
+	uint8_t *intermediate_values = malloc((*active) * 32);
 	if (!intermediate_values) {
 		return -1;
 	}
@@ -159,32 +205,25 @@ int key_exchange_router(fd_set *connections, sock_t server_socket, size_t connec
 	
 	// "Ratchet" hash forward once
 	sha256_self_digest(key);
-	send_ctrl_key(connections, server_socket, connection_count, key);
-
-	for (size_t i = 0; i < connection_count - 1; i++) {
-		for (size_t j = 0; j < connection_count; j++) {
-			sock_t fd = xfd_inset(connections, (j + 1) % connection_count);
-			if (fd != server_socket) {
-				if (xrecv(fd, &intermediate_values[32 * j], 32, 0) < 0) {
-					return -1;
-				}
-			}
-		}
-		for (size_t j = 0; j < connection_count; j++) {
-			sock_t fd = xfd_inset(connections, (j + 1) % connection_count);
-			if (fd != server_socket) {
-				if (xsend(fd, &intermediate_values[32 * j], 32, 0) < 0) {
-					return -1;
-				}
-			}
-		}
+	printf("Sending control key (start)\n");
+	if (send_ctrl_key(server, connections, max_in_set, key)) {
+		return -1;
 	}
-
 	sha256_self_digest(key);
-	send_ctrl_key(connections, server_socket, connection_count, key);
+	printf("Server-Side Key-Exchange\n");
+	printf("Active connections: %zu\n", *active);
+
+	for (size_t i = 0; i < (*active); i++) {
+		printf("Round: %zu\n", i);
+
+		from_left_node(server, connections, max_in_set, intermediate_values, active);
+		to_right_node(server, connections, max_in_set, intermediate_values);
+	}
+	
+	printf("Sending control key (end)\n");
+	send_ctrl_key(server, connections, max_in_set, key);
 	return 0;
 }
-
 
 // An N-Party Diffie-Hellman Key Exchange
 int node_key_exchange(const sock_t socket, uint8_t *ctrl_key, uint8_t *session_key, uint8_t *fingerprint)

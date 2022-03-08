@@ -34,18 +34,19 @@ bool add_client(server_t *srv)
 	}
 	else {
 		FD_SET(new_client, &srv->connections); // Add descriptor to set and update max
-		srv->connection_count = xfd_count(new_client, srv->connection_count);
+		srv->max_in_set = xfd_count(new_client, srv->max_in_set);
 	}
 
 	if (two_party_server(new_client, srv->server_key)) {
 		return false;
 	}
+	srv->alive_connections++;
 	return true;
 }
 
 static void transfer_message(server_t *srv, sock_t client_socket, msg_t *msg)
 {
-	for (size_t i = 0; i < srv->connection_count + 1; i++) {
+	for (size_t i = 0; i < srv->max_in_set + 1; i++) {
 		sock_t fd;
 		if ((fd = xfd_inset(&srv->connections, i))) {
 			if (fd != srv->socket && fd != client_socket) {
@@ -110,7 +111,7 @@ void configure_server(server_t *srv, const char *port)
 
 	FD_ZERO(&srv->connections);
 	FD_SET(srv->socket, &srv->connections);
-	srv->connection_count = xfd_init_count(srv->socket);
+	srv->max_in_set = xfd_init_count(srv->socket);
 
 	xgetrandom(srv->server_key, 32);
 	printf(">\033[32m parceld running...\033[0m\n");
@@ -130,7 +131,10 @@ static void recv_client(server_t *srv, sock_t client_socket)
 		}
 		FD_CLR(client_socket, &srv->connections);
 		(void)xclose(client_socket);
-		key_exchange_router(&srv->connections, srv->socket, srv->connection_count, srv->server_key);
+		
+		if (--srv->alive_connections) {
+			key_exchange_router(srv->socket, &srv->connections, srv->max_in_set, &srv->alive_connections, srv->server_key);
+		}
 	}
 	else {
 		transfer_message(srv, client_socket, &msg);
@@ -147,17 +151,22 @@ int main_thread(void *ctx)
 
 	while (1) {
 		read_fds = server->connections;
-		if (select(server->connection_count + 1, &read_fds, NULL, NULL, NULL) < 0) {
+		if (select(server->max_in_set + 1, &read_fds, NULL, NULL, NULL) < 0) {
 			fatal("select()");
 		}
 		
-		for (size_t i = 0; i < server->connection_count + 1; i++) {
+		for (size_t i = 0; i < server->max_in_set + 1; i++) {
 			sock_t fd;
 			if ((fd = xfd_isset(&server->connections, &read_fds, i))) {
 				if (fd == server->socket) {
 					printf("> Attempting to add new connection...\n");
-					printf("> Connection %s\n", add_client(server) ? "successful" : "failed");
-					key_exchange_router(&server->connections, server->socket, server->connection_count, server->server_key);
+					const bool client_added = add_client(server);
+					if (client_added && server->alive_connections > 1) {
+						if (key_exchange_router(server->socket, &server->connections, server->max_in_set, &server->alive_connections, server->server_key)) {
+							fatal("key_exchange_router()");
+						}
+					}
+					printf("> Connection %s\n", client_added ? "successful" : "failed");
 				}
 				else {
 					recv_client(server, fd);

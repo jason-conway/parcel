@@ -38,7 +38,8 @@ typedef struct server_t
 	sock_t socket;
 	uint8_t server_key[KEY_LENGTH];
 	fd_set connections;
-	size_t connection_count;
+	size_t max_in_set;
+	size_t alive_connections;
 } server_t;
 
 typedef struct msg_t
