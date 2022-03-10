@@ -134,94 +134,74 @@ int two_party_server(const sock_t socket, const uint8_t *session_key)
 	return 0;
 }
 
-static int send_ctrl_key(sock_t server, fd_set *connections, size_t count, uint8_t *key)
+static int send_ctrl_key(sock_t *nodes, size_t count, uint8_t *key)
 {
-	for (size_t i = 0; i < count + 1; i++) {
+	for (size_t i = 0; i < count; i++) {
+		if (xsend(nodes[i], key, KEY_LEN, 0) < 0) {
+			return -1;
+		}
+	}
+
+	return 0;
+}
+
+static int rotate_intermediates(sock_t *nodes, size_t count)
+{
+	for (size_t i = 0; i < count; i++) {
+		uint8_t intermediate_key[32];
+		printf("From %zu to %zu\n", i, (i + 1) % count);
+		if (xrecv(nodes[i], intermediate_key, 32, 0) <= 0) {
+			return -1;
+		}
+		if (xsend(nodes[(i + 1) % count], intermediate_key, 32, 0) < 0) {
+			return -1;
+		}
+	}
+	return 0;
+}
+
+static size_t node_count(fd_set *connections, size_t max_in_set)
+{
+	size_t count = 0;
+	for (size_t i = 0; i < max_in_set + 1; i++) {
+		if (FD_ISSET(i, connections)) {
+			count++;
+		}
+	}
+	return count - 1;
+}
+
+static sock_t *nodes_in_set(sock_t server, fd_set *connections, size_t max_in_set, size_t count)
+{
+	sock_t *nodes = malloc(sizeof(sock_t) * count);
+	if (!nodes) {
+		return NULL;
+	}
+	memset(nodes, 0, sizeof(sock_t) * count);
+	size_t node_index = 0;
+	for (size_t i = 0; i < max_in_set + 1; i++) {
 		sock_t fd;
 		if ((fd = xfd_inset(connections, i))) {
 			if (fd != server) {
-				if (xsend(fd, key, KEY_LEN, 0) < 0) {
-					return -1;
-				}
+				nodes[node_index++] = fd;
 			}
 		}
 	}
-	return 0;
+	return nodes;
 }
 
-static int rotate_intermediates(sock_t server, fd_set *connections, size_t max_in_set, size_t *active)
-{
-	fd_set read_fds;
-	FD_ZERO(&read_fds);
-	printf("Read in intermediates from nodes\n");
 
-	for (size_t i = 0; i < (*active); i++) {
-		read_fds = *connections;
-		if (select(max_in_set + 1, &read_fds, NULL, NULL, NULL) < 0) {
-			return -1;
-		}
-		sock_t nodes[2];
-		for (size_t j = 0; j < max_in_set + 1; j++) {
-			if ((nodes[0] = xfd_isset(connections, &read_fds, j))) {
-				if (nodes[0] != server) {
-					for (size_t k = j + 1; k < max_in_set + 1; k++) {
-						if ((nodes[1] = xfd_isset(connections, &read_fds, k % (max_in_set + 1)))) {
-							if (nodes[1] != server) {
-								printf("from %zu to %zu\n", j, k);
-								goto rotate_node;
-							}
-						}
-					}
-				}
-			}
-		}
-	rotate_node:
-		{
-			uint8_t intermediate_key[32];
-			if (xrecv(nodes[0], intermediate_key, 32, 0) <= 0) {
-				goto close_node;
-			}
-			if (xsend(nodes[1], intermediate_key, 32, 0) < 0) {
-				if (0) {
-				close_node:
-					FD_CLR(nodes[0], connections);
-					(void)xclose(nodes[0]);
-					(*active)--;
-				}
-				FD_CLR(nodes[1], connections);
-				(void)xclose(nodes[1]);
-				(*active)--;
-				return -1;
-			}
-		}
+int key_exchange_router(sock_t server, fd_set *connections, size_t max_in_set, uint8_t *key)
+{
+	size_t count = node_count(connections, max_in_set);
+	if (count < 2) {
+		return 0;
+	}
+	sock_t *nodes = nodes_in_set(server, connections, max_in_set, count);
+	if (!nodes) {
+		return -1;
 	}
 
-	return 0;
-}
-
-// static int to_right_node(sock_t server, fd_set *connections, size_t max_in_set, uint8_t *intermediate_values)
-// {
-// 	printf("Send out intermediates to nodes to the right\n");
-// 	size_t send_count = 0;
-// 	for (size_t i = 0; i < max_in_set + 1; i++) {
-// 		sock_t fd; 
-// 		if ((fd = xfd_inset(connections, (i + 1) % max_in_set))) {
-// 			if (fd != server) { 
-// 				printf("&intermediate_values[%zu]\n", 32*i);
-// 				if (xsend(fd, &intermediate_values[32 * send_count], 32, 0) < 0) {
-// 					return -1;
-// 				}
-// 				else {
-// 					send_count++;
-// 				}
-// 			}
-// 		}
-// 	}
-// 	return 0;
-// }
-
-int key_exchange_router(sock_t server, fd_set *connections, size_t max_in_set, size_t *active, uint8_t *key)
-{
 	// uint8_t *intermediate_values = malloc((*active) * 32);
 	// if (!intermediate_values) {
 	// 	return -1;
@@ -231,20 +211,26 @@ int key_exchange_router(sock_t server, fd_set *connections, size_t max_in_set, s
 	// "Ratchet" hash forward once
 	// sha256_self_digest(key);
 	printf("Sending control key (start)\n");
-	if (send_ctrl_key(server, connections, max_in_set, key)) {
+	if (send_ctrl_key(nodes, count, key)) {
+		free(nodes);
 		return -1;
 	}
 	// sha256_self_digest(key);
 	printf("Server-Side Key-Exchange\n");
-	printf("Active connections: %zu\n", *active);
+	printf("Active connections: %zu\n", count);
 
-	for (size_t i = 0; i < (*active) + 1; i++) {
+	for (size_t i = 0; i < count - 1; i++) {
 		printf("Round: %zu\n", i);
-		rotate_intermediates(server, connections, max_in_set, active);
+		rotate_intermediates(nodes, count);
 	}
 
 	printf("Sending control key (end)\n");
-	send_ctrl_key(server, connections, max_in_set, key);
+	if (send_ctrl_key(nodes, count, key)) {
+		free(nodes);
+		return -1;
+	}
+
+	free(nodes);
 	return 0;
 }
 
@@ -262,17 +248,18 @@ int node_key_exchange(const sock_t socket, uint8_t *ctrl_key, uint8_t *session_k
 		return -1;
 	}
 
-	uint8_t intermediate[KEY_LEN];
+	uint8_t intermediate_shared[KEY_LEN];
 	while (1) {
+		uint8_t intermediate[KEY_LEN];
 		if (xrecv(socket, intermediate, KEY_LEN, 0) != KEY_LEN) {
 			return -1;
 		}
 		// CTRL message received
-		if (memcmp(intermediate, ctrl_key, 32)) {
+		if (!memcmp(intermediate, ctrl_key, 32)) {
 			break;
 		}
 
-		uint8_t intermediate_shared[KEY_LEN];
+		
 		compute_shared(intermediate_shared, secret_key, intermediate);
 
 		if (xsend(socket, intermediate_shared, KEY_LEN, 0) != KEY_LEN) {
@@ -281,8 +268,8 @@ int node_key_exchange(const sock_t socket, uint8_t *ctrl_key, uint8_t *session_k
 	}
 
 	uint8_t shared_key[KEY_LEN];
-	compute_shared(shared_key, secret_key, intermediate);
+	compute_shared(shared_key, secret_key, intermediate_shared);
 	sha256_digest(session_key, shared_key);
-	sha256_self_digest(ctrl_key);
+	// sha256_self_digest(ctrl_key);
 	return 0;
 }
