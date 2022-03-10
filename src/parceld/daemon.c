@@ -40,7 +40,6 @@ bool add_client(server_t *srv)
 	if (two_party_server(new_client, srv->server_key)) {
 		return false;
 	}
-	srv->alive_connections++;
 	return true;
 }
 
@@ -123,18 +122,32 @@ static void recv_client(server_t *srv, sock_t client_socket)
 	memset(&msg, 0, sizeof(msg_t));
 
 	if ((msg.length = xrecv(client_socket, msg.data, MAX_CHUNK, 0)) <= 0) {
-		if (!msg.length) {
-			printf("> Connection left\n");
-		}
-		else {
+		if (msg.length) {
 			fprintf(stderr, ">\033[33m Connection error\033[0m\n");
 		}
+		else {
+			struct sockaddr_in client_sockaddr;
+			socklen_t len[1] = { sizeof(client_sockaddr) };
+			if (xgetpeername(client_socket, (struct sockaddr *)&client_sockaddr, len)) {
+				goto close_connection;
+			}
+
+			char address[INET_ADDRSTRLEN];
+			if (!inet_ntop(AF_INET, &client_sockaddr.sin_addr, address, INET_ADDRSTRLEN)) {
+				goto close_connection;
+			}
+			printf("> Disconnected from %s port %d\n", address, ntohs(client_sockaddr.sin_port));
+		}
+		
+		if (0) {
+			close_connection:
+			fprintf(stderr, ">\033[33m Unknown connection left\033[0m\n");
+		}
+		
 		FD_CLR(client_socket, &srv->connections);
 		(void)xclose(client_socket);
 		
-		if (--srv->alive_connections) {
-			key_exchange_router(srv->socket, &srv->connections, srv->max_in_set, &srv->alive_connections, srv->server_key);
-		}
+		// key_exchange_router(srv->socket, &srv->connections, srv->max_in_set, srv->server_key);
 	}
 	else {
 		transfer_message(srv, client_socket, &msg);
@@ -161,8 +174,8 @@ int main_thread(void *ctx)
 				if (fd == server->socket) {
 					printf("> Attempting to add new connection...\n");
 					const bool client_added = add_client(server);
-					if (client_added && server->alive_connections > 1) {
-						if (key_exchange_router(server->socket, &server->connections, server->max_in_set, &server->alive_connections, server->server_key)) {
+					if (client_added) {
+						if (key_exchange_router(server->socket, &server->connections, server->max_in_set, server->server_key)) {
 							fatal("key_exchange_router()");
 						}
 					}
