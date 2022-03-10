@@ -74,6 +74,7 @@ sock_t xfd_isset(fd_set *set, fd_set *read_fds, size_t index);
 sock_t xfd_inset(fd_set *set, size_t index);
 
 int xgetaddrinfo(const char *node, const char *service, const struct addrinfo *hints, struct addrinfo **res);
+int xgetpeername(sock_t socket, struct sockaddr *address, socklen_t *len);
 int xsetsockopt(sock_t socket, int level, int optname, const void *optval, socklen_t optlen);
 int xclose(sock_t socket);
 void xexit(int status);

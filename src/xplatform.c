@@ -170,6 +170,14 @@ int xgetifaddrs(void)
 #endif
 }
 
+int xgetpeername(sock_t socket, struct sockaddr *address, socklen_t *len)
+{
+#if __unix__ || __APPLE__
+	return getpeername(socket, address, len);
+#elif _WIN32
+	return getpeername(socket, address, (int *)len);
+#endif
+}
 /**
  * @section FD_SET related functions
  */
