@@ -121,12 +121,16 @@ static int recv_handler(client_t *ctx)
 
 	const ssize_t bytes_recv = xrecv(ctx->socket, wire, sizeof(*wire) + RECV_MAX_LENGTH, 0);
 	if (bytes_recv < 0) {
+		free(wire);
 		error(ctx->socket, "recv()");
 	}
 	if (bytes_recv == 32) {
 		if (!memcmp(wire, ctx->ctrl_key, 32)) {
+			free(wire);
 			return node_key_exchange(ctx->socket, ctx->ctrl_key, ctx->session_key, ctx->fingerprint);
 		}
+		free(wire);
+		error(ctx->socket, "invalid control message");
 	}
 	
 	if (decrypt_wire(wire, ctx->session_key)) {
