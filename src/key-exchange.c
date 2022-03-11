@@ -142,7 +142,7 @@ int two_party_server(const sock_t socket, const uint8_t *session_key)
 
 static int send_ctrl_key(sock_t *sockets, size_t count, uint8_t *key)
 {
-	for (size_t i = 1; i < count; i++) {
+	for (size_t i = 1; i <= count; i++) {
 		if (xsend(sockets[i], key, KEY_LEN, 0) < 0) {
 			return -1;
 		}
@@ -160,6 +160,7 @@ static int rotate_intermediates(sock_t *sockets, size_t count)
 			return -1;
 		}
 		printf("> xrecv from slot %zu", i);
+		fflush(stdout);
 		if (xsend(sockets[next], intermediate_key, 32, 0) < 0) {
 			printf("\n> Error sending to slot %zu\n", next);
 			return -1;
@@ -187,8 +188,8 @@ int key_exchange_router(sock_t *sockets, size_t connection_count, uint8_t *key)
 
 	printf("> Start messages sent\n");
 	
-	for (size_t i = 0; i < connection_count; i++) {
-		printf("> GDH1 round %zu of %zu\n", i + 1, connection_count);
+	for (size_t i = 0; i < connection_count - 1; i++) {
+		printf("> GDH1 round %zu of %zu\n", i + 1, connection_count - 1);
 		rotate_intermediates(sockets, connection_count);
 	}
 
@@ -226,7 +227,6 @@ int node_key_exchange(const sock_t socket, uint8_t *ctrl_key, uint8_t *session_k
 			break;
 		}
 
-		
 		compute_shared(intermediate_shared, secret_key, intermediate);
 
 		if (xsend(socket, intermediate_shared, KEY_LEN, 0) != KEY_LEN) {
