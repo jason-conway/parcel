@@ -24,52 +24,19 @@ static inline void fatal(const char *msg)
 	exit(EXIT_FAILURE);
 }
 
-bool add_client(server_t *srv)
-{
-	struct sockaddr_storage client_sockaddr;
-	socklen_t len[1] = { sizeof(client_sockaddr) };
-	sock_t new_client;
-	if (xaccept(&new_client, srv->socket, (struct sockaddr *)&client_sockaddr, len) < 0) {
-		return false;
-	}
-	else {
-		FD_SET(new_client, &srv->connections); // Add descriptor to set and update max
-		srv->max_in_set = xfd_count(new_client, srv->max_in_set);
-	}
-
-	if (two_party_server(new_client, srv->server_key)) {
-		return false;
-	}
-	return true;
-}
-
-static void transfer_message(server_t *srv, sock_t client_socket, msg_t *msg)
-{
-	for (size_t i = 0; i < srv->max_in_set + 1; i++) {
-		sock_t fd;
-		if ((fd = xfd_inset(&srv->connections, i))) {
-			if (fd != srv->socket && fd != client_socket) {
-				if (xsend(fd, msg->data, msg->length, 0) < 0) {
-					fatal("xsend()");
-				}
-			}
-		}
-	}
-}
-
 void configure_server(server_t *srv, const char *port)
 {
 	if (xstartup()) {
 		fatal("xstartup()");
 	}
 	
-	printf(">\033[35;49;1m parceld: Parcel Daemon v0.1\033[0m\n");
+	printf(">\033[35;49;1m parceld: Parcel Daemon v0.9.1\033[0m\n");
 	printf("> Interfaces:\n");
 	if (xgetifaddrs()) {
 		fatal("xgetifaddrs()");
 	}
 
-	printf("> Note: this system supports a maximum of \033[39;49;1m%u\033[0m connections\n", (unsigned)FD_SETSIZE);
+	printf("> Note: this system supports a maximum of \033[39;49;1m%u\033[0m connections\n", (unsigned)MAX_CONNECTIONS);
 
 	struct addrinfo hints = {
 		.ai_family = AF_INET,
@@ -85,14 +52,14 @@ void configure_server(server_t *srv, const char *port)
 	struct addrinfo *node = NULL;
 	int opt[1] = { 1 };
 	for (node = ai; node; node = node->ai_next) {
-		if (xsocket(&srv->socket, node->ai_family, node->ai_socktype, node->ai_protocol) < 0) {
+		if (xsocket(&srv->sockets[0], node->ai_family, node->ai_socktype, node->ai_protocol) < 0) {
 			continue;
 		}
-		if (xsetsockopt(srv->socket, SOL_SOCKET, SO_REUSEADDR, opt, sizeof(*opt)) < 0) {
+		if (xsetsockopt(srv->sockets[0], SOL_SOCKET, SO_REUSEADDR, opt, sizeof(*opt)) < 0) {
 			fatal("setsockopt()");
 		}
-		if (bind(srv->socket, node->ai_addr, node->ai_addrlen) < 0) {
-			(void)xclose(srv->socket);
+		if (bind(srv->sockets[0], node->ai_addr, node->ai_addrlen) < 0) {
+			(void)xclose(srv->sockets[0]);
 			continue;
 		}
 		break;
@@ -103,55 +70,109 @@ void configure_server(server_t *srv, const char *port)
 	}
 	freeaddrinfo(ai);
 
-	if (listen(srv->socket, 10) < 0) {
-		(void)xclose(srv->socket);
+	if (listen(srv->sockets[0], MAX_QUEUE) < 0) {
+		(void)xclose(srv->sockets[0]);
 		fatal("listen()");
 	}
 
-	FD_ZERO(&srv->connections);
-	FD_SET(srv->socket, &srv->connections);
-	srv->max_in_set = xfd_init_count(srv->socket);
+	FD_ZERO(&srv->descriptors);
+	FD_SET(srv->sockets[0], &srv->descriptors);
+	srv->descriptor_count = xfd_init_count(srv->sockets[0]);
+	srv->connection_count = 0;
 
 	xgetrandom(srv->server_key, 32);
 	printf(">\033[32m parceld running...\033[0m\n");
 }
 
-static void recv_client(server_t *srv, sock_t client_socket)
+static size_t socket_index(server_t *srv, sock_t socket)
+{
+	for (size_t i = 1; i < MAX_CONNECTIONS; i++) {
+		if (srv->sockets[i] == socket) {
+			return i;
+		}
+	}
+	return 0;
+}
+
+static bool add_client(server_t *srv)
+{
+	struct sockaddr_storage client_sockaddr;
+	socklen_t len[1] = { sizeof(client_sockaddr) };
+	sock_t new_client;
+	if (xaccept(&new_client, srv->sockets[0], (struct sockaddr *)&client_sockaddr, len) < 0) {
+		return false;
+	}
+	else {
+		FD_SET(new_client, &srv->descriptors); // Add descriptor to set and update max
+		srv->descriptor_count = xfd_count(new_client, srv->descriptor_count);
+		srv->connection_count++;
+	}
+
+	// Copy new connection's socket to the next free slot
+	for (size_t i = 1; i < MAX_CONNECTIONS; i++) {
+		if (!srv->sockets[i]) {
+			srv->sockets[i] = new_client;
+			printf("> Connection %zu added in slot %zu\n", srv->connection_count, i);
+			break;
+		}
+	}
+	
+	if (two_party_server(new_client, srv->server_key)) {
+		return false;
+	}
+	return true;
+}
+
+static int transfer_message(server_t *srv, size_t sender_index, msg_t *msg)
+{
+	for (size_t i = 1; i < srv->connection_count; i++) {
+		if (i == sender_index) {
+			continue;
+		}
+		if (xsend(srv->sockets[i], msg->data, msg->length, 0) < 0) {
+			return -1;
+		}
+	}
+	return 0;
+}
+
+static int recv_client(server_t *srv, size_t sender_index)
 {
 	msg_t msg;
 	memset(&msg, 0, sizeof(msg_t));
-
-	if ((msg.length = xrecv(client_socket, msg.data, MAX_CHUNK, 0)) <= 0) {
+	
+	if ((msg.length = xrecv(srv->sockets[sender_index], msg.data, MAX_CHUNK, 0)) <= 0) {
 		if (msg.length) {
 			fprintf(stderr, ">\033[33m Connection error\033[0m\n");
 		}
 		else {
 			struct sockaddr_in client_sockaddr;
 			socklen_t len[1] = { sizeof(client_sockaddr) };
-			if (xgetpeername(client_socket, (struct sockaddr *)&client_sockaddr, len)) {
-				goto close_connection;
+			if (xgetpeername(srv->sockets[sender_index], (struct sockaddr *)&client_sockaddr, len)) {
+				fatal("xgetpeername()");
 			}
-
 			char address[INET_ADDRSTRLEN];
-			if (!inet_ntop(AF_INET, &client_sockaddr.sin_addr, address, INET_ADDRSTRLEN)) {
-				goto close_connection;
-			}
+			(void)inet_ntop(AF_INET, &client_sockaddr.sin_addr, address, INET_ADDRSTRLEN);
+			
 			printf("> Disconnected from %s port %d\n", address, ntohs(client_sockaddr.sin_port));
 		}
+			
+		FD_CLR(srv->sockets[sender_index], &srv->descriptors);
+		(void)xclose(srv->sockets[sender_index]);
 		
-		if (0) {
-			close_connection:
-			fprintf(stderr, ">\033[33m Unknown connection left\033[0m\n");
-		}
-		
-		FD_CLR(client_socket, &srv->connections);
-		(void)xclose(client_socket);
+		// Replace this slot with the ending slot
+		srv->sockets[sender_index] = srv->sockets[srv->connection_count-1];
+		srv->connection_count--;
 		
 		// key_exchange_router(srv->socket, &srv->connections, srv->max_in_set, srv->server_key);
 	}
 	else {
-		transfer_message(srv, client_socket, &msg);
+		if (transfer_message(srv, sender_index, &msg) < 0) {
+			fprintf(stderr, "> Error broadcasting message\n");
+			return -1;
+		}
 	}
+	return 0;
 }
 
 int main_thread(void *ctx)
@@ -163,26 +184,31 @@ int main_thread(void *ctx)
 	FD_ZERO(&read_fds);
 
 	while (1) {
-		read_fds = server->connections;
-		if (select(server->max_in_set + 1, &read_fds, NULL, NULL, NULL) < 0) {
+		read_fds = server->descriptors;
+		if (select(server->descriptor_count + 1, &read_fds, NULL, NULL, NULL) < 0) {
 			fatal("select()");
 		}
 		
-		for (size_t i = 0; i < server->max_in_set + 1; i++) {
+		for (size_t i = 0; i < server->descriptor_count + 1; i++) {
 			sock_t fd;
-			if ((fd = xfd_isset(&server->connections, &read_fds, i))) {
-				if (fd == server->socket) {
-					printf("> Attempting to add new connection...\n");
-					const bool client_added = add_client(server);
-					if (client_added) {
-						if (key_exchange_router(server->socket, &server->connections, server->max_in_set, server->server_key)) {
+			if ((fd = xfd_isset(&server->descriptors, &read_fds, i))) {
+				if (fd == server->sockets[0]) {
+					printf("> Connection from unknown client\n");
+					if (add_client(server)) {
+						if (key_exchange_router(server->sockets, server->connection_count, server->server_key)) {
 							fatal("key_exchange_router()");
 						}
+						printf("> Connection added successfully\n");
 					}
-					printf("> Connection %s\n", client_added ? "successful" : "failed");
+					else {
+						fatal("add_client()");
+					}
 				}
 				else {
-					recv_client(server, fd);
+					const size_t sender_index = socket_index(server, fd);
+					if (recv_client(server, sender_index)) {
+						fatal("key_exchange_router()");
+					}
 				}
 			}
 		}

@@ -196,7 +196,7 @@ void connect_server(client_t *client, const char *ip, const char *port)
 	}
 
 	printf("\033[32mConnected to server\033[0m\n");
-	send_connection_status(client, false);
+	// send_connection_status(client, false);
 }
 
 void *recv_thread(void *ctx)

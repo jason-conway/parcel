@@ -29,16 +29,19 @@ enum Server
 {
 	MAX_CHUNK = 1 << 20,
 	SOCK_LEN = sizeof(struct sockaddr),
+	MAX_CONNECTIONS = FD_SETSIZE,
+	MAX_QUEUE = 32
 };
 
 enum KEY { KEY_LENGTH = 32 };
 
 typedef struct server_t
 {
-	sock_t socket;
 	uint8_t server_key[KEY_LENGTH];
-	fd_set connections;
-	size_t max_in_set;
+	fd_set descriptors;
+	size_t descriptor_count;
+	sock_t sockets[MAX_CONNECTIONS];
+	size_t connection_count;
 } server_t;
 
 typedef struct msg_t

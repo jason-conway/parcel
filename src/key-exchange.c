@@ -102,6 +102,7 @@ int two_party_client(const sock_t socket, uint8_t *key, uint8_t *fingerprint)
 
 int two_party_server(const sock_t socket, const uint8_t *session_key)
 {
+	printf("> Establishing new secure channel\n");
 	uint8_t shared_secret[KEY_LEN];
 	uint8_t server_public_key[KEY_LEN];
 
@@ -110,127 +111,93 @@ int two_party_server(const sock_t socket, const uint8_t *session_key)
 	if (xrecv(socket, public_key, KEY_LEN, 0) != KEY_LEN) {
 		return -1;
 	}
-
+	printf("> Received client's public key\n");
 	// Generate a single-use secret key for the key pair
 	uint8_t secret_key[KEY_LEN];
 	generate_secret(secret_key);
+	printf("> Generated one-time secret key\n");
 	// Compute a single-use public key and our shared secret with the client
 	compute_public(secret_key, server_public_key, NULL);
-	compute_shared(shared_secret, secret_key, public_key);
-
-	// Send server public key to the client so they can compute the shared-secret
+	printf("> Computed one-time public key\n");
 	if (xsend(socket, server_public_key, KEY_LEN, 0) < 0) {
 		return -1;
 	}
+	printf("> Sent public key to client\n");
 
+	compute_shared(shared_secret, secret_key, public_key);
+	printf("> Computed shared-secret\n");
+	
 	size_t len = KEY_LEN;
 	wire_t *wire = init_wire((char *)session_key, &len);
+	printf("> Created new wire\n");
 	encrypt_wire(wire, shared_secret);
+	printf("> Encrypted wire\n");
 	if (xsend(socket, wire, len, 0) < 0) {
 		return -1;
 	}
-
+	printf("> Sent wire to client\n");
 	free(wire);
 	return 0;
 }
 
-static int send_ctrl_key(sock_t *nodes, size_t count, uint8_t *key)
+static int send_ctrl_key(sock_t *sockets, size_t count, uint8_t *key)
 {
-	for (size_t i = 0; i < count; i++) {
-		if (xsend(nodes[i], key, KEY_LEN, 0) < 0) {
-			return -1;
-		}
-	}
-
-	return 0;
-}
-
-static int rotate_intermediates(sock_t *nodes, size_t count)
-{
-	for (size_t i = 0; i < count; i++) {
-		uint8_t intermediate_key[32];
-		printf("From %zu to %zu\n", i, (i + 1) % count);
-		if (xrecv(nodes[i], intermediate_key, 32, 0) <= 0) {
-			return -1;
-		}
-		if (xsend(nodes[(i + 1) % count], intermediate_key, 32, 0) < 0) {
+	for (size_t i = 1; i < count; i++) {
+		if (xsend(sockets[i], key, KEY_LEN, 0) < 0) {
 			return -1;
 		}
 	}
 	return 0;
 }
 
-static size_t node_count(fd_set *connections, size_t max_in_set)
+static int rotate_intermediates(sock_t *sockets, size_t count)
 {
-	size_t count = 0;
-	for (size_t i = 0; i < max_in_set + 1; i++) {
-		if (FD_ISSET(i, connections)) {
-			count++;
+	uint8_t intermediate_key[32];
+	for (size_t i = 1; i <= count; i++) {
+		size_t next = (i == count) ? 1 : i + 1;
+		
+		if (xrecv(sockets[i], intermediate_key, 32, 0) <= 0) {
+			return -1;
 		}
+		printf("> xrecv from slot %zu", i);
+		if (xsend(sockets[next], intermediate_key, 32, 0) < 0) {
+			printf("\n> Error sending to slot %zu\n", next);
+			return -1;
+		}
+		printf(" | xsend to slot %zu\n", next);
 	}
-	return count - 1;
+	return 0;
 }
 
-static sock_t *nodes_in_set(sock_t server, fd_set *connections, size_t max_in_set, size_t count)
+int key_exchange_router(sock_t *sockets, size_t connection_count, uint8_t *key)
 {
-	sock_t *nodes = malloc(sizeof(sock_t) * count);
-	if (!nodes) {
-		return NULL;
-	}
-	memset(nodes, 0, sizeof(sock_t) * count);
-	size_t node_index = 0;
-	for (size_t i = 0; i < max_in_set + 1; i++) {
-		sock_t fd;
-		if ((fd = xfd_inset(connections, i))) {
-			if (fd != server) {
-				nodes[node_index++] = fd;
-			}
-		}
-	}
-	return nodes;
-}
-
-
-int key_exchange_router(sock_t server, fd_set *connections, size_t max_in_set, uint8_t *key)
-{
-	size_t count = node_count(connections, max_in_set);
-	if (count < 2) {
+	if (connection_count < 2) {
 		return 0;
 	}
-	sock_t *nodes = nodes_in_set(server, connections, max_in_set, count);
-	if (!nodes) {
-		return -1;
-	}
 
-	// uint8_t *intermediate_values = malloc((*active) * 32);
-	// if (!intermediate_values) {
-	// 	return -1;
-	// }
-	// memset(intermediate_values, 0, sizeof(*intermediate_values));
+	printf("> Starting GDH1 sequence\n");
 
 	// "Ratchet" hash forward once
 	// sha256_self_digest(key);
-	printf("Sending control key (start)\n");
-	if (send_ctrl_key(nodes, count, key)) {
-		free(nodes);
-		return -1;
-	}
-	// sha256_self_digest(key);
-	printf("Server-Side Key-Exchange\n");
-	printf("Active connections: %zu\n", count);
 
-	for (size_t i = 0; i < count - 1; i++) {
-		printf("Round: %zu\n", i);
-		rotate_intermediates(nodes, count);
-	}
-
-	printf("Sending control key (end)\n");
-	if (send_ctrl_key(nodes, count, key)) {
-		free(nodes);
+	if (send_ctrl_key(sockets, connection_count, key)) {
+		printf("> Error sending starting control keys\n");
 		return -1;
 	}
 
-	free(nodes);
+	printf("> Start messages sent\n");
+	
+	for (size_t i = 0; i < connection_count; i++) {
+		printf("> GDH1 round %zu of %zu\n", i + 1, connection_count);
+		rotate_intermediates(sockets, connection_count);
+	}
+
+	if (send_ctrl_key(sockets, connection_count, key)) {
+		printf("> Error sending stopping control keys\n");
+		return -1;
+	}
+	printf("> Stop messages sent\n");
+	
 	return 0;
 }
 
