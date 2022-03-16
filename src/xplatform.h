@@ -66,6 +66,7 @@ void xgetrandom(void *dest, size_t len);
 int xsocket(sock_t *xsocket, int domain, int type, int protocol);
 int xaccept(sock_t *connection_socket, sock_t listening_socket, struct sockaddr *address, socklen_t *len);
 ssize_t xsend(sock_t socket, const void *data, size_t len, int flags);
+ssize_t xsendall(sock_t socket, const void *data, size_t len);
 ssize_t xrecv(sock_t socket, void *data, size_t len, int flags);
 
 size_t xfd_count(sock_t fd, size_t count);

@@ -129,7 +129,7 @@ static int transfer_message(server_t *srv, size_t sender_index, msg_t *msg)
 		if (i == sender_index) {
 			continue;
 		}
-		if (xsend(srv->sockets[i], msg->data, msg->length, 0) < 0) {
+		if (xsendall(srv->sockets[i], msg->data, msg->length) < 0) {
 			return -1;
 		}
 	}

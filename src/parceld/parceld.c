@@ -36,9 +36,10 @@ int main(int argc, char *argv[])
 			case 'h':
 				usage(stdout);
 				exit(EXIT_SUCCESS);
-			default:
+			case ':':
+			case '?':
 				usage(stderr);
-				exit(EXIT_FAILURE);
+				break;
 		}
 	}
 

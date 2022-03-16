@@ -27,9 +27,16 @@ typedef struct wire_t
 	uint8_t mac[16];
 	uint8_t iv[16];
 	uint8_t length[16];
+	uint8_t type[16];
 	uint8_t data[];
 } wire_t;
 
-wire_t *init_wire(char *plaintext, size_t *len);
+enum WireType
+{
+	TYPE_TEXT = 't',
+	TYPE_FILE = 'f',
+};
+
+wire_t *init_wire(void *data, uint8_t type, size_t *len);
 void encrypt_wire(wire_t *wire, const uint8_t *key);
 int decrypt_wire(wire_t *wire, const uint8_t *key);

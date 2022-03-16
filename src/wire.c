@@ -37,7 +37,7 @@ static void unpack64_le(uint8_t *dest, uint64_t word)
 	dest[7] = (uint8_t)(word >> 0x38);
 }
 
-wire_t *init_wire(char *plaintext, size_t *len)
+wire_t *init_wire(void *data, uint8_t type, size_t *len)
 {
 	const uint64_t data_length = BLOCK_LEN * ((*len + 15) / BLOCK_LEN);
 	const size_t wire_length = sizeof(wire_t) + data_length;
@@ -49,7 +49,8 @@ wire_t *init_wire(char *plaintext, size_t *len)
 
 	xgetrandom(wire->iv, BLOCK_LEN);
 	unpack64_le(wire->length, data_length);
-	memcpy(wire->data, plaintext, *len);
+	unpack64_le(wire->type, type);
+	memcpy(wire->data, data, *len);
 	*len = wire_length;
 	return wire;
 }
@@ -75,13 +76,14 @@ void encrypt_wire(wire_t *wire, const uint8_t *key)
 	aes128_init_cmac(&ctxs[1], &key[16]);
 
 	// Unpack and encrypt length
-	const size_t data_length = get_length(&ctxs[0], wire->length, false);
-
+	// const size_t data_length = get_length(&ctxs[0], wire->length, false);
+	const size_t data_length = pack64_le(wire->length);
+	
 	// Encrypt chunks
-	aes128_encrypt(&ctxs[0], wire->data, data_length);
+	aes128_encrypt(&ctxs[0], wire->length, data_length + 16);
 
-	// MAC for IV, length, and chunks into the wire
-	aes128_cmac(&ctxs[1], wire->iv, data_length + 32, wire->mac);
+	// MAC for IV, length, type, and chunks into the wire
+	aes128_cmac(&ctxs[1], wire->iv, data_length + (sizeof(wire_t) - 16), wire->mac);
 }
 
 int decrypt_wire(wire_t *wire, const uint8_t *key)
@@ -95,11 +97,12 @@ int decrypt_wire(wire_t *wire, const uint8_t *key)
 
 	// Verify MAC prior to decrypting in full
 	uint8_t verification_cmac[16] = { 0 };
-	aes128_cmac(&ctxs[1], wire->iv, 32 + data_length, verification_cmac);
+	aes128_cmac(&ctxs[1], wire->iv, data_length + (sizeof(wire_t) - 16), verification_cmac);
 	if (memcmp(&wire->mac[0], verification_cmac, BLOCK_LEN)) {
+		fprintf(stderr, "> internal: CMAC does not match\n");
 		return -1;
 	}
 
-	aes128_decrypt(&ctxs[0], wire->data, data_length);
+	aes128_decrypt(&ctxs[0], wire->type, data_length + 16);
 	return 0;
 }

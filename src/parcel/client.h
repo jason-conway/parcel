@@ -38,7 +38,8 @@ enum CommandID
 {
 	CMD_NONE = 0,
 	CMD_USERNAME,
-	CMD_FINGERPRINT
+	CMD_FINGERPRINT,
+	CMD_FILE,
 };
 
 typedef struct client_t
@@ -53,5 +54,26 @@ typedef struct client_t
 
 void connect_server(client_t *client, const char *ip, const char *port);
 void send_connection_status(client_t *ctx, bool exit);
-void *recv_thread(void *);
-int send_thread(void *);
+int parse_input(client_t *ctx, char **message, size_t *message_length);
+
+void *recv_thread(void *ctx);
+int send_thread(void *ctx);
+
+#define BLK "\033[0;30m"
+#define RED "\033[0;31m"
+#define GRN "\033[0;32m"
+#define YEL "\033[0;33m"
+#define BLU "\033[0;34m"
+#define MAG "\033[0;35m"
+#define CYN "\033[0;36m"
+#define WHT "\033[0;37m"
+
+
+#define BBLK "\033[1;30m"
+#define BRED "\033[1;31m"
+#define BGRN "\033[1;32m"
+#define BYEL "\033[1;33m"
+#define BBLU "\033[1;34m"
+#define BMAG "\033[1;35m"
+#define BCYN "\033[1;36m"
+#define BWHT "\033[1;37m"

@@ -21,94 +21,87 @@ static inline void error(sock_t socket, const char *msg)
 {
 	fprintf(stderr, ">\033[31m parcel error: %s\n\033[0m", msg);
 	(void)xclose(socket);
+	pthread_exit(NULL);
 	exit(EXIT_FAILURE);
 }
 
-static void prepend_username(client_t *ctx, char **message, size_t *message_length)
-{
-	// Prepend username to the input string
-	*message_length += strlen(ctx->username) + 2; // +2 for ": "
-
-	char *msg = malloc(*message_length);
-	if (!msg) {
-		free(*message);
-		*message = NULL;
-		return;
-	}
-
-	if (snprintf(msg, *message_length, "%s: %s", ctx->username, *message) != (int)*message_length) {
-		free(*message);
-		*message = NULL;
-		return;
-	}
-
-	free(*message);
-	*message = msg;
-	return;
-}
-
-static void send_encrypted_message(int socket, char *plaintext, size_t length, const uint8_t *key)
+static void send_encrypted_message(int socket, uint8_t type, void *data, size_t length, const uint8_t *key)
 {
 	size_t len = length;
-	wire_t *wire = init_wire(plaintext, &len);
+	wire_t *wire = init_wire(data, type,  &len);
 	encrypt_wire(wire, key);
-	if (xsend(socket, wire, len, 0) < 0) {
-		return;
+	if (xsendall(socket, wire, len) < 0) {
+		free(wire);
+		error(socket, "xsendall()");
 	}
 	free(wire);
 }
 
-static int change_username(client_t *ctx, char **message, size_t *message_length)
+void send_connection_status(client_t *ctx, bool leave)
 {
-	char *new_username = NULL;
-	size_t new_username_length = 0;
-	while (!new_username_length) {
-		printf("New username: ");
-		fflush(stdout);
-		xgetline(&new_username, &new_username_length, stdin);
-	}
-	new_username[new_username_length - 1] = '\0'; // remove \n
+	char msg[USERNAME_MAX_LENGTH + 36] = { 0 };
+	static const char *template = "\033[3%dm%s has %s the server.\033[0m";
 
-	static const char *template = "\033[33m%s has changed their username to %s\033[0m";
-	const size_t msg_length = strlen(template) + new_username_length + strlen(ctx->username) + 1;
-	char *msg = malloc(msg_length);
-	if (!msg) {
-		send_connection_status(ctx, true);
-		return -1;
+	if (snprintf(msg, sizeof(msg), template, leave ? 5 : 2, ctx->username, leave ? "left" : "joined") < 0) {
+		error(ctx->socket, "send()");
 	}
-	if (snprintf(msg, msg_length, template, ctx->username, new_username) < 0) {
-		send_connection_status(ctx, true);
-		return -1;
-	}
+	send_encrypted_message(ctx->socket, TYPE_TEXT, msg, strlen(msg) + 1, ctx->session_key);
 
-	*message = msg;
-	*message_length = msg_length;
-	memset(ctx->username, 0, USERNAME_MAX_LENGTH);
-	memcpy(ctx->username, new_username, new_username_length);
-	free(new_username);
-	return 0;
+	if (leave) {
+		if (xclose(ctx->socket)) {
+			error(ctx->socket, "close()");
+		}
+		pthread_exit(NULL);
+	}
 }
 
-static int is_command(client_t *ctx, char **message, size_t *message_length)
+int send_thread(void *ctx)
 {
-	if (strcmp(*message, "=-\n") == 0) {
-		free(*message);
-		send_connection_status(ctx, true);
-		exit(EXIT_SUCCESS);
-	}
-	if (strcmp(*message, "!username\n") == 0) {
-		free(*message);
-		if (change_username(ctx, message, message_length)) {
-			send_connection_status(ctx, true); // may not work
-			error(ctx->socket, "change_username()");
+	client_t client;
+	client_t *client_ctx = (client_t *)ctx;
+
+	while (1) {
+		pthread_mutex_lock(&client_ctx->mutex_lock);
+			memcpy(&client, client_ctx, sizeof(client_t));
+		pthread_mutex_unlock(&client_ctx->mutex_lock);
+
+		char *plaintext = NULL;
+		size_t length = 0;
+
+		// Don't send an empty message
+		do {
+			printf("%s: ", client.username);
+			fflush(stdout);
+			xgetline(&plaintext, &length, stdin);
+		} while (!length);
+		
+		if (!plaintext) {
+			error(client.socket, "malloc()");
 		}
-		return CMD_USERNAME;
+
+		switch (parse_input(&client, &plaintext, &length)) {
+			case CMD_NONE:
+			case CMD_USERNAME:
+				send_encrypted_message(client.socket, TYPE_TEXT, plaintext, length, client.session_key);
+				break;
+			case CMD_FINGERPRINT:
+				break;
+			case CMD_FILE:
+				break; // TODO
+		}
+		
+		free(plaintext);
+
+		pthread_mutex_lock(&client_ctx->mutex_lock);
+			memcpy(client_ctx, &client, sizeof(client_t));
+		pthread_mutex_unlock(&client_ctx->mutex_lock);
+
+		struct timespec ts = { .tv_sec = 0, .tv_nsec = 1000000 };
+		(void)nanosleep(&ts, NULL);
 	}
-	if (strcmp(*message, "!fingerprint\n") == 0) {
-		fprint("Fingerprint is: ", ctx->fingerprint);
-		return CMD_FINGERPRINT;
-	}
-	return CMD_NONE;
+
+	send_connection_status(&client, true);
+	return EXIT_SUCCESS;
 }
 
 static int recv_handler(client_t *ctx)
@@ -137,28 +130,39 @@ static int recv_handler(client_t *ctx)
 		return -1;
 	}
 
-	printf("\033[2K\r%s\n%s: ", wire->data, ctx->username);
-	fflush(stdout);
-
+	if (wire->type[0] == TYPE_FILE) {
+		// TODO
+	}
+	else {
+		printf("\033[2K\r%s\n%s: ", wire->data, ctx->username);
+		fflush(stdout);
+	}
+	
 	free(wire);
 
 	return 0;
 }
 
-void send_connection_status(client_t *ctx, bool leave)
+void *recv_thread(void *ctx)
 {
-	char msg[USERNAME_MAX_LENGTH + 36] = { 0 };
-	static const char *template = "\033[3%dm%s has %s the server.\033[0m";
+	client_t client;
+	client_t *client_ctx = (client_t *)ctx;
 
-	if (snprintf(msg, sizeof(msg), template, leave ? 5 : 2, ctx->username, leave ? "left" : "joined") < 0) {
-		error(ctx->socket, "send()");
-	}
-	send_encrypted_message(ctx->socket, msg, strlen(msg) + 1, ctx->session_key);
+	while (1) {
+		pthread_mutex_lock(&client_ctx->mutex_lock);
+			memcpy(&client, client_ctx, sizeof(client_t));
+		pthread_mutex_unlock(&client_ctx->mutex_lock);
 
-	if (leave) {
-		if (xclose(ctx->socket)) {
-			error(ctx->socket, "close()");
+		if (recv_handler(&client)) {
+			error(client.socket, "recv_handler()");
 		}
+
+		pthread_mutex_lock(&client_ctx->mutex_lock);
+			memcpy(client_ctx, &client, sizeof(client_t));
+		pthread_mutex_unlock(&client_ctx->mutex_lock);
+
+		struct timespec ts = { .tv_nsec = 1000000 };
+		(void)nanosleep(&ts, NULL);
 	}
 }
 
@@ -201,82 +205,4 @@ void connect_server(client_t *client, const char *ip, const char *port)
 
 	printf("\033[32mConnected to server\033[0m\n");
 	// send_connection_status(client, false);
-}
-
-void *recv_thread(void *ctx)
-{
-	client_t client;
-	client_t *client_ctx = (client_t *)ctx;
-
-	while (1) {
-		pthread_mutex_lock(&client_ctx->mutex_lock);
-		memcpy(&client, client_ctx, sizeof(client_t));
-		pthread_mutex_unlock(&client_ctx->mutex_lock);
-
-		if (recv_handler(&client)) {
-			fprintf(stderr, "\nError: recv_handler\n");
-			pthread_exit(NULL);
-		}
-
-		pthread_mutex_lock(&client_ctx->mutex_lock);
-		memcpy(client_ctx, &client, sizeof(client_t));
-		pthread_mutex_unlock(&client_ctx->mutex_lock);
-
-		struct timespec ts = { .tv_nsec = 1000000 };
-		(void)nanosleep(&ts, NULL);
-	}
-}
-
-int send_thread(void *ctx)
-{
-	client_t client;
-	client_t *client_ctx = (client_t *)ctx;
-
-	while (1) {
-		pthread_mutex_lock(&client_ctx->mutex_lock);
-		memcpy(&client, client_ctx, sizeof(client_t));
-		pthread_mutex_unlock(&client_ctx->mutex_lock);
-
-		char *plaintext = NULL;
-		size_t length = 0;
-
-		// Don't send an empty message
-		do {
-			printf("%s: ", client.username);
-			fflush(stdout);
-			xgetline(&plaintext, &length, stdin);
-		} while (!length);
-		
-		if (!plaintext) {
-			error(client.socket, "malloc()");
-		}
-
-		// TODO: clean this up
-		switch (is_command(&client, &plaintext, &length)) {
-			case CMD_NONE:
-				prepend_username(&client, &plaintext, &length);
-				if (!plaintext) {
-					error(client.socket, "malloc()");
-				}
-				break;
-			case CMD_USERNAME:
-				break;
-			case CMD_FINGERPRINT:
-				goto NO_SEND;
-		}
-
-		send_encrypted_message(client.socket, plaintext, length, client.session_key);
-	NO_SEND:
-		free(plaintext);
-
-		pthread_mutex_lock(&client_ctx->mutex_lock);
-		memcpy(client_ctx, &client, sizeof(client_t));
-		pthread_mutex_unlock(&client_ctx->mutex_lock);
-
-		struct timespec ts = { .tv_sec = 0, .tv_nsec = 1000000 };
-		(void)nanosleep(&ts, NULL);
-	}
-
-	send_connection_status(&client, true);
-	return EXIT_SUCCESS;
 }

@@ -128,7 +128,7 @@ int two_party_server(const sock_t socket, const uint8_t *session_key)
 	printf("> Computed shared-secret\n");
 	
 	size_t len = KEY_LEN;
-	wire_t *wire = init_wire((char *)session_key, &len);
+	wire_t *wire = init_wire((char *)session_key, TYPE_TEXT, &len);
 	printf("> Created new wire\n");
 	encrypt_wire(wire, shared_secret);
 	printf("> Encrypted wire\n");
