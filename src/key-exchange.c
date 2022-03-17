@@ -15,7 +15,7 @@
 void fprint(const char *str, const uint8_t *fingerprint)
 {
 	printf("\033[33m%s", str); // In yellow :D
-	for (size_t i = 0; i < 16; i += 4) {
+	for (size_t i = 0; i < 32; i += 4) {
 		uint64_t chunk = (((uint64_t)fingerprint[i + 0] << 0x18) |
 						  ((uint64_t)fingerprint[i + 1] << 0x10) |
 						  ((uint64_t)fingerprint[i + 2] << 0x08) |
@@ -100,7 +100,7 @@ int two_party_client(const sock_t socket, uint8_t *key, uint8_t *fingerprint)
 	return 0;
 }
 
-int two_party_server(const sock_t socket, const uint8_t *session_key)
+int two_party_server(const sock_t socket, uint8_t *session_key)
 {
 	printf("> Establishing new secure channel\n");
 	uint8_t shared_secret[KEY_LEN];
@@ -112,6 +112,7 @@ int two_party_server(const sock_t socket, const uint8_t *session_key)
 		return -1;
 	}
 	printf("> Received client's public key\n");
+	fprint("Client public key: ", public_key);
 	// Generate a single-use secret key for the key pair
 	uint8_t secret_key[KEY_LEN];
 	generate_secret(secret_key);
@@ -125,10 +126,12 @@ int two_party_server(const sock_t socket, const uint8_t *session_key)
 	printf("> Sent public key to client\n");
 
 	compute_shared(shared_secret, secret_key, public_key);
-	printf("> Computed shared-secret\n");
 	
+	fprint("Shared-secret: ", shared_secret);
+
+	fprint("Server session key is: ", session_key);
 	size_t len = KEY_LEN;
-	wire_t *wire = init_wire((char *)session_key, TYPE_TEXT, &len);
+	wire_t *wire = init_wire(session_key, TYPE_TEXT, &len);
 	printf("> Created new wire\n");
 	encrypt_wire(wire, shared_secret);
 	printf("> Encrypted wire\n");
@@ -143,7 +146,8 @@ int two_party_server(const sock_t socket, const uint8_t *session_key)
 static int send_ctrl_key(sock_t *sockets, size_t count, uint8_t *key)
 {
 	for (size_t i = 1; i <= count; i++) {
-		if (xsend(sockets[i], key, KEY_LEN, 0) < 0) {
+		printf("\n> Sending control key to slot %zu\n", i);
+		if (xsendall(sockets[i], key, KEY_LEN) < 0) {
 			return -1;
 		}
 	}
@@ -156,16 +160,18 @@ static int rotate_intermediates(sock_t *sockets, size_t count)
 	for (size_t i = 1; i <= count; i++) {
 		size_t next = (i == count) ? 1 : i + 1;
 		
-		if (xrecv(sockets[i], intermediate_key, 32, 0) <= 0) {
+		if (xrecv(sockets[i], intermediate_key, 32, 0) != 32) {
 			return -1;
 		}
+		
 		printf("> xrecv from slot %zu", i);
 		fflush(stdout);
-		if (xsend(sockets[next], intermediate_key, 32, 0) < 0) {
+		if (xsendall(sockets[next], intermediate_key, 32) < 0) {
 			printf("\n> Error sending to slot %zu\n", next);
 			return -1;
 		}
 		printf(" | xsend to slot %zu\n", next);
+		fprint("> msg: ", intermediate_key);
 	}
 	return 0;
 }
@@ -216,18 +222,24 @@ int node_key_exchange(const sock_t socket, uint8_t *ctrl_key, uint8_t *session_k
 		return -1;
 	}
 
+	uint8_t intermediate[KEY_LEN];
+	if (xrecv(socket, intermediate, KEY_LEN, 0) != KEY_LEN) {
+		return -1;
+	}
+	
+
 	uint8_t intermediate_shared[KEY_LEN];
 	while (1) {
-		uint8_t intermediate[KEY_LEN];
-		if (xrecv(socket, intermediate, KEY_LEN, 0) != KEY_LEN) {
+		uint8_t incoming[KEY_LEN];
+		if (xrecv(socket, incoming, KEY_LEN, 0) != KEY_LEN) {
 			return -1;
 		}
 		// CTRL message received
-		if (!memcmp(intermediate, ctrl_key, 32)) {
+		if (!memcmp(incoming, ctrl_key, 32)) {
 			break;
 		}
 
-		compute_shared(intermediate_shared, secret_key, intermediate);
+		compute_shared(intermediate_shared, secret_key, incoming);
 
 		if (xsend(socket, intermediate_shared, KEY_LEN, 0) != KEY_LEN) {
 			return -1;

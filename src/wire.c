@@ -80,7 +80,7 @@ void encrypt_wire(wire_t *wire, const uint8_t *key)
 	const size_t data_length = pack64_le(wire->length);
 	
 	// Encrypt chunks
-	aes128_encrypt(&ctxs[0], wire->length, data_length + 16);
+	aes128_encrypt(&ctxs[0], wire->length, data_length + 32);
 
 	// MAC for IV, length, type, and chunks into the wire
 	aes128_cmac(&ctxs[1], wire->iv, data_length + (sizeof(wire_t) - 16), wire->mac);
