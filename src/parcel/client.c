@@ -25,7 +25,7 @@ static inline void error(sock_t socket, const char *msg)
 	exit(EXIT_FAILURE);
 }
 
-static void send_encrypted_message(int socket, uint8_t type, void *data, size_t length, const uint8_t *key)
+static void send_encrypted_message(int socket, uint64_t type, void *data, size_t length, const uint8_t *key)
 {
 	size_t len = length;
 	wire_t *wire = init_wire(data, type,  &len);
@@ -106,40 +106,44 @@ int send_thread(void *ctx)
 
 static int recv_handler(client_t *ctx)
 {
-	wire_t *wire = malloc(sizeof(*wire) + RECV_MAX_LENGTH);
+	wire_t *wire = new_wire();
 	if (!wire) {
 		return -1;
 	}
-	memset(wire, 0, sizeof(*wire) + RECV_MAX_LENGTH);
 
 	const ssize_t bytes_recv = xrecv(ctx->socket, wire, sizeof(*wire) + RECV_MAX_LENGTH, 0);
 	if (bytes_recv < 0) {
 		free(wire);
 		error(ctx->socket, "recv()");
 	}
-	if (bytes_recv == 32) {
-		if (!memcmp(wire, ctx->ctrl_key, 32)) {
-			free(wire);
-			return node_key_exchange(ctx->socket, ctx->ctrl_key, ctx->session_key, ctx->fingerprint);
-		}
-		free(wire);
-		error(ctx->socket, "invalid control message");
+	
+	switch (decrypt_wire(wire, ctx->session_key)) {
+		case -1:
+			return -1;
+		case 0:
+			break;
+		case 1:
+			if (decrypt_wire(wire, ctx->ctrl_key)) {
+				return -1;
+			}
 	}
 	
-	if (decrypt_wire(wire, ctx->session_key)) {
-		return -1;
-	}
-
-	if (wire->type[0] == TYPE_FILE) {
-		// TODO
-	}
-	else {
-		printf("\033[2K\r%s\n%s: ", wire->data, ctx->username);
-		fflush(stdout);
+	switch (wire_get_type(wire)) {
+		case TYPE_CTRL:
+			if (node_key_exchange(ctx->socket, wire_get_data(wire), ctx->session_key, ctx->fingerprint)) {
+				return -1;
+			}
+			break;
+		case TYPE_FILE:
+			// TODO
+			break;
+		case TYPE_TEXT:
+			printf("\033[2K\r%s\n%s: ", wire->data, ctx->username);
+			fflush(stdout);
+			break;
 	}
 	
 	free(wire);
-
 	return 0;
 }
 

@@ -18,8 +18,8 @@
 #include <stdbool.h>
 #include <sys/types.h>
 
-enum AES128 
-{ 
+enum AES128
+{
 	ROUNDS = 10,
 	BLOCK_SIZE = 16
 };

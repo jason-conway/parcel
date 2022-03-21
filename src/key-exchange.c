@@ -145,12 +145,23 @@ int two_party_server(const sock_t socket, uint8_t *session_key)
 
 static int send_ctrl_key(sock_t *sockets, size_t count, uint8_t *key)
 {
+	//const size_t len = sizeof("1024");
+	char str_count[5];
+	ssize_t len = snprintf(str_count, sizeof(str_count), "%zu", count);
+	if (len < 0) {
+		return -1;
+	}
+	wire_t *wire = init_wire((uint8_t *)str_count, TYPE_CTRL, (size_t *)&len);
+	encrypt_wire(wire, key);
+
 	for (size_t i = 1; i <= count; i++) {
-		printf("\n> Sending control key to slot %zu\n", i);
-		if (xsendall(sockets[i], key, KEY_LEN) < 0) {
+		printf("\n> Sending control key wire to slot %zu\n", i);
+		if (xsendall(sockets[i], wire, len) < 0) {
+			free(wire);
 			return -1;
 		}
 	}
+	free(wire);
 	return 0;
 }
 
@@ -209,7 +220,7 @@ int key_exchange_router(sock_t *sockets, size_t connection_count, uint8_t *key)
 }
 
 // An N-Party Diffie-Hellman Key Exchange
-int node_key_exchange(const sock_t socket, uint8_t *ctrl_key, uint8_t *session_key, uint8_t *fingerprint)
+int node_key_exchange(const sock_t socket, size_t rounds, uint8_t *session_key, uint8_t *fingerprint)
 {
 	uint8_t secret_key[KEY_LEN];
 	generate_secret(secret_key);
@@ -226,17 +237,12 @@ int node_key_exchange(const sock_t socket, uint8_t *ctrl_key, uint8_t *session_k
 	if (xrecv(socket, intermediate, KEY_LEN, 0) != KEY_LEN) {
 		return -1;
 	}
-	
 
 	uint8_t intermediate_shared[KEY_LEN];
-	while (1) {
+	for (size_t i = 0; i < rounds; i++) {
 		uint8_t incoming[KEY_LEN];
 		if (xrecv(socket, incoming, KEY_LEN, 0) != KEY_LEN) {
 			return -1;
-		}
-		// CTRL message received
-		if (!memcmp(incoming, ctrl_key, 32)) {
-			break;
 		}
 
 		compute_shared(intermediate_shared, secret_key, incoming);

@@ -37,7 +37,27 @@ static void unpack64_le(uint8_t *dest, uint64_t word)
 	dest[7] = (uint8_t)(word >> 0x38);
 }
 
-wire_t *init_wire(void *data, uint8_t type, size_t *len)
+uint64_t wire_get_type(wire_t *wire)
+{
+	return pack64_le(wire->data_type);
+}
+
+uint64_t wire_get_data(wire_t *wire)
+{
+	return pack64_le(wire->data);
+}
+
+wire_t *new_wire(void)
+{
+	wire_t *wire = malloc(sizeof(*wire) + MAX_LEN);
+	if (!wire) {
+		return NULL;
+	}
+	memset(wire, 0, sizeof(*wire) + MAX_LEN);
+	return wire;
+}
+
+wire_t *init_wire(uint8_t *data, uint64_t type, size_t *len)
 {
 	const uint64_t data_length = BLOCK_LEN * ((*len + 15) / BLOCK_LEN);
 	const size_t wire_length = sizeof(wire_t) + data_length;
@@ -49,24 +69,11 @@ wire_t *init_wire(void *data, uint8_t type, size_t *len)
 
 	xgetrandom(wire->iv, BLOCK_LEN);
 	unpack64_le(wire->length, data_length);
-	unpack64_le(wire->type, type);
+	if (type == TYPE_CTRL)
+	unpack64_le(wire->data_type, type);
 	memcpy(wire->data, data, *len);
 	*len = wire_length;
 	return wire;
-}
-
-static inline size_t get_length(aes128_t *ctx, uint8_t *length_section, bool decrypt)
-{
-	if (decrypt) {
-		uint8_t length[16] = { 0 };
-		memcpy(length, length_section, BLOCK_LEN);
-		aes128_decrypt(ctx, length, BLOCK_LEN);
-		return pack64_le(length);
-	}
-
-	const size_t data_length = pack64_le(length_section);
-	aes128_encrypt(ctx, length_section, BLOCK_LEN);
-	return data_length;
 }
 
 void encrypt_wire(wire_t *wire, const uint8_t *key)
@@ -75,15 +82,14 @@ void encrypt_wire(wire_t *wire, const uint8_t *key)
 	aes128_init(&ctxs[0], wire->iv, &key[0]);
 	aes128_init_cmac(&ctxs[1], &key[16]);
 
-	// Unpack and encrypt length
-	// const size_t data_length = get_length(&ctxs[0], wire->length, false);
+	// Grab length from wire
 	const size_t data_length = pack64_le(wire->length);
 	
 	// Encrypt chunks
-	aes128_encrypt(&ctxs[0], wire->length, data_length + 32);
+	aes128_encrypt(&ctxs[0], wire->length, data_length + BASE_ENC_LEN);
 
 	// MAC for IV, length, type, and chunks into the wire
-	aes128_cmac(&ctxs[1], wire->iv, data_length + (sizeof(wire_t) - 16), wire->mac);
+	aes128_cmac(&ctxs[1], wire->iv, data_length + BASE_AUTH_LEN, wire->mac);
 }
 
 int decrypt_wire(wire_t *wire, const uint8_t *key)
@@ -92,17 +98,23 @@ int decrypt_wire(wire_t *wire, const uint8_t *key)
 	aes128_init(&ctxs[0], wire->iv, &key[0]);
 	aes128_init_cmac(&ctxs[1], &key[16]);
 
-	// Decrypt and unpack data length
-	const size_t data_length = get_length(&ctxs[0], wire->length, true);
+	// Decrypt only the length
+	uint8_t length[16] = { 0 };
+	memcpy(length, wire->length, BLOCK_LEN);
+	aes128_decrypt(&ctxs[0], length, BLOCK_LEN);
+	const size_t data_length = pack64_le(length);
+	if (data_length > MAX_LEN) {
+		return 1;
+	}
 
 	// Verify MAC prior to decrypting in full
 	uint8_t verification_cmac[16] = { 0 };
-	aes128_cmac(&ctxs[1], wire->iv, data_length + (sizeof(wire_t) - 16), verification_cmac);
+	aes128_cmac(&ctxs[1], wire->iv, data_length + BASE_AUTH_LEN, verification_cmac);
 	if (memcmp(&wire->mac[0], verification_cmac, BLOCK_LEN)) {
 		fprintf(stderr, "> internal: CMAC does not match\n");
 		return -1;
 	}
 
-	aes128_decrypt(&ctxs[0], wire->type, data_length + 16);
+	aes128_decrypt(&ctxs[0], wire->data_type, data_length + BASE_DEC_LEN);
 	return 0;
 }

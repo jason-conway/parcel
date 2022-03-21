@@ -30,7 +30,7 @@ ssize_t xsendall(sock_t socket, const void *data, size_t len)
 	ssize_t bytes_sent;
 	size_t remaining = len;
 	while (total_sent < len) {
-		if ((bytes_sent = xsend(socket, &data[total_sent], remaining, 0)) < 0) {
+		if ((bytes_sent = xsend(socket, data + total_sent, remaining, 0)) < 0) {
 			return -1;
 		}
 		total_sent += bytes_sent;
