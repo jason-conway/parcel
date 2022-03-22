@@ -57,10 +57,14 @@ int main(int argc, char **argv)
 			case 'h':
 				usage(stdout);
 				exit(EXIT_SUCCESS);
-			default:
-				usage(stderr);
+			case ':':
+				printf("> Option is missing an argument\n");
 				exit(EXIT_FAILURE);
 		}
+	}
+	if (!(address && port && username)) {
+		usage(stderr);
+		exit(EXIT_FAILURE);
 	}
 
 	client_t client = { .mutex_lock = PTHREAD_MUTEX_INITIALIZER };

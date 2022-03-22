@@ -94,6 +94,16 @@ static size_t socket_index(server_t *srv, sock_t socket)
 	return 0;
 }
 
+// static size_t max_descriptor(server_t *srv, sock_t socket)
+// {
+// 	for (size_t i = 0; i < srv->descriptor_count; i++) {
+// 		if (xfd_inset(srv->descriptors, i == socket) {
+// 			return i;
+// 		}
+// 	}
+// 	return 0;
+// }
+
 static bool add_client(server_t *srv)
 {
 	struct sockaddr_storage client_sockaddr;
@@ -140,7 +150,7 @@ static int recv_client(server_t *srv, size_t sender_index)
 {
 	msg_t msg;
 	memset(&msg, 0, sizeof(msg_t));
-	
+
 	if ((msg.length = xrecv(srv->sockets[sender_index], msg.data, MAX_CHUNK, 0)) <= 0) {
 		if (msg.length) {
 			fprintf(stderr, ">\033[33m Connection error\033[0m\n");
@@ -161,9 +171,16 @@ static int recv_client(server_t *srv, size_t sender_index)
 		(void)xclose(srv->sockets[sender_index]);
 		
 		// Replace this slot with the ending slot
-		srv->sockets[sender_index] = srv->sockets[srv->connection_count-1];
-		srv->connection_count--;
+		if (srv->connection_count == 1) {
+			srv->sockets[sender_index] = 0;
+		}
+		else {
+			srv->sockets[sender_index] = srv->sockets[srv->connection_count - 1];
+			srv->sockets[srv->connection_count - 1] = 0;
+		}
 		
+		// srv->sockets[sender_index] = (srv->connection_count == 1) ? 0 : srv->sockets[srv->connection_count-1];
+		srv->connection_count--;
 		// key_exchange_router(srv->socket, &srv->connections, srv->max_in_set, srv->server_key);
 	}
 	else {

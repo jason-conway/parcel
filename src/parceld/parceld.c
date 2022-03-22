@@ -4,9 +4,9 @@
  * @brief Parcel Daemon
  * @version 0.1
  * @date 2022-01-28
- * 
+ *
  * @copyright Copyright (c) 2022 Jason Conway. All rights reserved.
- * 
+ *
  */
 
 #include "daemon.h"
@@ -37,10 +37,13 @@ int main(int argc, char *argv[])
 				usage(stdout);
 				exit(EXIT_SUCCESS);
 			case ':':
-			case '?':
-				usage(stderr);
-				break;
+				printf("> Option is missing an argument\n");
+				exit(EXIT_FAILURE);
 		}
+	}
+	if (!port) {
+		usage(stderr);
+		exit(EXIT_FAILURE);
 	}
 
 	configure_server(&server, port);

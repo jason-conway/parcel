@@ -126,7 +126,7 @@ int two_party_server(const sock_t socket, uint8_t *session_key)
 	printf("> Sent public key to client\n");
 
 	compute_shared(shared_secret, secret_key, public_key);
-	
+
 	fprint("Shared-secret: ", shared_secret);
 
 	fprint("Server session key is: ", session_key);
@@ -146,12 +146,17 @@ int two_party_server(const sock_t socket, uint8_t *session_key)
 static int send_ctrl_key(sock_t *sockets, size_t count, uint8_t *key)
 {
 	//const size_t len = sizeof("1024");
-	char str_count[5];
-	ssize_t len = snprintf(str_count, sizeof(str_count), "%zu", count);
-	if (len < 0) {
-		return -1;
-	}
-	wire_t *wire = init_wire((uint8_t *)str_count, TYPE_CTRL, (size_t *)&len);
+	uint8_t ctrl_message[48];
+	memset(ctrl_message, 0, sizeof(ctrl_message));
+	// if (snprintf((char *)ctrl_message, 16, "%zu", count - 1) < 0) {
+	// 	return -1;
+	// }
+	
+	xgetrandom(&ctrl_message[16], 32);
+
+	size_t len = sizeof(ctrl_message);
+	wire_t *wire = init_wire(ctrl_message, TYPE_CTRL, &len);
+	wire_set_first_word(wire, count - 1);
 	encrypt_wire(wire, key);
 
 	for (size_t i = 1; i <= count; i++) {
@@ -161,6 +166,7 @@ static int send_ctrl_key(sock_t *sockets, size_t count, uint8_t *key)
 			return -1;
 		}
 	}
+	memcpy(key, &ctrl_message[16], 32);
 	free(wire);
 	return 0;
 }
@@ -170,11 +176,11 @@ static int rotate_intermediates(sock_t *sockets, size_t count)
 	uint8_t intermediate_key[32];
 	for (size_t i = 1; i <= count; i++) {
 		size_t next = (i == count) ? 1 : i + 1;
-		
+
 		if (xrecv(sockets[i], intermediate_key, 32, 0) != 32) {
 			return -1;
 		}
-		
+
 		printf("> xrecv from slot %zu", i);
 		fflush(stdout);
 		if (xsendall(sockets[next], intermediate_key, 32) < 0) {
@@ -197,25 +203,18 @@ int key_exchange_router(sock_t *sockets, size_t connection_count, uint8_t *key)
 
 	// "Ratchet" hash forward once
 	// sha256_self_digest(key);
-
 	if (send_ctrl_key(sockets, connection_count, key)) {
 		printf("> Error sending starting control keys\n");
 		return -1;
 	}
 
 	printf("> Start messages sent\n");
-	
+
 	for (size_t i = 0; i < connection_count - 1; i++) {
 		printf("> GDH1 round %zu of %zu\n", i + 1, connection_count - 1);
 		rotate_intermediates(sockets, connection_count);
 	}
 
-	if (send_ctrl_key(sockets, connection_count, key)) {
-		printf("> Error sending stopping control keys\n");
-		return -1;
-	}
-	printf("> Stop messages sent\n");
-	
 	return 0;
 }
 
@@ -233,28 +232,24 @@ int node_key_exchange(const sock_t socket, size_t rounds, uint8_t *session_key, 
 		return -1;
 	}
 
-	uint8_t intermediate[KEY_LEN];
-	if (xrecv(socket, intermediate, KEY_LEN, 0) != KEY_LEN) {
-		return -1;
-	}
-
-	uint8_t intermediate_shared[KEY_LEN];
 	for (size_t i = 0; i < rounds; i++) {
-		uint8_t incoming[KEY_LEN];
-		if (xrecv(socket, incoming, KEY_LEN, 0) != KEY_LEN) {
+		uint8_t intermediate_public[KEY_LEN];
+		if (xrecv(socket, intermediate_public, KEY_LEN, 0) != KEY_LEN) {
 			return -1;
 		}
 
-		compute_shared(intermediate_shared, secret_key, incoming);
+		uint8_t shared_secret[KEY_LEN];
+		compute_shared(shared_secret, secret_key, intermediate_public);
 
-		if (xsend(socket, intermediate_shared, KEY_LEN, 0) != KEY_LEN) {
+		if (i == rounds - 1) {
+			sha256_digest(session_key, shared_secret);
+			// sha256_self_digest(ctrl_key);
+			return 0;
+		}
+
+		if (xsend(socket, shared_secret, KEY_LEN, 0) != KEY_LEN) {
 			return -1;
 		}
 	}
-
-	uint8_t shared_key[KEY_LEN];
-	compute_shared(shared_key, secret_key, intermediate_shared);
-	sha256_digest(session_key, shared_key);
-	// sha256_self_digest(ctrl_key);
 	return 0;
 }

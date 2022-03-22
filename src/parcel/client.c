@@ -39,8 +39,8 @@ static void send_encrypted_message(int socket, uint64_t type, void *data, size_t
 
 void send_connection_status(client_t *ctx, bool leave)
 {
-	char msg[USERNAME_MAX_LENGTH + 36] = { 0 };
-	static const char *template = "\033[3%dm%s has %s the server.\033[0m";
+	char msg[USERNAME_MAX_LENGTH + 40] = { 0 };
+	static const char template[] = "\033[3%dm%s has %s the server.\033[0m";
 
 	if (snprintf(msg, sizeof(msg), template, leave ? 5 : 2, ctx->username, leave ? "left" : "joined") < 0) {
 		error(ctx->socket, "send()");
@@ -117,23 +117,37 @@ static int recv_handler(client_t *ctx)
 		error(ctx->socket, "recv()");
 	}
 	
-	switch (decrypt_wire(wire, ctx->session_key)) {
-		case -1:
-			return -1;
-		case 0:
-			break;
-		case 1:
-			if (decrypt_wire(wire, ctx->ctrl_key)) {
+	size_t length[1] = { bytes_recv };
+	switch (_decrypt_wire(wire, length, ctx->session_key)) {
+		case INCORRECT_KEY:
+			if (_decrypt_wire(wire, length, ctx->ctrl_key)) {
 				return -1;
 			}
+			break;
+		case CMAC_ERROR:
+			return -1;
+		case WIRE_OK:
+			break;
 	}
+
+	// if (wire_get_type(wire) == TYPE_CTRL) {
+	// 	// size_t rounds = strtol((char *)wire->data, NULL, 10);
+	// 	size_t rounds = wire_get_first_word(wire);
+	// 	memcpy(ctx->ctrl_key, &wire->data[16], 32);
+	// 	if (node_key_exchange(ctx->socket, rounds, ctx->session_key, ctx->fingerprint)) {
+	// 		return -1;
+	// 	}
+	// }
 	
 	switch (wire_get_type(wire)) {
-		case TYPE_CTRL:
-			if (node_key_exchange(ctx->socket, wire_get_data(wire), ctx->session_key, ctx->fingerprint)) {
+		case TYPE_CTRL: {
+			size_t rounds = wire_get_first_word(wire);
+			memcpy(ctx->ctrl_key, &wire->data[16], 32);
+			if (node_key_exchange(ctx->socket, rounds, ctx->session_key, ctx->fingerprint)) {
 				return -1;
 			}
 			break;
+		}
 		case TYPE_FILE:
 			// TODO
 			break;
