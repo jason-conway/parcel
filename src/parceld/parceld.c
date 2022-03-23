@@ -37,7 +37,7 @@ int main(int argc, char *argv[])
 				usage(stdout);
 				exit(EXIT_SUCCESS);
 			case ':':
-				printf("> Option is missing an argument\n");
+				printf("Option is missing an argument\n");
 				exit(EXIT_FAILURE);
 		}
 	}

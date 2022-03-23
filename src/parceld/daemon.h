@@ -25,15 +25,14 @@
 #include "sha256.h"
 #include "wire.h"
 
-enum Server
+enum ParceldConstants
 {
 	MAX_CHUNK = 1 << 20,
 	SOCK_LEN = sizeof(struct sockaddr),
 	MAX_CONNECTIONS = FD_SETSIZE,
-	MAX_QUEUE = 32
+	MAX_QUEUE = 32,
+	KEY_LENGTH = 32
 };
-
-enum KEY { KEY_LENGTH = 32 };
 
 typedef struct server_t
 {
@@ -46,9 +45,9 @@ typedef struct server_t
 
 typedef struct msg_t
 {
-	char data[MAX_CHUNK];
+	uint8_t data[MAX_CHUNK];
 	ssize_t length;
 } msg_t;
 
-void configure_server(server_t *, const char *);
-int main_thread(void *);
+void configure_server(server_t *srv, const char *port);
+int main_thread(void *ctx);
