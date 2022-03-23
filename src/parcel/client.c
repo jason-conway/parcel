@@ -51,7 +51,6 @@ void send_connection_status(client_t *ctx, bool leave)
 		if (xclose(ctx->socket)) {
 			error(ctx->socket, "close()");
 		}
-		pthread_exit(NULL);
 	}
 }
 
@@ -130,19 +129,10 @@ static int recv_handler(client_t *ctx)
 			break;
 	}
 
-	// if (wire_get_type(wire) == TYPE_CTRL) {
-	// 	// size_t rounds = strtol((char *)wire->data, NULL, 10);
-	// 	size_t rounds = wire_get_first_word(wire);
-	// 	memcpy(ctx->ctrl_key, &wire->data[16], 32);
-	// 	if (node_key_exchange(ctx->socket, rounds, ctx->session_key, ctx->fingerprint)) {
-	// 		return -1;
-	// 	}
-	// }
-	
-	switch (wire_get_type(wire)) {
+	switch (wire_get_raw(wire->data_type)) {
 		case TYPE_CTRL: {
-			size_t rounds = wire_get_first_word(wire);
-			memcpy(ctx->ctrl_key, &wire->data[16], 32);
+			size_t rounds = wire_get_raw(wire->data);
+			memcpy(ctx->ctrl_key, &wire->data[16], KEY_LEN);
 			if (node_key_exchange(ctx->socket, rounds, ctx->session_key, ctx->fingerprint)) {
 				return -1;
 			}
@@ -222,5 +212,7 @@ void connect_server(client_t *client, const char *ip, const char *port)
 	}
 
 	printf("\033[32mConnected to server\033[0m\n");
+	
+	// TODO: This needs to be done after a key exchange sequence
 	// send_connection_status(client, false);
 }
