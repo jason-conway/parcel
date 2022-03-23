@@ -33,8 +33,9 @@ static void prepend_username(client_t *ctx, char **message, size_t *message_leng
 	*message = msg;
 }
 
-static int change_username(client_t *ctx, char **message, size_t *message_length)
+static int cmd_username(client_t *ctx, char **message, size_t *message_length)
 {
+	free(*message);
 	char *new_username = NULL;
 	size_t new_username_length = 0;
 	do {
@@ -64,8 +65,18 @@ static int change_username(client_t *ctx, char **message, size_t *message_length
 	return 0;
 }
 
+static bool file_exists(char *filename)
+{
+	FILE *f = fopen(filename, "r");
+	if (f) {
+		(void)fclose(f);
+		return true;
+	}
+	return false;
+}
+
 // TODO
-static int send_file(client_t *ctx, char **message, size_t *message_length)
+static int cmd_send_file(client_t *ctx, char **message, size_t *message_length)
 {
 	(void)ctx;
 	(void)message;
@@ -79,7 +90,39 @@ static int send_file(client_t *ctx, char **message, size_t *message_length)
 		xgetline(&file_path, &path_length, stdin);
 	} while (!path_length);
 	file_path[path_length - 1] = '\0'; // remove \n
+	if (file_exists(file_path)) {
+		
+	}
 	return 0;
+}
+
+static inline void cmd_print_fingerprint(const uint8_t *fingerprint)
+{
+	print_fingerprint("Fingerprint is: ", fingerprint);
+}
+
+static inline void cmd_exit(client_t *ctx, char *message)
+{
+	free(message);
+	send_connection_status(ctx, true);
+	exit(EXIT_SUCCESS);
+}
+
+static enum command_id parse_command(char *command)
+{
+	static const char *command_strings[] = {
+		":q\n", ":username\n", ":fingerprint\n", ":file\n"
+	};
+	
+	const size_t len = strlen(command);
+	const size_t commands = sizeof(command_strings) / sizeof(*command_strings);
+
+	for (size_t i = 1; i <= commands; i++) {
+		if (!strncmp(command, command_strings[i - 1], len)) {
+			return i;
+		}
+	}
+	return -1;
 }
 
 // This needs work later
@@ -92,29 +135,20 @@ int parse_input(client_t *ctx, char **message, size_t *message_length)
 		}
 		return CMD_NONE;
 	}
-	else if (!strcmp(*message, ":q\n")) {
-		free(*message);
-		send_connection_status(ctx, true);
-		pthread_exit(NULL);
-		exit(EXIT_SUCCESS);
-	}
-	else if (!strcmp(*message, ":username\n")) {
-		free(*message);
-		if (change_username(ctx, message, message_length)) {
-			send_connection_status(ctx, true); // may not work
-			return -1;
-		}
-		return CMD_USERNAME;
-	}
-	else if (!strcmp(*message, ":fingerprint\n")) {
-		fprint("Fingerprint is: ", ctx->fingerprint);
-		return CMD_FINGERPRINT;
-	}
-	else if (!strcmp(*message, ":file\n")) {
-		send_file(ctx, message, message_length);
-		return CMD_FINGERPRINT;
-	}
 	else {
-		return -1;
+		switch (parse_command(*message)) {
+			case CMD_EXIT:
+				cmd_exit(ctx, *message);
+			case CMD_USERNAME:
+				return cmd_username(ctx, message, message_length) ? -1 : CMD_USERNAME;
+			case CMD_FINGERPRINT:
+				cmd_print_fingerprint(ctx->fingerprint);
+				return CMD_FINGERPRINT;
+			case CMD_FILE:
+				cmd_send_file(ctx, message, message_length);
+				return CMD_FILE;
+			default:
+				return -1;
+		}
 	}
 }
