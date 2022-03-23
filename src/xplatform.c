@@ -151,7 +151,7 @@ int xgetifaddrs(void)
 			if (getnameinfo(node->ifa_addr, sizeof(struct sockaddr_in), interface_name, NI_MAXHOST, NULL, 0, NI_NUMERICHOST)) {
 				return -1;
 			}
-			printf(">\t%s\n", interface_name);
+			printf("\t%s\n", interface_name);
 		}
 	}
 	freeifaddrs(interfaces);
@@ -177,7 +177,7 @@ int xgetifaddrs(void)
 		return -1;
 	}
 	for (PIP_ADAPTER_INFO adapter = adapter_info; adapter; adapter = adapter->Next) {
-		printf(">\t%s\n", adapter->IpAddressList.IpAddress.String);
+		printf("\t%s\n", adapter->IpAddressList.IpAddress.String);
 	}
 
 	(void)HeapFree(GetProcessHeap(), 0, adapter_info);
@@ -370,4 +370,18 @@ void xgetline(char **message, size_t *message_length, FILE *stream)
 	*message = line;
 	*message_length = read_length;
 	return;
+}
+
+void xprintf(ansi color, const char *format, ...)
+{
+	static const char *escape_codes[] = {
+		"\033[0;31m", "\033[0;32m", "\033[0;33m", "\033[0;35m"
+	};
+
+	va_list ap;
+	va_start(ap, format);
+	fprintf(stdout, "%s", escape_codes[color]);
+	vfprintf(stdout, format, ap);
+	fprintf(stdout, "\033[0m");
+	va_end(ap);
 }

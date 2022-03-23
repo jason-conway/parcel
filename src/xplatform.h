@@ -17,6 +17,7 @@
 #include <string.h>
 #include <stdbool.h>
 #include <pthread.h>
+#include <stdarg.h>
 #include <sys/types.h>
 
 #if __unix__ || __APPLE__
@@ -61,6 +62,14 @@ typedef struct xgetopt_t
 	int position;
 } xgetopt_t;
 
+typedef enum ansi
+{
+	RED,
+	GRN,
+	YEL,
+	MAG
+} ansi;
+
 void xgetrandom(void *dest, size_t len);
 
 int xsocket(sock_t *xsocket, int domain, int type, int protocol);
@@ -83,3 +92,5 @@ int xgetopt(xgetopt_t *x, int argc, char **argv, const char *optstr);
 void xgetline(char **message, size_t *message_length, FILE *stream);
 int xgetifaddrs(void);
 int xstartup(void);
+
+void xprintf(ansi color, const char *format, ...);
