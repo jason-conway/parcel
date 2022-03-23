@@ -60,6 +60,5 @@ size_t encrypt_wire(wire_t *wire, const uint8_t *key);
 int decrypt_wire(wire_t *wire, const uint8_t *key);
 int _decrypt_wire(wire_t *wire, size_t *len, const uint8_t *key);
 
-uint64_t wire_get_type(wire_t *wire);
-void wire_set_first_word(wire_t *wire, uint64_t word);
-uint64_t wire_get_first_word(wire_t *wire);
+void wire_set_raw(uint8_t *dest, uint64_t src);
+uint64_t wire_get_raw(uint8_t *src);

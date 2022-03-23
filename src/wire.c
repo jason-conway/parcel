@@ -37,19 +37,14 @@ static void unpack64_le(uint8_t *dest, uint64_t word)
 	dest[7] = (uint8_t)(word >> 0x38);
 }
 
-uint64_t wire_get_type(wire_t *wire)
+uint64_t wire_get_raw(uint8_t *src)
 {
-	return pack64_le(wire->data_type);
+	return pack64_le(src);
 }
 
-uint64_t wire_get_first_word(wire_t *wire)
+void wire_set_raw(uint8_t *dest, uint64_t src)
 {
-	return pack64_le(wire->data);
-}
-
-void wire_set_first_word(wire_t *wire, uint64_t word)
-{
-	unpack64_le(wire->data, word);
+	unpack64_le(dest, src);
 }
 
 wire_t *new_wire(void)
