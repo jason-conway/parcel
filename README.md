@@ -54,12 +54,13 @@ Parcel encrypts and decrypts message data using AES128. Messages are authenticat
 
 ### Key Exchange
 
-The parcel daemon, `parceld`, generates a random session key at startup.
+The parcel daemon, `parceld`, generates a random 32-byte control key at startup. After establishing a secured channel, this key is shared with the client and used to decrypt `TYPE_CTRL` messages from the daemon. 
 
-As of version 0.9.0, this key is static over the duration of the session. This behavior is planned on being replaced with a ratcheting mechanism for forward secrecy.
+The control key is used only once, with `TYPE_CTRL` messages containing the next control keys as part of its encrypted contents.
 
-Curve25519 is used to perform the [Elliptic-curve Diffie-Hellmans](https://en.wikipedia.org/wiki/Elliptic-curve_Diffie%E2%80%93Hellman) between the client and server. 
+Upon recieving and decrypting a control message, the parcel clients perform a multi-party [Elliptic-curve Diffie-Hellman](https://en.wikipedia.org/wiki/Elliptic-curve_Diffie%E2%80%93Hellman) key exchange using [Curve25519](https://en.wikipedia.org/wiki/Curve25519), at which point all clients posess a new shared key.
 
+A new group key is derived whenever the number of clients changes.
 
 ## Frequently Asked Questions
 
@@ -75,6 +76,20 @@ REG ADD HKCU\CONSOLE /f /v VirtualTerminalLevel /t REG_DWORD /d 1
 
 If an earlier version of Windows is being used or if parcel is being run from a different shell, the extra console configuration will fail silently and parcel will continue as normal.
 
+The number of active clients supported by `parceld` is determined by `FD_SETSIZE`. As a result, `parceld` supports a maximum of 64 active clients when running on Windows.
+
+## Client-Side Commands
+
+All commands start with a colon followed by the command itself.
+
+| Command        | Description                           |
+| -------------- | ------------------------------------- |
+| `:q`           | Cleanly quit parcel                   |
+| `:file`        | Send a file                           |
+| `:fingerprint` | Display fingerprint of the public key |
+| `:username`    | Change client username                |
+
+
 ## Wire Format
 
 The wire consists of 4 sections: mac, iv, length, data
@@ -83,6 +98,24 @@ The wire consists of 4 sections: mac, iv, length, data
 
 `iv` contains the 16-byte Initialization Vector. required for ciper block chaining. Since `data` is encrypted in CBC mode, the IV only needs to be random- not secret, so it is sent as plaintext.
 
-`length` containts the number the bytes in the `data` section. 
+`length` containts the number the bytes in the `data` section.
+
+`data_type` indicates the type of data contained in the `data` section. 
 
 `data` contains one or more 16-byte chunks of encrypted data
+
+### Wire Types
+
+The possible message types are `TYPE_TEXT`, `TYPE_FILE`, and `TYPE_CTRL`.
+
+The parcel client can send messages of type `TYPE_TEXT` and `TYPE_FILE`. Only the parcel daemon can send `TYPE_CTRL`, which are used to trigger a GDHKD sequence to update the key.
+
+### Type-Specific `data` Section Layout
+
+When a message has the type `TYPE_CTRL`, the `data` section will always be 48-bytes long.
+
+The first 8 bytes encode the value `GHDR`, representing the number of intermediate shared-key derivation rounds to perform.
+
+The second 8 bytes are set to `\0`
+
+The last 32 bytes are set to the next control message key.
