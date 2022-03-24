@@ -2,7 +2,7 @@
  * @file xplatform.c
  * @author Jason Conway (jpc@jasonconway.dev)
  * @brief xplatform (cross-platform) wrappers
- * @version 0.1
+ * @version 0.9.1
  * @date 2022-01-26
  *
  * @copyright Copyright (c) 2022 Jason Conway. All rights reserved.
@@ -160,19 +160,19 @@ int xgetifaddrs(void)
 	ULONG ip_adapter_len[1] = { sizeof(IP_ADAPTER_INFO) };
 	PIP_ADAPTER_INFO adapter_info = (IP_ADAPTER_INFO *)HeapAlloc(GetProcessHeap(), 0, ip_adapter_len[0]);
 	if (!adapter_info) {
-		fprintf(stderr, "\033[31merror: HeapAlloc()\n\033[0m");
+		xprintf(RED, "error: HeapAlloc()\n");
 		return -1;
 	}
 	if (GetAdaptersInfo(adapter_info, ip_adapter_len) == ERROR_BUFFER_OVERFLOW) {
 		(void)HeapFree(GetProcessHeap(), 0, (adapter_info));
 		adapter_info = (IP_ADAPTER_INFO *)HeapAlloc(GetProcessHeap(), 0, ip_adapter_len[0]);
 		if (!adapter_info) {
-			fprintf(stderr, "\033[31merror: HeapAlloc()\n\033[0m");
+			xprintf(RED, "error: HeapAlloc()\n");
 			return -1;
 		}
 	}
 	if (GetAdaptersInfo(adapter_info, ip_adapter_len)) {
-		fprintf(stderr, "\033[31merror: GetAdaptersInfo()\n\033[0m");
+		xprintf(RED, "error: GetAdaptersInfo()\n");
 		(void)HeapFree(GetProcessHeap(), 0, adapter_info);
 		return -1;
 	}
@@ -252,7 +252,7 @@ size_t xfd_init_count(sock_t fd)
 }
 
 /**
- * @section unistd / win32 wrappers
+ * @section unistd / win32 wrappers and portable implementations
  */
 
 void xgetrandom(void *dest, size_t len)
@@ -335,16 +335,18 @@ void xgetline(char **message, size_t *message_length, FILE *stream)
 		if (read_length == line_length - 2) {
 			line[read_length] = 0;
 			if (line_length * 2 < line_length) {
-				free(line);
-				*message = NULL;
-				return;
+				goto error;
+				// free(line);
+				// *message = NULL;
+				// return;
 			}
 
 			char *new_line = NULL;
 			if (!(new_line = realloc(line, line_length *= 2))) {
-				free(line);
-				*message = NULL;
-				return;
+				goto error;
+				// free(line);
+				// *message = NULL;
+				// return;
 			}
 			line = new_line;
 		}
@@ -354,14 +356,15 @@ void xgetline(char **message, size_t *message_length, FILE *stream)
 			goto eol;
 		}
 
-		line[read_length++] = c;
+		line[read_length++] = (char)c;
 		if (c == '\n') {
 		eol:
 			if (read_length == 1) {
 				*message_length = 0;
-				*message = NULL;
-				free(line);
-				return;
+				goto error;
+				// *message = NULL;
+				// free(line);
+				// return;
 			}
 			line[read_length] = '\0';
 			break;
@@ -369,6 +372,11 @@ void xgetline(char **message, size_t *message_length, FILE *stream)
 	}
 	*message = line;
 	*message_length = read_length;
+
+	error:
+		free(line);
+		*message = NULL;
+
 	return;
 }
 
@@ -380,8 +388,89 @@ void xprintf(ansi color, const char *format, ...)
 
 	va_list ap;
 	va_start(ap, format);
-	fprintf(stdout, "%s", escape_codes[color]);
-	vfprintf(stdout, format, ap);
-	fprintf(stdout, "\033[0m");
+	(void)fprintf(stdout, "%s", escape_codes[color]);
+	(void)vfprintf(stdout, format, ap);
+	(void)fprintf(stdout, "\033[0m");
 	va_end(ap);
+}
+
+bool xfexists(const char *filename)
+{
+	FILE *f = fopen(filename, "r");
+	if (f) {
+		(void)fclose(f);
+		return true;
+	}
+	return false;
+}
+
+// "Setting the file position indicator to end-of-file,
+// as with fseek(file, 0, SEEK_END), has undefined behavior
+// for a binary stream (because of possible trailing null
+// characters) or for any stream with state-dependent encoding
+// that does not assuredly end in the initial shift state"
+size_t xfsize(const char *filename)
+{
+#if __unix__ || __APPLE__
+	struct stat st;
+	stat(filename, &st);
+	return (size_t)st.st_size;
+#elif _WIN32
+	WIN32_FILE_ATTRIBUTE_DATA file_attributes;
+	if (GetFileAttributesEx(filename, GetFileExInfoStandard, &file_attributes)) {
+		ULARGE_INTEGER ul;
+		ul.HighPart = file_attributes.nFileSizeHigh;
+		ul.LowPart = file_attributes.nFileSizeLow;
+		return (size_t)ul.QuadPart;
+	}
+	return 0;
+#endif
+}
+
+char *xstrdup(const char *str)
+{
+	char *duplicate = NULL;
+	if (str) {
+		size_t length = strlen(str) + 1;
+		duplicate = malloc(length);
+		if (!duplicate) {
+			xprintf(RED, "malloc() failed\n");
+			return NULL;
+		}
+		memcpy(duplicate, str, length);
+	}
+	return duplicate;
+}
+
+char *xstrcat(size_t count, ...)
+{
+	va_list ap;
+	va_start(ap, count);
+
+	// Determine required length for concatenated string
+	size_t length = 1;
+	for (size_t i = 0; i < count; i++) {
+		char *substring = va_arg(ap, char *);
+		length += strlen(substring);
+	}
+	va_end(ap);
+
+	char *str = malloc(length);
+	if (!str) {
+		xprintf(RED, "malloc() failed\n");
+		return NULL;
+	}
+	// char *p = str;
+	size_t offset = 0;
+	va_start(ap, count);
+	for (size_t i = 0; i < count; i++) {
+		char *substring = va_arg(ap, char *);
+		size_t substring_length = strlen(substring);
+		memcpy(&str[offset], substring, substring_length);
+		offset += substring_length;
+	}
+	str[offset] = '\0';
+	va_end(ap);
+
+	return str;
 }

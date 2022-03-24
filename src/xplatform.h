@@ -2,7 +2,7 @@
  * @file xplatform.h
  * @author Jason Conway (jpc@jasonconway.dev)
  * @brief xplatform (cross-platform) methods for Parcel
- * @version 0.1
+ * @version 0.9.1
  * @date 2022-01-26
  *
  * @copyright Copyright (c) 2022 Jason Conway. All rights reserved.
@@ -94,3 +94,7 @@ int xgetifaddrs(void);
 int xstartup(void);
 
 void xprintf(ansi color, const char *format, ...);
+bool xfexists(const char *filename);
+size_t xfsize(const char *filename);
+char *xstrdup(const char *str);
+char *xstrcat(size_t count, ...);
