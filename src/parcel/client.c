@@ -2,7 +2,7 @@
  * @file client.c
  * @author Jason Conway (jpc@jasonconway.dev)
  * @brief
- * @version 0.1
+ * @version 0.9.1
  * @date 2021-11-08
  *
  * @copyright Copyright (c) 2021-2022 Jason Conway. All rights reserved.
@@ -11,17 +11,16 @@
 
 #include "client.h"
 
-static inline void fatal(const char *msg)
+noreturn void fatal(const char *msg)
 {
 	fprintf(stderr, ">\033[31m fatal error: %s\n\033[0m", msg);
 	exit(EXIT_FAILURE);
 }
 
-static inline void error(sock_t socket, const char *msg)
+noreturn void error(sock_t socket, const char *msg)
 {
 	fprintf(stderr, ">\033[31m parcel error: %s\n\033[0m", msg);
 	(void)xclose(socket);
-	pthread_exit(NULL);
 	exit(EXIT_FAILURE);
 }
 
@@ -86,6 +85,7 @@ int send_thread(void *ctx)
 			case CMD_FINGERPRINT:
 				break;
 			case CMD_FILE:
+				send_encrypted_message(client.socket, TYPE_FILE, plaintext, length, client.session_key);
 				break; // TODO
 		}
 		
@@ -110,7 +110,7 @@ static int recv_handler(client_t *ctx)
 		return -1;
 	}
 
-	const ssize_t bytes_recv = xrecv(ctx->socket, wire, sizeof(*wire) + RECV_MAX_LENGTH, 0);
+	const ssize_t bytes_recv = xrecv(ctx->socket, wire, DATA_LEN_MAX, 0);
 	if (bytes_recv < 0) {
 		free(wire);
 		error(ctx->socket, "recv()");
@@ -139,7 +139,7 @@ static int recv_handler(client_t *ctx)
 			break;
 		}
 		case TYPE_FILE:
-			// TODO
+			
 			break;
 		case TYPE_TEXT:
 			printf("\033[2K\r%s\n%s: ", wire->data, ctx->username);

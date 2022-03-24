@@ -2,7 +2,7 @@
  * @file client.h
  * @author Jason Conway (jpc@jasonconway.dev)
  * @brief
- * @version 0.1
+ * @version 0.9.1
  * @date 2021-11-08
  *
  * @copyright Copyright (c) 2021-2022 Jason Conway. All rights reserved.
@@ -20,6 +20,7 @@
 #include <errno.h>
 #include <pthread.h>
 #include <unistd.h>
+#include <stdnoreturn.h>
 
 #include "xplatform.h"
 #include "x25519.h"
@@ -30,7 +31,6 @@ enum ParcelConstants
 {
 	USERNAME_MAX_LENGTH = 32,
 	FINGERPRINT_LENGTH = 32,
-	RECV_MAX_LENGTH = 1 << 20,
 };
 
 enum command_id

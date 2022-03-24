@@ -11,9 +11,9 @@
 
 #include "xplatform.h"
 
-/**
- * @section BSD / Winsock wrappers
- */
+ /**
+  * @section BSD / Winsock wrappers
+  */
 
 ssize_t xsend(sock_t socket, const void *data, size_t len, int flags)
 {
@@ -60,7 +60,7 @@ int xclose(sock_t socket)
 int xaccept(sock_t *connection_socket, sock_t listening_socket, struct sockaddr *address, socklen_t *len)
 {
 #if __unix__ || __APPLE__
-	*connection_socket = accept(listening_socket, address, len);
+	* connection_socket = accept(listening_socket, address, len);
 	return *connection_socket;
 #elif _WIN32
 	sock_t sd = accept(listening_socket, address, (int *)len);
@@ -75,7 +75,7 @@ int xaccept(sock_t *connection_socket, sock_t listening_socket, struct sockaddr 
 int xsocket(sock_t *xsocket, int domain, int type, int protocol)
 {
 #if __unix__ || __APPLE__
-	*xsocket = socket(domain, type, protocol);
+	* xsocket = socket(domain, type, protocol);
 	return *xsocket;
 #elif _WIN32
 	sock_t sd = socket(domain, type, protocol);
@@ -112,7 +112,7 @@ int xgetaddrinfo(const char *node, const char *service, const struct addrinfo *h
 	return getaddrinfo(node, service, hints, res);
 #elif _WIN32
 	if (getaddrinfo(node, service, hints, res)) {
-		(void)WSACleanup();
+		(void)WSACleanup( );
 		return -1;
 	}
 	return 0;
@@ -127,7 +127,7 @@ int xsetsockopt(sock_t socket, int level, int optname, const void *optval, sockl
 	(void)optlen;
 	const char *opt = optval;
 	if (setsockopt(socket, level, optname, opt, optlen)) {
-		(void)WSACleanup();
+		(void)WSACleanup( );
 		return -1;
 	}
 	return 0;
@@ -158,14 +158,14 @@ int xgetifaddrs(void)
 	return 0;
 #elif _WIN32
 	ULONG ip_adapter_len[1] = { sizeof(IP_ADAPTER_INFO) };
-	PIP_ADAPTER_INFO adapter_info = (IP_ADAPTER_INFO *)HeapAlloc(GetProcessHeap(), 0, ip_adapter_len[0]);
+	PIP_ADAPTER_INFO adapter_info = (IP_ADAPTER_INFO *)HeapAlloc(GetProcessHeap( ), 0, ip_adapter_len[0]);
 	if (!adapter_info) {
 		xprintf(RED, "error: HeapAlloc()\n");
 		return -1;
 	}
 	if (GetAdaptersInfo(adapter_info, ip_adapter_len) == ERROR_BUFFER_OVERFLOW) {
-		(void)HeapFree(GetProcessHeap(), 0, (adapter_info));
-		adapter_info = (IP_ADAPTER_INFO *)HeapAlloc(GetProcessHeap(), 0, ip_adapter_len[0]);
+		(void)HeapFree(GetProcessHeap( ), 0, (adapter_info));
+		adapter_info = (IP_ADAPTER_INFO *)HeapAlloc(GetProcessHeap( ), 0, ip_adapter_len[0]);
 		if (!adapter_info) {
 			xprintf(RED, "error: HeapAlloc()\n");
 			return -1;
@@ -173,14 +173,14 @@ int xgetifaddrs(void)
 	}
 	if (GetAdaptersInfo(adapter_info, ip_adapter_len)) {
 		xprintf(RED, "error: GetAdaptersInfo()\n");
-		(void)HeapFree(GetProcessHeap(), 0, adapter_info);
+		(void)HeapFree(GetProcessHeap( ), 0, adapter_info);
 		return -1;
 	}
 	for (PIP_ADAPTER_INFO adapter = adapter_info; adapter; adapter = adapter->Next) {
 		printf("\t%s\n", adapter->IpAddressList.IpAddress.String);
 	}
 
-	(void)HeapFree(GetProcessHeap(), 0, adapter_info);
+	(void)HeapFree(GetProcessHeap( ), 0, adapter_info);
 	return 0;
 #endif
 }
@@ -336,17 +336,11 @@ void xgetline(char **message, size_t *message_length, FILE *stream)
 			line[read_length] = 0;
 			if (line_length * 2 < line_length) {
 				goto error;
-				// free(line);
-				// *message = NULL;
-				// return;
 			}
 
 			char *new_line = NULL;
 			if (!(new_line = realloc(line, line_length *= 2))) {
 				goto error;
-				// free(line);
-				// *message = NULL;
-				// return;
 			}
 			line = new_line;
 		}
@@ -362,9 +356,6 @@ void xgetline(char **message, size_t *message_length, FILE *stream)
 			if (read_length == 1) {
 				*message_length = 0;
 				goto error;
-				// *message = NULL;
-				// free(line);
-				// return;
 			}
 			line[read_length] = '\0';
 			break;
@@ -372,12 +363,11 @@ void xgetline(char **message, size_t *message_length, FILE *stream)
 	}
 	*message = line;
 	*message_length = read_length;
-
-	error:
-		free(line);
-		*message = NULL;
-
 	return;
+
+error:
+	free(line);
+	*message = NULL;
 }
 
 void xprintf(ansi color, const char *format, ...)
@@ -460,7 +450,7 @@ char *xstrcat(size_t count, ...)
 		xprintf(RED, "malloc() failed\n");
 		return NULL;
 	}
-	// char *p = str;
+
 	size_t offset = 0;
 	va_start(ap, count);
 	for (size_t i = 0; i < count; i++) {

@@ -11,9 +11,9 @@
 
 #include "client.h"
 
+// Prepend client username to message string
 static void prepend_username(client_t *ctx, char **message, size_t *message_length)
 {
-	// Prepend username to the input string
 	*message_length += strlen(ctx->username) + 2; // +2 for ": "
 
 	char *msg = malloc(*message_length);
@@ -65,23 +65,12 @@ static int cmd_username(client_t *ctx, char **message, size_t *message_length)
 	return 0;
 }
 
-static bool file_exists(char *filename)
-{
-	FILE *f = fopen(filename, "r");
-	if (f) {
-		(void)fclose(f);
-		return true;
-	}
-	return false;
-}
-
 // TODO
 static int cmd_send_file(client_t *ctx, char **message, size_t *message_length)
 {
 	(void)ctx;
-	(void)message;
 	(void)message_length;
-
+	
 	char *file_path = NULL;
 	size_t path_length = 0;
 	do {
@@ -90,9 +79,49 @@ static int cmd_send_file(client_t *ctx, char **message, size_t *message_length)
 		xgetline(&file_path, &path_length, stdin);
 	} while (!path_length);
 	file_path[path_length - 1] = '\0'; // remove \n
-	if (file_exists(file_path)) {
-		
+	
+	// Check if file is valid
+	// Open file
+	// Read file into buffer at *message
+	// Update message_length
+
+	if (!xfexists(file_path)) {
+		xprintf(YEL, "File \"%s\" not found\n", file_path);
+		return -1;
 	}
+
+	size_t file_size = xfsize(file_path); 
+	if (!file_size) {
+		xprintf(YEL, "Unable to determine size of file \"%s\"\n", file_path);
+		return -1;
+	}
+	// TODO: make enum
+	const size_t max_file = DATA_LEN_MAX - BLOCK_LEN;
+	if (file_size > max_file) {
+		xprintf(YEL, "File \"%s\" is %zu bytes over the maximum supported size of %d bytes\n", file_path, (size_t)(file_size - max_file), max_file);
+		return -1;
+	}
+
+	uint8_t *file_contents = malloc(file_size + BLOCK_LEN);
+	if (!file_contents) {
+		return -1;
+	}
+	FILE *file = fopen(file_path, "rb");
+	if (!file) {
+		xprintf(RED, "Could not open file \"%s\" for reading\n", file_path);
+		return -1;
+	}
+	
+	// First block will be the file name
+	memcpy(&file_contents[0], file_path, BLOCK_LEN);
+
+	if (fread(&file_contents[16], 1, file_size, file) != file_size) {
+		xprintf(RED, "Error reading contents of file \"%s\"\n", file_path);
+		return -1;
+	}
+	(void)fclose(file);
+	free(*message);
+	*message = (char *)file_contents;
 	return 0;
 }
 
@@ -101,7 +130,7 @@ static inline void cmd_print_fingerprint(const uint8_t *fingerprint)
 	print_fingerprint("Fingerprint is: ", fingerprint);
 }
 
-static inline void cmd_exit(client_t *ctx, char *message)
+_Noreturn static void cmd_exit(client_t *ctx, char *message)
 {
 	free(message);
 	send_connection_status(ctx, true);
@@ -125,7 +154,6 @@ static enum command_id parse_command(char *command)
 	return -1;
 }
 
-// This needs work later
 int parse_input(client_t *ctx, char **message, size_t *message_length)
 {
 	if (*message[0] != ':') { // Fast return
