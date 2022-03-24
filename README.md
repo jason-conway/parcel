@@ -92,7 +92,7 @@ All commands start with a colon followed by the command itself.
 
 ## Wire Format
 
-The wire consists of 4 sections: mac, iv, length, data
+The wire consists of five sections: mac, iv, length, type, and data
 
 `mac` contains the 16-byte MAC of the IV, length, and data sections. 
 
@@ -100,7 +100,7 @@ The wire consists of 4 sections: mac, iv, length, data
 
 `length` containts the number the bytes in the `data` section.
 
-`data_type` indicates the type of data contained in the `data` section. 
+`type` indicates the type of data contained in the `data` section. 
 
 `data` contains one or more 16-byte chunks of encrypted data
 
