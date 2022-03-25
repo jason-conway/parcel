@@ -78,15 +78,17 @@ int send_thread(void *ctx)
 		}
 
 		switch (parse_input(&client, &plaintext, &length)) {
-			case CMD_NONE:
-			case CMD_USERNAME:
+			case SEND_NONE:
+				break;
+			case SEND_TEXT:
 				send_encrypted_message(client.socket, TYPE_TEXT, plaintext, length, client.session_key);
 				break;
-			case CMD_FINGERPRINT:
-				break;
-			case CMD_FILE:
+			case SEND_FILE:
 				send_encrypted_message(client.socket, TYPE_FILE, plaintext, length, client.session_key);
-				break; // TODO
+				break;
+			default:
+				free(plaintext);
+				error(client.socket, "parse_input()");
 		}
 		
 		free(plaintext);

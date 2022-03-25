@@ -42,6 +42,13 @@ enum command_id
 	CMD_FILE,
 };
 
+enum SendType
+{
+	SEND_NONE = 0,
+	SEND_TEXT,
+	SEND_FILE
+};
+
 typedef struct client_t
 {
 	sock_t socket;
