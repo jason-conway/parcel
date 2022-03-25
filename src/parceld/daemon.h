@@ -27,16 +27,14 @@
 
 enum ParceldConstants
 {
-	MAX_CHUNK = 1 << 20,
 	SOCK_LEN = sizeof(struct sockaddr),
 	MAX_CONNECTIONS = FD_SETSIZE,
 	MAX_QUEUE = 32,
-	KEY_LENGTH = 32
 };
 
 typedef struct server_t
 {
-	uint8_t server_key[KEY_LENGTH];
+	uint8_t server_key[KEY_LEN];
 	fd_set descriptors;
 	size_t descriptor_count;
 	sock_t sockets[MAX_CONNECTIONS];
@@ -45,7 +43,7 @@ typedef struct server_t
 
 typedef struct msg_t
 {
-	uint8_t data[MAX_CHUNK];
+	uint8_t data[RECV_MAX_BYTES];
 	ssize_t length;
 } msg_t;
 
