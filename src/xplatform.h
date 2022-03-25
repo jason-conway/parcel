@@ -20,14 +20,6 @@
 #include <stdarg.h>
 #include <sys/types.h>
 
-// TODO: Remove this
-#if (-1 & 3) != 3
-	#error "Two's compliment required"
-#endif
-#if (-32 >> 1) != -16
-	#error "Sign extention required"
-#endif
-
 #if __unix__ || __APPLE__
 	#include <unistd.h>
 	#include <sys/stat.h>
