@@ -1,6 +1,6 @@
 .POSIX:
 CC     = cc
-CFLAGS = -Wall -Werror -Wextra -O0 -g3
+CFLAGS = -Wall -Werror -Wextra -O0 -g3 -fsanitize=integer -fsanitize=undefined -fsanitize=implicit-integer-arithmetic-value-change -fno-omit-frame-pointer
 
 ifeq ($(OS), Windows_NT)
 	LDFLAGS = -s -static
@@ -8,7 +8,7 @@ ifeq ($(OS), Windows_NT)
 	PREFIX  = %HOMEPATH%/parcel
 	EXE     = .exe
 else
-	LDFLAGS = 
+	LDFLAGS = -fsanitize=integer -fsanitize=undefined -fsanitize=implicit-integer-arithmetic-value-change -fno-omit-frame-pointer
 	LDLIBS  = -pthread
 	PREFIX  = /usr/local
 endif

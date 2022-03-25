@@ -154,7 +154,7 @@ void sha256_finish(sha256_t *ctx, uint8_t *hash)
 
 	// Message length stored as the last 8 octets
 	for (size_t i = 0; i < 8; i++) {
-		ctx->data[0x3f - i] = ctx->bit_length >> (8 * i);
+		ctx->data[0x3f - i] = (uint8_t)(ctx->bit_length >> (uint8_t)(8 * i));
 	}
 
 	sha256_hash(ctx, ctx->data);

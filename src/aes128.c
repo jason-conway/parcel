@@ -211,7 +211,7 @@ static void aes_mix_columns(state_t *ctx, bool invert)
 			for (size_t j = 0; j < 4; j++) {
 				// XOR s[i][3] with the previous s[i][0]
 				uint8_t c = ctx->s[i][j] ^ ((j == 3) ? c0 : ctx->s[i][j + 1]);
-				c = ((c << 1) ^ (((c >> 7) & 1) * 0x1b));
+				c = ((uint8_t)(c << 1U) ^ (((c >> 7) & 1) * 0x1b));
 				ctx->s[i][j] ^= c ^ s;
 			}
 		}
@@ -255,9 +255,10 @@ static void aes_generate_subkey(uint8_t *key)
 {
 	uint8_t msb = key[0] & 0x80;
 	for (size_t i = 0; i < 15; i++) {
-		key[i] = (key[i] << 1) | (key[i + 1] >> 7);
+		key[i] = (uint8_t)(key[i] << 1U) | (key[i + 1] >> 7U);
 	}
-	key[15] <<= 1;
+	// key[15] <<= (uint8_t)1;
+	key[15] = (uint8_t)(key[15] << 1U);
 	if (msb) {
 		key[15] ^= 0x87; // const_Rb
 	}

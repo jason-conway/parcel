@@ -28,8 +28,11 @@ typedef union field_t {
 static inline void carry_reduce(field_t *dest)
 {
 	for (size_t i = 0; i < 16; i++) {
-		const int64_t carry = dest->q[i] >> 16; // Select all bits that are greater than the low-order 16 bits.
-		dest->q[i] -= carry << 16; //  [0, 2^16 − 1]
+		// dest->q[i] += (1ULL << 16);
+		// TODO: Stop relying on undefined behavior
+		
+		int64_t carry = dest->q[i] >> 16; // Select all bits that are greater than the low-order 16 bits.
+		dest->q[i] = dest->q[i] - (carry << 16U); //  [0, 2^16 − 1]
 		if (i < 15) {
 			dest->q[i + 1] += carry;
 		}
@@ -38,6 +41,7 @@ static inline void carry_reduce(field_t *dest)
 		}
 	}
 }
+
 
 static inline void multiply(field_t *dest, const field_t *a, const field_t *b)
 {
@@ -48,7 +52,7 @@ static inline void multiply(field_t *dest, const field_t *a, const field_t *b)
 		}
 	}
 
-	// Reduce the 510-bit result
+	// Reduce the 510-bit result mod 2^256 - 38
 	for (size_t i = 0; i < 15; i++) {
 		product[i] += 38 * product[i + 16];
 	}
@@ -86,10 +90,10 @@ static inline void add(field_t *dest, const field_t *a, const field_t *b)
 	}
 }
 
-static inline void subtract(field_t *dest, const field_t *minuend, const field_t *subtrahend)
+static inline void subtract(field_t *dest, const field_t *a, const field_t *b)
 {
 	for (size_t i = 0; i < 16; i++) {
-		dest->q[i] = minuend->q[i] - subtrahend->q[i];
+		dest->q[i] = a->q[i] - b->q[i];
 	}
 }
 
