@@ -19,7 +19,8 @@
 #include "x25519.h"
 
 // Galois field working type
-typedef union field_t {
+typedef union field_t
+{
 	int64_t q[16];
 } field_t;
 
@@ -28,11 +29,9 @@ typedef union field_t {
 static inline void carry_reduce(field_t *dest)
 {
 	for (size_t i = 0; i < 16; i++) {
-		// dest->q[i] += (1ULL << 16);
-		// TODO: Stop relying on undefined behavior
-		
 		int64_t carry = dest->q[i] >> 16; // Select all bits that are greater than the low-order 16 bits.
-		dest->q[i] = dest->q[i] - (carry << 16U); //  [0, 2^16 − 1]
+		dest->q[i] -= (uint64_t)carry << 16; // Subtract from uppper to yield [0, 2^16 - 1]
+
 		if (i < 15) {
 			dest->q[i + 1] += carry;
 		}
@@ -41,7 +40,6 @@ static inline void carry_reduce(field_t *dest)
 		}
 	}
 }
-
 
 static inline void multiply(field_t *dest, const field_t *a, const field_t *b)
 {
@@ -137,7 +135,7 @@ static inline void pack(uint8_t *dest, const field_t *src)
 
 	// Spit into two bytes and place in adjacent elements
 	for (size_t i = 0; i < 16; i++) {
-		dest[2 * i + 0] = elements.q[i] & 0xff;
+		dest[2 * i + 0] = (uint8_t)elements.q[i] & 0xff;
 		dest[2 * i + 1] = (uint8_t)(elements.q[i] >> 8);
 	}
 }
