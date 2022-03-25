@@ -323,7 +323,7 @@ int xgetopt(xgetopt_t *x, int argc, char **argv, const char *optstr)
 
 void xgetline(char **message, size_t *message_length, FILE *stream)
 {
-	size_t line_length = 256;
+	size_t line_length = 64;
 	char *line = malloc(line_length);
 	if (!line) {
 		*message = NULL;
@@ -350,17 +350,19 @@ void xgetline(char **message, size_t *message_length, FILE *stream)
 			goto eol;
 		}
 
-		line[read_length++] = (char)c;
+		line[read_length] = (char)c;
 		if (c == '\n') {
 		eol:
-			if (read_length == 1) {
+			if (!read_length) {
 				*message_length = 0;
 				goto error;
 			}
 			line[read_length] = '\0';
 			break;
 		}
+		read_length++;
 	}
+
 	*message = line;
 	*message_length = read_length;
 	return;
