@@ -69,7 +69,7 @@ wire_t *init_wire(uint8_t *data, uint64_t type, size_t *len)
 
 	xgetrandom(wire->iv, BLOCK_LEN);
 	unpack64_le(wire->length, data_length);
-	unpack64_le(wire->data_type, type);
+	unpack64_le(wire->type, type);
 	memcpy(wire->data, data, *len);
 	*len = wire_length;
 	return wire;
@@ -116,7 +116,7 @@ int _decrypt_wire(wire_t *wire, size_t *len, const uint8_t *key)
 		return CMAC_ERROR;
 	}
 
-	aes128_decrypt(&ctxs[0], wire->data_type, data_length + BASE_DEC_LEN);
+	aes128_decrypt(&ctxs[0], wire->type, data_length + BASE_DEC_LEN);
 	return WIRE_OK;
 }
 

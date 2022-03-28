@@ -1,7 +1,7 @@
 /**
  * @file client.c
  * @author Jason Conway (jpc@jasonconway.dev)
- * @brief
+ * @brief The `parcel` Client
  * @version 0.9.1
  * @date 2021-11-08
  *
@@ -131,11 +131,11 @@ static int recv_handler(client_t *ctx)
 			break;
 	}
 
-	switch (wire_get_raw(wire->data_type)) {
+	switch (wire_get_raw(wire->type)) {
 		case TYPE_CTRL: {
 			size_t rounds = wire_get_raw(wire->data);
 			memcpy(ctx->ctrl_key, &wire->data[16], KEY_LEN);
-			if (node_key_exchange(ctx->socket, rounds, ctx->session_key, ctx->fingerprint)) {
+			if (n_party_client(ctx->socket, rounds, ctx->session_key, ctx->fingerprint)) {
 				return -1;
 			}
 			break;
@@ -213,7 +213,7 @@ void connect_server(client_t *client, const char *ip, const char *port)
 		error(client->socket, "key_exchange()");
 	}
 
-	printf("\033[32mConnected to server\033[0m\n");
+	printf(">\033[32m Connected to server\033[0m\n");
 	
 	// TODO: This needs to be done after a key exchange sequence
 	// send_connection_status(client, false);

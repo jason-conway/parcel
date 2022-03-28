@@ -2,7 +2,7 @@
  * @file wire.h
  * @author Jason Conway (jpc@jasonconway.dev)
  * @brief Wire is an encyption/decryption tool for Parcel built on AES in CBC mode
- * @version 0.1
+ * @version 0.9.1
  * @date 2022-02-06
  *
  * @copyright Copyright (c) 2022 Jason Conway. All rights reserved.
@@ -20,7 +20,7 @@ typedef struct wire_t
 	uint8_t mac[16];
 	uint8_t iv[16];
 	uint8_t length[16];
-	uint8_t data_type[16];
+	uint8_t type[16];
 	uint8_t data[];
 } wire_t;
 
@@ -35,8 +35,8 @@ enum Wire
 enum SectionLengths
 {
 	BASE_AUTH_LEN = sizeof(wire_t) - BLOCK_LEN,
-	BASE_ENC_LEN = sizeof(((wire_t *)0)->length) + sizeof(((wire_t *)0)->data_type),
-	BASE_DEC_LEN = sizeof(((wire_t *)0)->data_type)
+	BASE_ENC_LEN = sizeof(((wire_t *)0)->length) + sizeof(((wire_t *)0)->type),
+	BASE_DEC_LEN = sizeof(((wire_t *)0)->type)
 };
 
 enum WireType
