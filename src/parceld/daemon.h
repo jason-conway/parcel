@@ -18,6 +18,7 @@
 #include <signal.h>
 #include <stdatomic.h>
 #include <inttypes.h>
+#include <stdnoreturn.h>
 
 #include "xplatform.h"
 #include "x25519.h"
