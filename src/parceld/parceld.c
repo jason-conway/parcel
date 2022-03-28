@@ -1,8 +1,8 @@
 /**
  * @file parceld.c
  * @author Jason Conway (jpc@jasonconway.dev)
- * @brief Parcel Daemon
- * @version 0.1
+ * @brief The `parcel` Daemon
+ * @version 0.9.1
  * @date 2022-01-28
  *
  * @copyright Copyright (c) 2022 Jason Conway. All rights reserved.
