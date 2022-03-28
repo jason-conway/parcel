@@ -29,8 +29,9 @@ typedef union field_t
 static inline void carry_reduce(field_t *dest)
 {
 	for (size_t i = 0; i < 16; i++) {
-		int64_t carry = dest->q[i] >> 16; // Select all bits that are greater than the low-order 16 bits.
-		dest->q[i] -= (uint64_t)carry << 16; // Subtract from uppper to yield [0, 2^16 - 1]
+		// Subtract the top 48 bits from each element to yield [0, 2^16 - 1]
+		int64_t carry = dest->q[i] >> 16;
+		dest->q[i] -= (uint64_t)carry << 16; // Shift without the cast to uint64_t is undefined
 
 		if (i < 15) {
 			dest->q[i + 1] += carry;
