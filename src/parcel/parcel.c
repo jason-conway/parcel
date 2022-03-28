@@ -1,8 +1,8 @@
 /**
- * @file main.c
+ * @file parcel.c
  * @author Jason Conway (jpc@jasonconway.dev)
- * @brief Parcel entry point
- * @version 0.1
+ * @brief Entry point for parcel client
+ * @version 0.9.1
  * @date 2022-01-15
  *
  * @copyright Copyright (c) 2022 Jason Conway. All rights reserved.
@@ -14,7 +14,7 @@
 void catch_sigint(int sig)
 {
 	(void)sig;
-	fprintf(stderr, "\033[31m\nApplication aborted\n\033[0m");
+	xprintf(RED, "\nApplication aborted\n");
 	exit(EXIT_FAILURE);
 }
 
@@ -72,7 +72,7 @@ int main(int argc, char **argv)
 
 	size_t username_length = 0;
 	if ((username_length = strlen(username) + 1) > USERNAME_MAX_LENGTH) {
-		fprintf(stderr, "Username is too long\n");
+		fprintf(stderr, "> Username is too long\n");
 	}
 	memcpy(client.username, username, username_length);
 	

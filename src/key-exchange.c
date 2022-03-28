@@ -11,7 +11,6 @@
 
 #include "key-exchange.h"
 
- // print_fingerprint (finger-print) - Print the fingerprint
 void print_fingerprint(const char *str, const uint8_t *fingerprint)
 {
 	printf("\033[33m%s", str); // In yellow :D
@@ -87,7 +86,6 @@ int two_party_client(const sock_t socket, uint8_t *key, uint8_t *fingerprint)
 		return -1;
 	}
 
-	// sha256_digest(wire->data, key);
 	memcpy(key, wire->data, KEY_LEN);
 	free(wire);
 	return 0;
@@ -95,43 +93,34 @@ int two_party_client(const sock_t socket, uint8_t *key, uint8_t *fingerprint)
 
 int two_party_server(const sock_t socket, uint8_t *session_key)
 {
-	// printf("> Establishing new secure channel\n");
-	uint8_t shared_secret[KEY_LEN];
-	uint8_t server_public_key[KEY_LEN];
-
 	// Receive public key from the client
 	uint8_t public_key[KEY_LEN];
 	if (xrecv(socket, public_key, KEY_LEN, 0) != KEY_LEN) {
 		return -1;
 	}
-	// printf("> Received client's public key\n");
-	// print_fingerprint("Client public key: ", public_key);
+
 	// Generate a single-use secret key for the key pair
 	uint8_t secret_key[KEY_LEN];
 	point_d(secret_key);
-	// printf("> Generated one-time secret key\n");
+
 	// Compute a single-use public key and our shared secret with the client
+	uint8_t server_public_key[KEY_LEN];
 	point_q(secret_key, server_public_key, NULL);
-	// printf("> Computed one-time public key\n");
+
 	if (xsend(socket, server_public_key, KEY_LEN, 0) < 0) {
 		return -1;
 	}
-	// printf("> Sent public key to client\n");
 
+	uint8_t shared_secret[KEY_LEN];
 	point_kx(shared_secret, secret_key, public_key);
 
-	// print_fingerprint("Shared-secret: ", shared_secret);
-
-	// print_fingerprint("Server session key is: ", session_key);
 	size_t len = KEY_LEN;
 	wire_t *wire = init_wire(session_key, TYPE_TEXT, &len);
-	// printf("> Created new wire\n");
 	encrypt_wire(wire, shared_secret);
-	// printf("> Encrypted wire\n");
 	if (xsend(socket, wire, len, 0) < 0) {
 		return -1;
 	}
-	// printf("> Sent wire to client\n");
+
 	free(wire);
 	return 0;
 }
@@ -143,48 +132,42 @@ static int send_ctrl_key(sock_t *sockets, size_t count, uint8_t *key)
 	memset(ctrl_message, 0, len);
 	wire_set_raw(&ctrl_message[0], count - 1);
 	xgetrandom(&ctrl_message[16], 32);
-	
+
 	wire_t *wire = init_wire(ctrl_message, TYPE_CTRL, &len);
 	encrypt_wire(wire, key);
 
 	// Update key
 	memcpy(key, &ctrl_message[16], 32);
-	
+
 	for (size_t i = 1; i <= count; i++) {
-		// printf("\n> Sending control key wire to slot %zu\n", i);
 		if (xsendall(sockets[i], wire, len) < 0) {
 			free(wire);
 			return -1;
 		}
 	}
-	
+
 	free(wire);
 	return 0;
 }
 
 static int rotate_intermediates(sock_t *sockets, size_t count)
 {
-	uint8_t intermediate_key[32];
 	for (size_t i = 1; i <= count; i++) {
-		size_t next = (i == count) ? 1 : i + 1; // Rotate right, skip server's socket
-
+		uint8_t intermediate_key[32];
 		if (xrecv(sockets[i], intermediate_key, KEY_LEN, 0) != KEY_LEN) {
 			return -1;
 		}
 
-		// printf("> xrecv from slot %zu", i);
-		// fflush(stdout);
+		const size_t next = (i == count) ? 1 : i + 1; // Rotate right, skip server's socket
 		if (xsendall(sockets[next], intermediate_key, KEY_LEN) < 0) {
 			printf("\n> Error sending to slot %zu\n", next);
 			return -1;
 		}
-		// printf(" | xsend to slot %zu\n", next);
-		// print_fingerprint("> msg: ", intermediate_key);
 	}
 	return 0;
 }
 
-int key_exchange_router(sock_t *sockets, size_t connection_count, uint8_t *key)
+int n_party_server(sock_t *sockets, size_t connection_count, uint8_t *key)
 {
 	if (connection_count < 2) {
 		return 0;
@@ -195,18 +178,15 @@ int key_exchange_router(sock_t *sockets, size_t connection_count, uint8_t *key)
 		return -1;
 	}
 
-	// printf("> Start messages sent\n");
-
 	for (size_t i = 0; i < connection_count - 1; i++) {
 		rotate_intermediates(sockets, connection_count);
-		// printf("> GDH1 round %zu of %zu\n", i + 1, connection_count - 1);
 	}
 
 	return 0;
 }
 
 // An N-Party Diffie-Hellman Key Exchange
-int node_key_exchange(const sock_t socket, size_t rounds, uint8_t *session_key, uint8_t *fingerprint)
+int n_party_client(const sock_t socket, size_t rounds, uint8_t *session_key, uint8_t *fingerprint)
 {
 	uint8_t secret_key[KEY_LEN];
 	point_d(secret_key);

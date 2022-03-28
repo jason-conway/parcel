@@ -11,14 +11,14 @@
 
 #include "daemon.h"
 
-void catch_sigint(int sig)
+noreturn void catch_sigint(int sig)
 {
 	(void)sig;
 	fprintf(stderr, "\n>\033[31m Application aborted\n\033[0m");
 	exit(EXIT_FAILURE);
 }
 
-static inline void fatal(const char *msg)
+noreturn void fatal(const char *msg)
 {
 	xprintf(RED, "server error: %s\n", msg);
 	exit(EXIT_FAILURE);
@@ -175,7 +175,7 @@ static int recv_client(server_t *srv, size_t sender_index)
 		}
 
 		srv->connection_count--;
-		// key_exchange_router(srv->socket, &srv->connections, srv->max_in_set, srv->server_key);
+		// n_party_server(srv->socket, &srv->connections, srv->max_in_set, srv->server_key);
 	}
 	else {
 		if (transfer_message(srv, sender_index, msg) < 0) {
@@ -209,8 +209,8 @@ int main_thread(void *ctx)
 				if (fd == server->sockets[0]) {
 					printf("Pending connection from unknown client\n");
 					if (add_client(server)) {
-						if (key_exchange_router(server->sockets, server->connection_count, server->server_key)) {
-							fatal("key_exchange_router()");
+						if (n_party_server(server->sockets, server->connection_count, server->server_key)) {
+							fatal("n_party_server()");
 						}
 						printf("Connection added successfully\n");
 					}
