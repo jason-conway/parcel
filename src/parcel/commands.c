@@ -83,40 +83,44 @@ static int cmd_send_file(client_t *ctx, char **message, size_t *message_length)
 		fflush(stdout);
 		xgetline(&file_path, &path_length, stdin);
 	} while (!path_length);
+
 	
 	if (!xfexists(file_path)) {
 		xprintf(YEL, "File \"%s\" not found\n", file_path);
-		goto error_path_only;
+		goto free_path_only;
 	}
 
 	size_t file_size = xfsize(file_path); 
 	if (!file_size) {
 		xprintf(YEL, "Unable to determine size of file \"%s\"\n", file_path);
-		goto error_path_only;
-	}
-	
-	// TODO: make enum
-	const size_t max_file = DATA_LEN_MAX - BLOCK_LEN;
-	if (file_size > max_file) {
-		xprintf(YEL, "File \"%s\" is %zu bytes over the maximum supported size of %d bytes\n", file_path, (size_t)(file_size - max_file), max_file);
-		goto error_path_only;
+		goto free_path_only;
 	}
 
-	*message_length = file_size + BLOCK_LEN;
+	if (file_size > FILE_SIZE_MAX) {
+		xprintf(YEL, "File \"%s\" is %zu bytes over the maximum size of %d bytes\n", file_path, (size_t)(file_size - FILE_SIZE_MAX), FILE_SIZE_MAX);
+		goto free_path_only;
+	}
+
+	*message_length = file_size + FILENAME_LEN; // To hold file name and data
 	uint8_t *file_contents = malloc(*message_length);
 	if (!file_contents) {
 		goto error;
 	}
+	memset(file_contents, 0, *message_length);
+
 	FILE *file = fopen(file_path, "rb");
 	if (!file) {
 		xprintf(RED, "Could not open file \"%s\" for reading\n", file_path);
 		goto error;
 	}
-	
-	// First block will be the file name
-	memcpy(&file_contents[0], file_path, BLOCK_LEN);
 
-	if (fread(&file_contents[16], 1, file_size, file) != file_size) {
+	// First 32 bytes are file name
+	memcpy(&file_contents[0], file_path, FILENAME_LEN);
+	if (path_length > FILENAME_LEN) {
+		file_contents[FILENAME_LEN - 1] = '\0'; // Ensure filename string is null-terminated
+	}
+
+	if (fread(&file_contents[FILENAME_LEN], 1, file_size, file) != file_size) {
 		xprintf(RED, "Error reading contents of file \"%s\"\n", file_path);
 		(void)fclose(file);
 		goto error;
@@ -133,7 +137,7 @@ static int cmd_send_file(client_t *ctx, char **message, size_t *message_length)
 
 	error:
 		free(file_contents);
-	error_path_only:
+	free_path_only:
 		free(file_path);
 		send_connection_status(ctx, true);
 		return -1;
