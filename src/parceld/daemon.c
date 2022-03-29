@@ -1,7 +1,7 @@
 /**
  * @file daemon.c
  * @author Jason Conway (jpc@jasonconway.dev)
- * @brief
+ * @brief The `parcel` Daemon 
  * @version 0.9.1
  * @date 2021-11-21
  *
@@ -14,7 +14,7 @@
 noreturn void catch_sigint(int sig)
 {
 	(void)sig;
-	fprintf(stderr, "\n>\033[31m Application aborted\n\033[0m");
+	xprintf(RED, "\nApplication aborted\n");
 	exit(EXIT_FAILURE);
 }
 

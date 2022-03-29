@@ -1,7 +1,7 @@
 /**
  * @file parceld.c
  * @author Jason Conway (jpc@jasonconway.dev)
- * @brief The `parcel` Daemon
+ * @brief Entry point for parcel client
  * @version 0.9.1
  * @date 2022-01-28
  *

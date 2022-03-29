@@ -132,20 +132,18 @@ static int recv_handler(client_t *ctx)
 	}
 
 	switch (wire_get_raw(wire->type)) {
-		case TYPE_CTRL: {
-			size_t rounds = wire_get_raw(wire->data);
-			memcpy(ctx->ctrl_key, &wire->data[16], KEY_LEN);
-			if (n_party_client(ctx->socket, rounds, ctx->session_key, ctx->fingerprint)) {
+		case TYPE_CTRL:
+			if (proc_ctrl(ctx, wire->data)) {
+				return -1;
+			} 
+			break;
+		case TYPE_FILE: 
+			if (proc_file(wire->data, length[0])) {
 				return -1;
 			}
 			break;
-		}
-		case TYPE_FILE:
-			
-			break;
 		case TYPE_TEXT:
-			printf("\033[2K\r%s\n%s: ", wire->data, ctx->username);
-			fflush(stdout);
+			proc_text(ctx, wire->data);
 			break;
 	}
 	
