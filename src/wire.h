@@ -29,6 +29,8 @@ enum Wire
 	KEY_LEN = 1 << 5,
 	BLOCK_LEN = 1 << 4,
 	DATA_LEN_MAX = 1 << 20,
+	FILENAME_LEN = 1 << 5,
+	FILE_SIZE_MAX = DATA_LEN_MAX - FILENAME_LEN,
 	RECV_MAX_BYTES = sizeof(wire_t) + DATA_LEN_MAX,
 };
 
