@@ -51,6 +51,10 @@
 		#pragma comment(lib, "IPHLPAPI.lib")
 	#endif
 
+	#if __MINGW32__
+		char *inet_ntop(int af, const void *src, char *dst, size_t size);
+	#endif
+
 	typedef unsigned short in_port_t;
 	typedef SOCKET sock_t;
 #endif
