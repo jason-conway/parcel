@@ -29,27 +29,8 @@ static int cmd_username(client_t *ctx, char **message, size_t *message_length)
 {
 	free(*message);
 	
-	char *new_username;
 	size_t new_username_length;
-	
-	while (1) {
-		new_username = NULL;
-		new_username_length = 0;
-
-		do {
-			printf("> New username: ");
-			fflush(stdout);
-			xgetline(&new_username, &new_username_length, stdin);
-		} while (!new_username_length);
-
-		if (new_username_length > USERNAME_MAX_LENGTH) {
-			printf("> Maximum username length is %d characters\n", USERNAME_MAX_LENGTH);
-			free(new_username);
-			continue;
-		}
-		break;
-	}
-
+	char *new_username = xprompt("> New username: ", "username", &new_username_length);
 	static const char *template = "\033[33m%s has changed their username to %s\033[0m";
 	const size_t msg_length = strlen(template) + new_username_length + strlen(ctx->username) + 1;
 	char *msg = malloc(msg_length);
