@@ -216,3 +216,19 @@ void connect_server(client_t *client, const char *ip, const char *port)
 	// TODO: This needs to be done after a key exchange sequence
 	// send_connection_status(client, false);
 }
+
+void prompt_args(char *address, char *username)
+{
+	char *args[] = { &address[0], &username[0] };
+	size_t lengths[] = { ADDRESS_MAX_LENGTH, USERNAME_MAX_LENGTH };
+	char *prompts[] = { "> Enter server address: ", "> Enter username: " };
+	char *arg_name[] = { "address", "username" };
+	for (size_t i = 0; i < 2; i++) {
+		if (!*args[i]) {
+			size_t len = lengths[i];
+			char *str = xprompt(prompts[i], arg_name[i], &len);
+			memcpy(args[i], str, len);
+			free(str);
+		}
+	}
+}

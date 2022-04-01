@@ -34,22 +34,25 @@ int main(int argc, char **argv)
 {
 	signal(SIGINT, catch_sigint);
 
-	char *address = NULL;
-	char *port = NULL;
-	char *username = NULL;
+	char address[ADDRESS_MAX_LENGTH];
+	char port[PORT_MAX_LENGTH] = "2315";
+	char username[USERNAME_MAX_LENGTH];
 	
+	memset(address, 0, ADDRESS_MAX_LENGTH);
+	memset(username, 0, USERNAME_MAX_LENGTH);
+
 	int option;
 	xgetopt_t x = { 0 };
 	while ((option = xgetopt(&x, argc, argv, "ha:p:u:")) != -1) {
 		switch (option) {
 			case 'a':
-				address = x.arg;
+				memcpy(address, x.arg, strlen(x.arg));
 				break;
 			case 'p':
-				port = x.arg;
+				memcpy(port, x.arg, strlen(x.arg));
 				break;
 			case 'u':
-				username = x.arg;
+				memcpy(username, x.arg, strlen(x.arg));
 				break;
 			case 'd':
 				// TODO
@@ -62,11 +65,10 @@ int main(int argc, char **argv)
 				exit(EXIT_FAILURE);
 		}
 	}
-	if (!(address && port && username)) {
-		usage(stderr);
-		exit(EXIT_FAILURE);
+	if (argc < 5) {
+		prompt_args(address, username);
 	}
-
+	
 	client_t client = { .mutex_lock = PTHREAD_MUTEX_INITIALIZER };
 	pthread_mutex_init(&client.mutex_lock, NULL);
 
