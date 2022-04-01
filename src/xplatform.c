@@ -39,6 +39,11 @@ ssize_t xsendall(sock_t socket, const void *data, size_t len)
 	return total_sent;
 }
 
+ssize_t xrecvall(sock_t socket, void *data, size_t len)
+{
+	return xrecv(socket, data, len, MSG_WAITALL);
+}
+
 ssize_t xrecv(sock_t socket, void *data, size_t len, int flags)
 {
 #if __unix__ || __APPLE__
@@ -60,7 +65,7 @@ int xclose(sock_t socket)
 int xaccept(sock_t *connection_socket, sock_t listening_socket, struct sockaddr *address, socklen_t *len)
 {
 #if __unix__ || __APPLE__
-	* connection_socket = accept(listening_socket, address, len);
+	*connection_socket = accept(listening_socket, address, len);
 	return *connection_socket;
 #elif _WIN32
 	sock_t sd = accept(listening_socket, address, (int *)len);
@@ -75,7 +80,7 @@ int xaccept(sock_t *connection_socket, sock_t listening_socket, struct sockaddr 
 int xsocket(sock_t *xsocket, int domain, int type, int protocol)
 {
 #if __unix__ || __APPLE__
-	* xsocket = socket(domain, type, protocol);
+	*xsocket = socket(domain, type, protocol);
 	return *xsocket;
 #elif _WIN32
 	sock_t sd = socket(domain, type, protocol);
@@ -112,7 +117,7 @@ int xgetaddrinfo(const char *node, const char *service, const struct addrinfo *h
 	return getaddrinfo(node, service, hints, res);
 #elif _WIN32
 	if (getaddrinfo(node, service, hints, res)) {
-		(void)WSACleanup( );
+		(void)WSACleanup();
 		return -1;
 	}
 	return 0;
@@ -127,7 +132,7 @@ int xsetsockopt(sock_t socket, int level, int optname, const void *optval, sockl
 	(void)optlen;
 	const char *opt = optval;
 	if (setsockopt(socket, level, optname, opt, optlen)) {
-		(void)WSACleanup( );
+		(void)WSACleanup();
 		return -1;
 	}
 	return 0;
@@ -158,14 +163,14 @@ int xgetifaddrs(void)
 	return 0;
 #elif _WIN32
 	ULONG ip_adapter_len[1] = { sizeof(IP_ADAPTER_INFO) };
-	PIP_ADAPTER_INFO adapter_info = (IP_ADAPTER_INFO *)HeapAlloc(GetProcessHeap( ), 0, ip_adapter_len[0]);
+	PIP_ADAPTER_INFO adapter_info = (IP_ADAPTER_INFO *)HeapAlloc(GetProcessHeap(), 0, ip_adapter_len[0]);
 	if (!adapter_info) {
 		xprintf(RED, "error: HeapAlloc()\n");
 		return -1;
 	}
 	if (GetAdaptersInfo(adapter_info, ip_adapter_len) == ERROR_BUFFER_OVERFLOW) {
-		(void)HeapFree(GetProcessHeap( ), 0, (adapter_info));
-		adapter_info = (IP_ADAPTER_INFO *)HeapAlloc(GetProcessHeap( ), 0, ip_adapter_len[0]);
+		(void)HeapFree(GetProcessHeap(), 0, (adapter_info));
+		adapter_info = (IP_ADAPTER_INFO *)HeapAlloc(GetProcessHeap(), 0, ip_adapter_len[0]);
 		if (!adapter_info) {
 			xprintf(RED, "error: HeapAlloc()\n");
 			return -1;
@@ -173,14 +178,14 @@ int xgetifaddrs(void)
 	}
 	if (GetAdaptersInfo(adapter_info, ip_adapter_len)) {
 		xprintf(RED, "error: GetAdaptersInfo()\n");
-		(void)HeapFree(GetProcessHeap( ), 0, adapter_info);
+		(void)HeapFree(GetProcessHeap(), 0, adapter_info);
 		return -1;
 	}
 	for (PIP_ADAPTER_INFO adapter = adapter_info; adapter; adapter = adapter->Next) {
 		printf("\t%s\n", adapter->IpAddressList.IpAddress.String);
 	}
 
-	(void)HeapFree(GetProcessHeap( ), 0, adapter_info);
+	(void)HeapFree(GetProcessHeap(), 0, adapter_info);
 	return 0;
 #endif
 }
@@ -370,6 +375,32 @@ void xgetline(char **message, size_t *message_length, FILE *stream)
 error:
 	free(line);
 	*message = NULL;
+}
+
+char *xprompt(const char *prompt_msg, const char *error_msg, size_t *len)
+{
+	char *line;
+	size_t line_length;
+	
+	while (1) {
+		line = NULL;
+		line_length = 0;
+
+		do {
+			printf("%s", prompt_msg);
+			fflush(stdout);
+			xgetline(&line, &line_length, stdin);
+		} while (!line_length);
+
+		if (line_length > *len) {
+			printf("> Error: %s length has a maximum of %zu bytes", error_msg, *len);
+			free(line);
+			continue;
+		}
+		break;
+	}
+	*len = line_length;
+	return line;
 }
 
 void xprintf(ansi color, const char *format, ...)

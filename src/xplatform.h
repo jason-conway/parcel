@@ -44,7 +44,6 @@
 	#include <iphlpapi.h>
 	#include <ntsecapi.h>
 	#include <io.h>
-
 	#ifdef _MSC_VER
 		#pragma comment(lib, "ws2_32.lib")
 		#pragma comment(lib, "advapi32")
@@ -52,7 +51,7 @@
 	#endif
 
 	#if __MINGW32__
-		char *inet_ntop(int af, const void *src, char *dst, size_t size);
+		// char *inet_ntop(int af, const void *src, char *dst, size_t size);
 	#endif
 
 	typedef unsigned short in_port_t;
@@ -79,9 +78,29 @@ void xgetrandom(void *dest, size_t len);
 
 int xsocket(sock_t *xsocket, int domain, int type, int protocol);
 int xaccept(sock_t *connection_socket, sock_t listening_socket, struct sockaddr *address, socklen_t *len);
+
 ssize_t xsend(sock_t socket, const void *data, size_t len, int flags);
-ssize_t xsendall(sock_t socket, const void *data, size_t len);
 ssize_t xrecv(sock_t socket, void *data, size_t len, int flags);
+
+/**
+ * @brief Send message of len bytes across multiple send() calls if required
+ * 
+ * @param sockfd File descriptor of the sending socket
+ * @param data Data to be sent
+ * @param len Length of 'data'
+ * @return Number of bytes sent
+ */
+ssize_t xsendall(sock_t socket, const void *data, size_t len);
+
+/**
+ * @brief Receive len-bytes into data, blocking until full
+ * 
+ * @param sockfd File descriptor of the connected socket
+ * @param data Message buffer to place received data into
+ * @param len Number of bytes to recieve
+ * @return Number of bytes remaining, i.e., 0 on success
+ */
+ssize_t xrecvall(sock_t socket, void *data, size_t len);
 
 size_t xfd_count(sock_t fd, size_t count);
 size_t xfd_init_count(sock_t fd);
@@ -94,6 +113,7 @@ int xsetsockopt(sock_t socket, int level, int optname, const void *optval, sockl
 int xclose(sock_t socket);
 void xexit(int status);
 int xgetopt(xgetopt_t *x, int argc, char **argv, const char *optstr);
+char *xprompt(const char *prompt_msg, const char *error_msg, size_t *len);
 void xgetline(char **message, size_t *message_length, FILE *stream);
 int xgetifaddrs(void);
 int xstartup(void);
