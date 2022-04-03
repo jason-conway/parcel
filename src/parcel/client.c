@@ -100,9 +100,6 @@ int send_thread(void *ctx)
 		struct timespec ts = { .tv_sec = 0, .tv_nsec = 1000000 };
 		(void)nanosleep(&ts, NULL);
 	}
-
-	send_connection_status(&client, true);
-	return EXIT_SUCCESS;
 }
 
 static int recv_handler(client_t *ctx)
