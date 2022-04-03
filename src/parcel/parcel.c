@@ -11,10 +11,10 @@
 
 #include "client.h"
 
-void catch_sigint(int sig)
+static void catch_sigint(int sig)
 {
 	(void)sig;
-	xprintf(RED, "\nApplication aborted\n");
+	xprintf(RED, "\nAborting application\n");
 	exit(EXIT_FAILURE);
 }
 
@@ -25,6 +25,7 @@ static void usage(FILE *f)
 		"  -a ADDR  server address (www.example.com, 111.222.333.444)\n"
 		"  -p PORT  server port (3724, 9216)\n"
 		"  -u NAME  username displayed alongside sent messages\n"
+		"  -l       use computer login as username\n"
 		"  -h       print this usage information\n"
 		"  -d       enable debug mode (verbose)\n";
 	fprintf(f, "%s", usage);
@@ -35,27 +36,42 @@ int main(int argc, char **argv)
 	signal(SIGINT, catch_sigint);
 
 	char address[ADDRESS_MAX_LENGTH];
-	char port[PORT_MAX_LENGTH] = "2315";
-	char username[USERNAME_MAX_LENGTH];
-	
 	memset(address, 0, ADDRESS_MAX_LENGTH);
-	memset(username, 0, USERNAME_MAX_LENGTH);
-
+	
+	char port[PORT_MAX_LENGTH] = "2315";
+	
+	client_t client = { .mutex_lock = PTHREAD_MUTEX_INITIALIZER };
+	pthread_mutex_init(&client.mutex_lock, NULL);
+	
 	int option;
 	xgetopt_t x = { 0 };
-	while ((option = xgetopt(&x, argc, argv, "ha:p:u:")) != -1) {
+	while ((option = xgetopt(&x, argc, argv, "lha:p:u:")) != -1) {
 		switch (option) {
 			case 'a':
-				memcpy(address, x.arg, strlen(x.arg));
-				break;
+				if (strlen(x.arg) < ADDRESS_MAX_LENGTH) {
+					memcpy(address, x.arg, strlen(x.arg));
+					break;
+				}
+				fatal("server address too long");
 			case 'p':
-				memcpy(port, x.arg, strlen(x.arg));
-				break;
+				if (strlen(x.arg) < PORT_MAX_LENGTH) {
+					memcpy(port, x.arg, strlen(x.arg));
+					break;
+				}
+				fatal("server port too long");
 			case 'u':
-				memcpy(username, x.arg, strlen(x.arg));
+				if (strlen(x.arg) < USERNAME_MAX_LENGTH) {
+					memcpy(client.username, x.arg, strlen(x.arg));
+					break;
+				}
+				fatal("username too long");
+			case 'l': 
+				if (xgetusername(client.username, USERNAME_MAX_LENGTH)) {
+					fatal("unable to determine device username");
+				}
 				break;
 			case 'd':
-				// TODO
+				printf("> Option 'd' is not implemented yet\n");
 				break;
 			case 'h':
 				usage(stdout);
@@ -66,17 +82,8 @@ int main(int argc, char **argv)
 		}
 	}
 	if (argc < 5) {
-		prompt_args(address, username);
+		prompt_args(address, client.username);
 	}
-	
-	client_t client = { .mutex_lock = PTHREAD_MUTEX_INITIALIZER };
-	pthread_mutex_init(&client.mutex_lock, NULL);
-
-	size_t username_length = 0;
-	if ((username_length = strlen(username) + 1) > USERNAME_MAX_LENGTH) {
-		fprintf(stderr, "> Username is too long\n");
-	}
-	memcpy(client.username, username, username_length);
 	
 	connect_server(&client, address, port);
 	pthread_t recv_ctx;

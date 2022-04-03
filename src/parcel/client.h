@@ -65,7 +65,7 @@ void connect_server(client_t *client, const char *ip, const char *port);
 void send_connection_status(client_t *ctx, bool exit);
 int parse_input(client_t *ctx, char **message, size_t *message_length);
 void prompt_args(char *address, char *username);
-
+noreturn void fatal(const char *msg);
 int proc_file(uint8_t *data, size_t length);
 int proc_ctrl(client_t *ctx, uint8_t *wire_data);
 void proc_text(client_t *ctx, uint8_t *wire_data);

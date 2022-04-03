@@ -497,3 +497,13 @@ char *xstrcat(size_t count, ...)
 
 	return str;
 }
+
+int xgetusername(char *username, size_t len)
+{
+#if __unix__ || __APPLE__
+	return getlogin_r(username, len) ? -1 : 0;
+#elif _WIN32
+	LPDWORD length = (LPDWORD)&len;
+	return GetUserName(username, length) ? 0 : -1;
+#endif
+}

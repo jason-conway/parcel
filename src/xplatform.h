@@ -43,6 +43,7 @@
 	#include <mstcpip.h>
 	#include <iphlpapi.h>
 	#include <ntsecapi.h>
+	#include <winbase.h>
 	#include <io.h>
 	#ifdef _MSC_VER
 		#pragma comment(lib, "ws2_32.lib")
@@ -117,6 +118,8 @@ char *xprompt(const char *prompt_msg, const char *error_msg, size_t *len);
 void xgetline(char **message, size_t *message_length, FILE *stream);
 int xgetifaddrs(void);
 int xstartup(void);
+
+int xgetusername(char *username, size_t len);
 
 void xprintf(ansi color, const char *format, ...);
 bool xfexists(const char *filename);
