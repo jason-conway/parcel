@@ -14,9 +14,8 @@
 // Prepend client username to message string
 static void prepend_username(char *username, char **plaintext, size_t *plaintext_length)
 {
-	static const char *seperator = ": ";
 	bool error = true;
-	char *named_message = xstrcat(3, username, seperator, *plaintext);
+	char *named_message = xstrcat(3, username, ": ", *plaintext);
 	if (named_message) {
 		*plaintext_length = strlen(named_message);
 		error = false;
@@ -29,29 +28,22 @@ static int cmd_username(client_t *ctx, char **message, size_t *message_length)
 {
 	free(*message);
 	
-	size_t new_username_length;
+	size_t new_username_length = USERNAME_MAX_LENGTH;
 	char *new_username = xprompt("> New username: ", "username", &new_username_length);
-	static const char *template = "\033[33m%s has changed their username to %s\033[0m";
-	const size_t msg_length = strlen(template) + new_username_length + strlen(ctx->username) + 1;
-	char *msg = malloc(msg_length);
-	if (!msg) {
-		goto error;
+	*message = xstrcat(5, "\033[33m", ctx->username, " has changed their username to ", new_username, "\033[0m");
+	if (!message) {
+		*message_length = 0;
+		*message = NULL;
+		free(new_username);
+		send_connection_status(ctx, true);
+		return -1;
 	}
-	if (snprintf(msg, msg_length, template, ctx->username, new_username) < 0) {
-		goto error;
-	}
-
-	*message = msg;
-	*message_length = msg_length;
+	
+	*message_length = strlen(*message);
 	memset(ctx->username, 0, USERNAME_MAX_LENGTH);
 	memcpy(ctx->username, new_username, new_username_length);
 	free(new_username);
 	return 0;
-
-	error:
-		free(new_username);
-		send_connection_status(ctx, true);
-		return -1;
 }
 
 // TODO

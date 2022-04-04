@@ -42,7 +42,7 @@ int main(int argc, char **argv)
 	
 	client_t client = { .mutex_lock = PTHREAD_MUTEX_INITIALIZER };
 	pthread_mutex_init(&client.mutex_lock, NULL);
-	
+		
 	int option;
 	xgetopt_t x = { 0 };
 	while ((option = xgetopt(&x, argc, argv, "lha:p:u:")) != -1) {
