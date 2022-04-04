@@ -54,7 +54,7 @@ static void sha256_hash(sha256_t *ctx, const uint8_t *data)
 
 		msg_schedule[i] = ((((msg_schedule[i - 0x02] >> 0x11) |
 							 (msg_schedule[i - 0x02] << 0x0f)) ^
-							((msg_schedule[i - 0x02] >> 0x0d) |
+							((msg_schedule[i - 0x02] >> 0x13) |
 							 (msg_schedule[i - 0x02] << 0x0d)) ^
 							(msg_schedule[i - 0x02] >> 0x0a)) +
 						   msg_schedule[i - 0x07] +
