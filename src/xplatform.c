@@ -349,7 +349,7 @@ void xgetline(char **message, size_t *message_length, FILE *stream)
 			}
 			line = new_line;
 		}
-
+	
 		int c = fgetc(stream);
 		if (c == EOF) {
 			goto eol;

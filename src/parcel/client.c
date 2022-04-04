@@ -117,12 +117,14 @@ static int recv_handler(client_t *ctx)
 	
 	size_t length[1] = { bytes_recv };
 	switch (_decrypt_wire(wire, length, ctx->session_key)) {
-		case INCORRECT_KEY:
+		case WIRE_INVALID_KEY:
 			if (_decrypt_wire(wire, length, ctx->ctrl_key)) {
 				return -1;
 			}
 			break;
-		case CMAC_ERROR:
+		case WIRE_PARTIAL:
+			break; // TODO
+		case WIRE_CMAC_ERROR:
 			return -1;
 		case WIRE_OK:
 			break;

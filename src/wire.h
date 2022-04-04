@@ -18,6 +18,7 @@
 typedef struct wire_t
 {
 	uint8_t mac[16];
+	uint8_t lac[16];
 	uint8_t iv[16];
 	uint8_t length[16];
 	uint8_t type[16];
@@ -41,6 +42,20 @@ enum SectionLengths
 	BASE_DEC_LEN = sizeof(((wire_t *)0)->type)
 };
 
+enum SectionOffsets
+{
+	WIRE_OFFSET_MAC = offsetof(wire_t, mac),
+	WIRE_OFFSET_LAC = offsetof(wire_t, lac),
+	WIRE_OFFSET_IV = offsetof(wire_t, iv),
+	WIRE_OFFSET_LENGTH = offsetof(wire_t, length),
+	WIRE_OFFSET_TYPE = offsetof(wire_t, type),
+	WIRE_OFFSET_DATA = offsetof(wire_t, data),
+};
+
+/**
+ * @brief WireType constants are the concatenated ascii values
+ * of "text", "file", "ctrl" in hex.
+ */
 enum WireType
 {
 	TYPE_TEXT = 0x74657874,
@@ -51,9 +66,9 @@ enum WireType
 enum DecryptionStatus
 {
 	WIRE_OK,
-	CMAC_ERROR,
-	INCORRECT_KEY,
-	GDH
+	WIRE_CMAC_ERROR,
+	WIRE_INVALID_KEY,
+	WIRE_PARTIAL,
 };
 
 wire_t *new_wire(void);
