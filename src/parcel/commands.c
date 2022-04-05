@@ -122,6 +122,12 @@ static inline int cmd_print_fingerprint(const uint8_t *fingerprint)
 	return 0;
 }
 
+static inline int cmd_not_found(char *message)
+{
+	xwarn("Unrecognized command, \"%s\"\n", message);
+	return CMD_NONE;
+}
+
 noreturn void cmd_exit(client_t *ctx, char *message)
 {
 	free(message);
@@ -166,7 +172,7 @@ int parse_input(client_t *ctx, char **message, size_t *message_length)
 			case CMD_FILE:
 				return cmd_send_file(ctx, message, message_length) ? -1 : SEND_FILE;
 			default:
-				return -1;
+				return cmd_not_found(*message);
 		}
 	}
 }
