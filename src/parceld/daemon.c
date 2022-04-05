@@ -11,16 +11,16 @@
 
 #include "daemon.h"
 
-noreturn void catch_sigint(int sig)
+void catch_sigint(int sig)
 {
 	(void)sig;
-	xprintf(RED, "\nApplication aborted\n");
+	xalert("\nApplication aborted\n");
 	exit(EXIT_FAILURE);
 }
 
-noreturn void fatal(const char *msg)
+void fatal(const char *msg)
 {
-	xprintf(RED, "server error: %s\n", msg);
+	xalert("server error: %s\n", msg);
 	exit(EXIT_FAILURE);
 }
 
@@ -29,7 +29,6 @@ void configure_server(server_t *srv, const char *port)
 	if (xstartup()) {
 		fatal("xstartup()");
 	}
-	
 	
 	xprintf(MAG, "parceld: Parcel Daemon v0.9.1\n");
 	printf("Interfaces:\n");
@@ -109,11 +108,18 @@ static bool add_client(server_t *srv)
 		srv->connection_count++;
 	}
 
+	char address[INET_ADDRSTRLEN];
+	in_port_t port;
+	if (xgetpeeraddr(new_client, address, &port) < 0) {
+		fatal("xgetpeeraddr()");
+	}
+
 	// Copy new connection's socket to the next free slot
 	for (size_t i = 1; i < MAX_CONNECTIONS; i++) {
 		if (!srv->sockets[i]) {
 			srv->sockets[i] = new_client;
-			printf("Connection %zu added in slot %zu\n", srv->connection_count, i);
+			printf("Connection from %s port %u added to slot %zu\n", address, port, i);
+			printf("Active connections: %zu\n", srv->connection_count);
 			break;
 		}
 	}
@@ -147,19 +153,15 @@ static int recv_client(server_t *srv, size_t sender_index)
 
 	if ((msg->length = xrecv(srv->sockets[sender_index], msg->data, sizeof(msg->data), 0)) <= 0) {
 		if (msg->length) {
-			// fprintf(stderr, ">\033[33m Connection error\033[0m\n");
-			xprintf(YEL, "Connection error\n");
+			xwarn("Connection error\n");
 		}
 		else {
-			struct sockaddr_in client_sockaddr;
-			socklen_t len[1] = { sizeof(client_sockaddr) };
-			if (xgetpeername(srv->sockets[sender_index], (struct sockaddr *)&client_sockaddr, len)) {
-				fatal("xgetpeername()");
-			}
 			char address[INET_ADDRSTRLEN];
-			(void)inet_ntop(AF_INET, &client_sockaddr.sin_addr, address, INET_ADDRSTRLEN);
-
-			printf("Disconnected from %s port %d\n", address, ntohs(client_sockaddr.sin_port));
+			in_port_t port;
+			if (xgetpeeraddr(srv->sockets[sender_index], address, &port) < 0) {
+				fatal("xgetpeeraddr()");
+			}
+			printf("Connection from %s port %d ended\n", address, port);
 		}
 
 		FD_CLR(srv->sockets[sender_index], &srv->descriptors);
@@ -175,7 +177,11 @@ static int recv_client(server_t *srv, size_t sender_index)
 		}
 
 		srv->connection_count--;
-		// n_party_server(srv->socket, &srv->connections, srv->max_in_set, srv->server_key);
+		printf("Active connections: %zu\n", srv->connection_count);
+		
+		if (n_party_server(srv->sockets, srv->connection_count, srv->server_key)) {
+			fatal("Key exchange failed");
+		}
 	}
 	else {
 		if (transfer_message(srv, sender_index, msg) < 0) {

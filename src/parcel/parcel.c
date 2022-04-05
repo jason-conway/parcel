@@ -54,11 +54,11 @@ int main(int argc, char **argv)
 				}
 				fatal("server address too long");
 			case 'p':
-				if (strlen(x.arg) < PORT_MAX_LENGTH) {
+				if (xport_valid(x.arg)) {
 					memcpy(port, x.arg, strlen(x.arg));
 					break;
 				}
-				fatal("server port too long");
+				exit(EXIT_FAILURE);
 			case 'u':
 				if (strlen(x.arg) < USERNAME_MAX_LENGTH) {
 					memcpy(client.username, x.arg, strlen(x.arg));

@@ -14,9 +14,12 @@
 static void usage(FILE *f)
 {
 	static const char usage[] =
-		"usage: parceld [-p PORT] [-s SEED]\n"
-		"  -p PORT  server port (3724, 9216)\n"
-		"  -h       print this usage information\n";
+		"usage: parceld [-dh] [-p PORT] [-M CONNS]\n"
+		"  -p PORT  start daemon on port PORT\n"
+		"  -q LMAX  limit length of pending connections queue to LMAX\n"
+		"  -m CMAX  limit number of active server connections to CMAX\n"
+		"  -d        enable debug mode\n"
+		"  -h        print this usage information\n";
 	fprintf(f, "%s", usage);
 }
 
@@ -27,11 +30,15 @@ int main(int argc, char *argv[])
 
 	int option;
 	xgetopt_t x = { 0 };
-	char *port = NULL;
-	while ((option = xgetopt(&x, argc, argv, "hp:")) != -1) {
+
+	char port[6] = "2315";
+
+	while ((option = xgetopt(&x, argc, argv, "dhp:q:m:")) != -1) {
 		switch (option) {
 			case 'p':
-				port = x.arg;
+				if (xport_valid(x.arg)) {
+					memcpy(port, x.arg, strlen(x.arg));
+				}
 				break;
 			case 'h':
 				usage(stdout);
@@ -40,10 +47,6 @@ int main(int argc, char *argv[])
 				printf("Option is missing an argument\n");
 				exit(EXIT_FAILURE);
 		}
-	}
-	if (!port) {
-		usage(stderr);
-		exit(EXIT_FAILURE);
 	}
 
 	configure_server(&server, port);

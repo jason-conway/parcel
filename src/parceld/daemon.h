@@ -31,6 +31,9 @@ enum ParceldConstants
 	SOCK_LEN = sizeof(struct sockaddr),
 	MAX_CONNECTIONS = FD_SETSIZE,
 	MAX_QUEUE = 32,
+	
+	DEFAULT_PORT = 2315,
+	PORT_MAX_LENGTH = 6,
 };
 
 typedef struct server_t
