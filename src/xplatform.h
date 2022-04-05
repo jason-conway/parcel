@@ -110,6 +110,8 @@ sock_t xfd_inset(fd_set *set, size_t index);
 
 int xgetaddrinfo(const char *node, const char *service, const struct addrinfo *hints, struct addrinfo **res);
 int xgetpeername(sock_t socket, struct sockaddr *address, socklen_t *len);
+int xgetpeeraddr(sock_t socket, char *address, in_port_t *port);
+bool xport_valid(char *arg);
 int xsetsockopt(sock_t socket, int level, int optname, const void *optval, socklen_t optlen);
 int xclose(sock_t socket);
 void xexit(int status);
@@ -121,8 +123,19 @@ int xstartup(void);
 
 int xgetusername(char *username, size_t len);
 
+void xwarn(const char *format, ...);
+void xalert(const char *format, ...);
 void xprintf(ansi color, const char *format, ...);
+
 bool xfexists(const char *filename);
 size_t xfsize(const char *filename);
 char *xstrdup(const char *str);
+
+/**
+ * @brief Concatenate `count` strings right to left
+ * 
+ * @param count number of strings provided
+ * @param ... `count` strings
+ * @return pointer to concatenated string, NULL if malloc() fails
+ */
 char *xstrcat(size_t count, ...);

@@ -11,9 +11,29 @@
 
 #include "xplatform.h"
 
- /**
-  * @section BSD / Winsock wrappers
-  */
+void xwarn(const char *format, ...)
+{
+	va_list ap;
+	va_start(ap, format);
+	(void)fprintf(stdout, "%s", "\033[0;33m");
+	(void)vfprintf(stdout, format, ap);
+	(void)fprintf(stdout, "\033[0m");
+	va_end(ap);
+}
+
+void xalert(const char *format, ...)
+{
+	va_list ap;
+	va_start(ap, format);
+	(void)fprintf(stderr, "%s", "\033[0;31m");
+	(void)vfprintf(stderr, format, ap);
+	(void)fprintf(stderr, "\033[0m");
+	va_end(ap);
+}
+
+/**
+ * @section BSD / Winsock wrappers
+ */
 
 ssize_t xsend(sock_t socket, const void *data, size_t len, int flags)
 {
@@ -165,19 +185,16 @@ int xgetifaddrs(void)
 	ULONG ip_adapter_len[1] = { sizeof(IP_ADAPTER_INFO) };
 	PIP_ADAPTER_INFO adapter_info = (IP_ADAPTER_INFO *)HeapAlloc(GetProcessHeap(), 0, ip_adapter_len[0]);
 	if (!adapter_info) {
-		xprintf(RED, "error: HeapAlloc()\n");
 		return -1;
 	}
 	if (GetAdaptersInfo(adapter_info, ip_adapter_len) == ERROR_BUFFER_OVERFLOW) {
 		(void)HeapFree(GetProcessHeap(), 0, (adapter_info));
 		adapter_info = (IP_ADAPTER_INFO *)HeapAlloc(GetProcessHeap(), 0, ip_adapter_len[0]);
 		if (!adapter_info) {
-			xprintf(RED, "error: HeapAlloc()\n");
 			return -1;
 		}
 	}
 	if (GetAdaptersInfo(adapter_info, ip_adapter_len)) {
-		xprintf(RED, "error: GetAdaptersInfo()\n");
 		(void)HeapFree(GetProcessHeap(), 0, adapter_info);
 		return -1;
 	}
@@ -198,6 +215,30 @@ int xgetpeername(sock_t socket, struct sockaddr *address, socklen_t *len)
 	return getpeername(socket, address, (int *)len);
 #endif
 }
+
+int xgetpeeraddr(sock_t socket, char *address, in_port_t *port)
+{
+	struct sockaddr_in client_sockaddr;
+	socklen_t len[1] = { sizeof(client_sockaddr) };
+	if (xgetpeername(socket, (struct sockaddr *)&client_sockaddr, len)) {
+		return -1;
+	}
+	(void)inet_ntop(AF_INET, &client_sockaddr.sin_addr, address, INET_ADDRSTRLEN);
+	*port = ntohs(client_sockaddr.sin_port);
+	return 0;
+}
+
+bool xport_valid(char *arg)
+{
+	long port = strtol(arg, NULL, 10);
+	if (port < 0 || port > 65535) {
+		xwarn("Port cannot be %s\n", port < 0 ? "negative" : "greater than 65535");
+		xwarn("Using default port: 2315\n");
+		return false;
+	}
+	return true;
+}
+
 /**
  * @section FD_SET related functions
  */
@@ -275,6 +316,16 @@ void xgetrandom(void *dest, size_t len)
 	if (!SystemFunction036(dest, len)) {
 		exit(EXIT_FAILURE);
 	}
+#endif
+}
+
+int xgetusername(char *username, size_t len)
+{
+#if __unix__ || __APPLE__
+	return getlogin_r(username, len) ? -1 : 0;
+#elif _WIN32
+	LPDWORD length = (LPDWORD)&len;
+	return GetUserName(username, length) ? 0 : -1;
 #endif
 }
 
@@ -393,7 +444,7 @@ char *xprompt(const char *prompt_msg, const char *error_msg, size_t *len)
 		} while (!line_length);
 
 		if (line_length > *len) {
-			printf("> Error: %s length has a maximum of %zu bytes", error_msg, *len);
+			xwarn("Maximum %s length is %zu bytes", error_msg, *len);
 			free(line);
 			continue;
 		}
@@ -427,11 +478,6 @@ bool xfexists(const char *filename)
 	return false;
 }
 
-// "Setting the file position indicator to end-of-file,
-// as with fseek(file, 0, SEEK_END), has undefined behavior
-// for a binary stream (because of possible trailing null
-// characters) or for any stream with state-dependent encoding
-// that does not assuredly end in the initial shift state"
 size_t xfsize(const char *filename)
 {
 #if __unix__ || __APPLE__
@@ -457,7 +503,6 @@ char *xstrdup(const char *str)
 		size_t length = strlen(str) + 1;
 		duplicate = malloc(length);
 		if (!duplicate) {
-			xprintf(RED, "malloc() failed\n");
 			return NULL;
 		}
 		memcpy(duplicate, str, length);
@@ -470,7 +515,7 @@ char *xstrcat(size_t count, ...)
 	va_list ap;
 	va_start(ap, count);
 
-	// Determine required length for concatenated string
+	// Allocate the required length
 	size_t length = 1;
 	for (size_t i = 0; i < count; i++) {
 		char *substring = va_arg(ap, char *);
@@ -480,10 +525,10 @@ char *xstrcat(size_t count, ...)
 
 	char *str = malloc(length);
 	if (!str) {
-		xprintf(RED, "malloc() failed\n");
 		return NULL;
 	}
 
+	// Append each arg to the end of the last
 	size_t offset = 0;
 	va_start(ap, count);
 	for (size_t i = 0; i < count; i++) {
@@ -498,12 +543,3 @@ char *xstrcat(size_t count, ...)
 	return str;
 }
 
-int xgetusername(char *username, size_t len)
-{
-#if __unix__ || __APPLE__
-	return getlogin_r(username, len) ? -1 : 0;
-#elif _WIN32
-	LPDWORD length = (LPDWORD)&len;
-	return GetUserName(username, length) ? 0 : -1;
-#endif
-}
