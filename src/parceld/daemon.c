@@ -145,12 +145,11 @@ static int transfer_message(server_t *srv, size_t sender_index, msg_t *msg)
 
 static int recv_client(server_t *srv, size_t sender_index)
 {
-	msg_t *msg = malloc(sizeof(msg_t));
+	msg_t *msg = xcalloc(sizeof(msg_t));
 	if (!msg) {
-		fatal("malloc()");
+		fatal("xcalloc()");
 	}
-	memset(msg, 0, sizeof(msg_t));
-
+	
 	if ((msg->length = xrecv(srv->sockets[sender_index], msg->data, sizeof(msg->data), 0)) <= 0) {
 		if (msg->length) {
 			xwarn("Connection error\n");
@@ -186,12 +185,12 @@ static int recv_client(server_t *srv, size_t sender_index)
 	else {
 		if (transfer_message(srv, sender_index, msg) < 0) {
 			fprintf(stderr, "Error broadcasting message\n");
-			free(msg);
+			xfree(msg);
 			return -1;
 		}
 		printf("Fanout message from slot %zu\n", sender_index);
 	}
-	free(msg);
+	xfree(msg);
 	return 0;
 }
 

@@ -21,7 +21,7 @@ typedef union state_t
 	uint8_t s[4][4];
 } state_t;
 
- // Precalculated lookup table instead of recursive polynomial multiplication
+// Precalculated lookup table instead of recursive polynomial multiplication
 static uint8_t galois_multiply(uint8_t x, uint8_t y)
 {
 	static const uint8_t polynomial_mask[8] = { 0x00, 0x1b, 0x36, 0x2d, 0x6c, 0x77, 0x5a, 0x41 };

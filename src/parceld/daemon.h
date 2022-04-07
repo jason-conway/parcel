@@ -21,6 +21,7 @@
 #include <stdnoreturn.h>
 
 #include "xplatform.h"
+#include "xutils.h"
 #include "x25519.h"
 #include "key-exchange.h"
 #include "sha256.h"

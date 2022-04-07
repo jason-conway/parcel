@@ -66,8 +66,8 @@ int main(int argc, char **argv)
 				}
 				fatal("username too long");
 			case 'l': 
-				if (xgetusername(client.username, USERNAME_MAX_LENGTH)) {
-					fatal("unable to determine device username");
+				if (xgetlogin(client.username, USERNAME_MAX_LENGTH)) {
+					fatal("unable to determine login name");
 				}
 				break;
 			case 'd':

@@ -23,6 +23,7 @@
 #include <stdnoreturn.h>
 
 #include "xplatform.h"
+#include "xutils.h"
 #include "x25519.h"
 #include "key-exchange.h"
 #include "wire.h"
@@ -38,6 +39,8 @@ enum ParcelConstants
 enum command_id
 {
 	CMD_NONE = 0,
+	CMD_AMBIGUOUS,
+	CMD_LIST,
 	CMD_EXIT,
 	CMD_USERNAME,
 	CMD_FINGERPRINT,

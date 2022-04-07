@@ -30,10 +30,10 @@ static void send_encrypted_message(int socket, uint64_t type, void *data, size_t
 	wire_t *wire = init_wire(data, type,  &len);
 	encrypt_wire(wire, key);
 	if (xsendall(socket, wire, len) < 0) {
-		free(wire);
+		xfree(wire);
 		error(socket, "xsendall()");
 	}
-	free(wire);
+	xfree(wire);
 }
 
 void send_connection_status(client_t *ctx, bool leave)
@@ -87,11 +87,11 @@ int send_thread(void *ctx)
 				send_encrypted_message(client.socket, TYPE_FILE, plaintext, length, client.session_key);
 				break;
 			default:
-				free(plaintext);
+				xfree(plaintext);
 				error(client.socket, "parse_input()");
 		}
 		
-		free(plaintext);
+		xfree(plaintext);
 
 		pthread_mutex_lock(&client_ctx->mutex_lock);
 			memcpy(client_ctx, &client, sizeof(client_t));
@@ -111,7 +111,7 @@ static int recv_handler(client_t *ctx)
 
 	const ssize_t bytes_recv = xrecv(ctx->socket, wire, DATA_LEN_MAX, 0);
 	if (bytes_recv < 0) {
-		free(wire);
+		xfree(wire);
 		error(ctx->socket, "recv()");
 	}
 	
@@ -134,7 +134,7 @@ static int recv_handler(client_t *ctx)
 		case TYPE_CTRL:
 			if (proc_ctrl(ctx, wire->data)) {
 				return -1;
-			} 
+			}
 			break;
 		case TYPE_FILE: 
 			if (proc_file(wire->data, length[0])) {
@@ -146,7 +146,7 @@ static int recv_handler(client_t *ctx)
 			break;
 	}
 	
-	free(wire);
+	xfree(wire);
 	return 0;
 }
 
@@ -227,7 +227,7 @@ void prompt_args(char *address, char *username)
 			size_t len = lengths[i];
 			char *str = xprompt(prompts[i], arg_name[i], &len);
 			memcpy(args[i], str, len);
-			free(str);
+			xfree(str);
 		}
 	}
 }

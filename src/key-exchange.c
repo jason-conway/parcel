@@ -13,7 +13,7 @@
 
 void print_fingerprint(const char *str, const uint8_t *fingerprint)
 {
-	printf("\033[33m%s", str); // In yellow :D
+	printf("\033[1m%s", str); // In yellow :D
 	for (size_t i = 0; i < 32; i += 4) {
 		uint64_t chunk = (((uint64_t)fingerprint[i + 0] << 0x18) |
 						  ((uint64_t)fingerprint[i + 1] << 0x10) |
@@ -67,16 +67,15 @@ int two_party_client(const sock_t socket, uint8_t *key, uint8_t *fingerprint)
 		return -1;
 	}
 
-	uint8_t shared_secret[KEY_LEN] = { 0 };
+	uint8_t shared_secret[KEY_LEN];
 	point_kx(shared_secret, secret_key, server_public_key);
 
 	ssize_t key_exchange_wire_length = sizeof(wire_t) + KEY_LEN;
-	wire_t *wire = malloc(key_exchange_wire_length);
+	wire_t *wire = xcalloc(key_exchange_wire_length);
 	if (!wire) {
 		return -1;
 	}
-	memset(wire, 0, key_exchange_wire_length);
-
+	
 	if (xrecv(socket, wire, key_exchange_wire_length, 0) != key_exchange_wire_length) {
 		return -1;
 	}
@@ -87,7 +86,7 @@ int two_party_client(const sock_t socket, uint8_t *key, uint8_t *fingerprint)
 	}
 
 	memcpy(key, wire->data, KEY_LEN);
-	free(wire);
+	xfree(wire);
 	return 0;
 }
 
@@ -121,7 +120,7 @@ int two_party_server(const sock_t socket, uint8_t *session_key)
 		return -1;
 	}
 
-	free(wire);
+	xfree(wire);
 	return 0;
 }
 
@@ -140,13 +139,13 @@ static int send_ctrl_key(sock_t *sockets, size_t count, uint8_t *key)
 	memcpy(key, &ctrl_message[16], 32);
 
 	for (size_t i = 1; i <= count; i++) {
-		if (xsendall(sockets[i], wire, len) < 0) {
-			free(wire);
+		if (xsend(sockets[i], wire, len, 0) < 0) {
+			xfree(wire);
 			return -1;
 		}
 	}
 
-	free(wire);
+	xfree(wire);
 	return 0;
 }
 
@@ -159,7 +158,7 @@ static int rotate_intermediates(sock_t *sockets, size_t count)
 		}
 
 		const size_t next = (i == count) ? 1 : i + 1; // Rotate right, skip server's socket
-		if (xsendall(sockets[next], intermediate_key, KEY_LEN) < 0) {
+		if (xsend(sockets[next], intermediate_key, KEY_LEN, 0) < 0) {
 			printf("\n> Error sending to slot %zu\n", next);
 			return -1;
 		}
@@ -195,7 +194,7 @@ int n_party_client(const sock_t socket, size_t rounds, uint8_t *session_key, uin
 	point_q(secret_key, public_key, fingerprint);
 
 	// Send our public key to the client on our right
-	if (xsendall(socket, public_key, KEY_LEN) != KEY_LEN) {
+	if (xsend(socket, public_key, KEY_LEN, 0) != KEY_LEN) {
 		return -1;
 	}
 
@@ -213,7 +212,7 @@ int n_party_client(const sock_t socket, size_t rounds, uint8_t *session_key, uin
 			return 0;
 		}
 
-		if (xsendall(socket, shared_secret, KEY_LEN) != KEY_LEN) {
+		if (xsend(socket, shared_secret, KEY_LEN, 0) != KEY_LEN) {
 			return -1;
 		}
 	}

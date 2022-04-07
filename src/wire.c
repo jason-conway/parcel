@@ -49,23 +49,18 @@ void wire_set_raw(uint8_t *dest, uint64_t src)
 
 wire_t *new_wire(void)
 {
-	wire_t *wire = malloc(RECV_MAX_BYTES);
-	if (!wire) {
-		return NULL;
-	}
-	memset(wire, 0, RECV_MAX_BYTES);
-	return wire;
+	wire_t *wire = xcalloc(RECV_MAX_BYTES);
+	return wire ? wire : NULL;
 }
 
 wire_t *init_wire(uint8_t *data, uint64_t type, size_t *len)
 {
 	const uint64_t data_length = BLOCK_LEN * ((*len + 15) / BLOCK_LEN);
 	const size_t wire_length = sizeof(wire_t) + data_length;
-	wire_t *wire = malloc(wire_length);
+	wire_t *wire = xcalloc(wire_length);
 	if (!wire) {
 		return NULL;
 	}
-	memset(wire, 0, wire_length);
 
 	xgetrandom(wire->iv, BLOCK_LEN);
 	unpack64_le(wire->length, data_length);
