@@ -30,9 +30,18 @@ enum Wire
 	KEY_LEN = 1 << 5,
 	BLOCK_LEN = 1 << 4,
 	DATA_LEN_MAX = 1 << 20,
-	FILENAME_LEN = 1 << 5,
-	FILE_SIZE_MAX = DATA_LEN_MAX - FILENAME_LEN,
 	RECV_MAX_BYTES = sizeof(wire_t) + DATA_LEN_MAX,
+};
+
+enum DataTypeFile
+{
+	FILE_PATH_MAX_LENGTH = FILENAME_MAX,
+	FILE_NAME_START = 0,
+	FILE_NAME_LEN = 1 << 6,
+	FILE_SIZE_START = FILE_NAME_LEN,
+	FILE_DATA_START = FILE_NAME_LEN + BLOCK_LEN,
+	FILE_HEADER_SIZE = FILE_DATA_START,
+	FILE_DATA_MAX_SIZE = DATA_LEN_MAX - FILE_HEADER_SIZE,
 };
 
 enum SectionLengths
@@ -77,5 +86,8 @@ size_t encrypt_wire(wire_t *wire, const uint8_t *key);
 int decrypt_wire(wire_t *wire, const uint8_t *key);
 int _decrypt_wire(wire_t *wire, size_t *len, const uint8_t *key);
 
-void wire_set_raw(uint8_t *dest, uint64_t src);
+uint64_t wire_pack64(const uint8_t *src);
 uint64_t wire_get_raw(uint8_t *src);
+
+void wire_unpack64(uint8_t *dest, uint64_t src);
+void wire_set_raw(uint8_t *dest, uint64_t src);

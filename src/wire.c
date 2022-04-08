@@ -12,7 +12,7 @@
 #include "wire.h"
 
 // Pack byte array into 64-bit word
-static uint64_t pack64_le(const uint8_t *src)
+uint64_t wire_pack64(const uint8_t *src)
 {
 	return (((uint64_t)src[0] << 0x00) |
 			((uint64_t)src[1] << 0x08) |
@@ -25,26 +25,26 @@ static uint64_t pack64_le(const uint8_t *src)
 }
 
 // Unpack a 64-bit word into a little-endian array of bytes
-static void unpack64_le(uint8_t *dest, uint64_t word)
+void wire_unpack64(uint8_t *dest, uint64_t src)
 {
-	dest[0] = (uint8_t)(word >> 0x00);
-	dest[1] = (uint8_t)(word >> 0x08);
-	dest[2] = (uint8_t)(word >> 0x10);
-	dest[3] = (uint8_t)(word >> 0x18);
-	dest[4] = (uint8_t)(word >> 0x20);
-	dest[5] = (uint8_t)(word >> 0x28);
-	dest[6] = (uint8_t)(word >> 0x30);
-	dest[7] = (uint8_t)(word >> 0x38);
+	dest[0] = (uint8_t)(src >> 0x00);
+	dest[1] = (uint8_t)(src >> 0x08);
+	dest[2] = (uint8_t)(src >> 0x10);
+	dest[3] = (uint8_t)(src >> 0x18);
+	dest[4] = (uint8_t)(src >> 0x20);
+	dest[5] = (uint8_t)(src >> 0x28);
+	dest[6] = (uint8_t)(src >> 0x30);
+	dest[7] = (uint8_t)(src >> 0x38);
 }
 
 uint64_t wire_get_raw(uint8_t *src)
 {
-	return pack64_le(src);
+	return wire_pack64(src);
 }
 
 void wire_set_raw(uint8_t *dest, uint64_t src)
 {
-	unpack64_le(dest, src);
+	wire_unpack64(dest, src);
 }
 
 wire_t *new_wire(void)
@@ -63,8 +63,8 @@ wire_t *init_wire(uint8_t *data, uint64_t type, size_t *len)
 	}
 
 	xgetrandom(wire->iv, BLOCK_LEN);
-	unpack64_le(wire->length, data_length);
-	unpack64_le(wire->type, type);
+	wire_unpack64(wire->length, data_length);
+	wire_unpack64(wire->type, type);
 	memcpy(wire->data, data, *len);
 	*len = wire_length;
 	return wire;
@@ -77,7 +77,7 @@ size_t encrypt_wire(wire_t *wire, const uint8_t *key)
 	aes128_init_cmac(&ctxs[1], &key[16]);
 
 	// Grab length from wire
-	const size_t data_length = pack64_le(wire->length);
+	const size_t data_length = wire_pack64(wire->length);
 
 	// Encrypt chunks
 	aes128_encrypt(&ctxs[0], wire->length, data_length + BASE_ENC_LEN);
@@ -106,7 +106,7 @@ int _decrypt_wire(wire_t *wire, size_t *len, const uint8_t *key)
 	uint8_t length[16] = { 0 };
 	memcpy(length, wire->length, BLOCK_LEN);
 	aes128_decrypt(&ctxs[0], length, BLOCK_LEN);
-	const size_t data_length = pack64_le(length);
+	const size_t data_length = wire_pack64(length);
 	size_t wire_length = data_length + sizeof(wire_t);
 	if (*len && *len != wire_length) {
 		return WIRE_PARTIAL; // TODO
