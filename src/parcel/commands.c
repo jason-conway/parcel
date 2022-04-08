@@ -46,10 +46,10 @@ static int cmd_username(client_t *ctx, char **message, size_t *message_length)
 	return 0;
 }
 
-// TODO
+// TODO: Break parts of this into their own function
 static int cmd_send_file(client_t *ctx, char **message, size_t *message_length)
 {
-	size_t path_length = MAXNAMLEN;
+	size_t path_length = FILE_PATH_MAX_LENGTH;
 	char *file_path = xprompt("> File path: ", "path", &path_length);
 	
 	if (!xfexists(file_path)) {
@@ -63,12 +63,13 @@ static int cmd_send_file(client_t *ctx, char **message, size_t *message_length)
 		goto free_path_only;
 	}
 
-	if (file_size > FILE_SIZE_MAX) {
-		xwarn("File \"%s\" is %zu bytes over the maximum size of %d bytes\n", file_path, (size_t)(file_size - FILE_SIZE_MAX), FILE_SIZE_MAX);
+	if (file_size > FILE_DATA_MAX_SIZE) {
+		const size_t overage = file_size - FILE_DATA_MAX_SIZE;
+		xwarn("File \"%s\" is %zu bytes over the maximum size of %d bytes\n", file_path, overage, FILE_DATA_MAX_SIZE);
 		goto free_path_only;
 	}
 
-	*message_length = file_size + FILENAME_LEN; // To hold file name and data
+	*message_length = file_size + FILE_HEADER_SIZE; // To hold file name and data
 	uint8_t *file_contents = xcalloc(*message_length);
 	if (!file_contents) {
 		goto error;
@@ -76,19 +77,21 @@ static int cmd_send_file(client_t *ctx, char **message, size_t *message_length)
 	
 	FILE *file = fopen(file_path, "rb");
 	if (!file) {
-		xprintf(RED, "Could not open file \"%s\" for reading\n", file_path);
+		xwarn("Could not open file \"%s\" for reading\n", file_path);
 		goto error;
 	}
 
-	// First 32 bytes are file name
+	// First 64 bytes are file name
 	char *filename = xbasename(file_path);
-	memcpy(&file_contents[0], filename, FILENAME_LEN);
-	if (path_length > FILENAME_LEN) {
-		file_contents[FILENAME_LEN - 1] = '\0'; // Ensure filename string is null-terminated
-	}
+	memcpy(&file_contents[FILE_NAME_START], filename, FILE_NAME_LEN);
+	file_contents[FILE_NAME_LEN - 1] = '\0'; // Ensure filename string is null-terminated
+	
+	// Next 16 bytes hold the actual file size. Only the first 8 bytes are set
+	wire_unpack64(&file_contents[FILE_SIZE_START], file_size);
 
-	if (fread(&file_contents[FILENAME_LEN], 1, file_size, file) != file_size) {
-		xprintf(RED, "Error reading contents of file \"%s\"\n", filename);
+	// Now read in the file contents
+	if (fread(&file_contents[FILE_DATA_START], 1, file_size, file) != file_size) {
+		xwarn("Error reading contents of file \"%s\"\n", filename);
 		(void)fclose(file);
 		goto error;
 	}

@@ -11,27 +11,33 @@
 
 #include "client.h"
 
-int proc_file(uint8_t *data, size_t length)
+int proc_file(uint8_t *data)
 {
-	char filename[32];
-	memset(filename, 0, FILENAME_LEN);
-	size_t filename_length = strnlen((char *)data, FILENAME_LEN);
-	memcpy(filename, data, filename_length);
+	size_t filename_length = strnlen((char *)data, FILE_NAME_LEN);
+	char *filename = xcalloc(filename_length);
+	if (!filename) {
+		return -1;
+	}
+	memcpy(filename, &data[FILE_NAME_START], filename_length);
 
 	FILE *file = fopen(filename, "wb");
 	if (!file) {
-		xprintf(RED, "Could not open file \"%s\" for writing\n", filename);
+		xwarn("Could not open file \"%s\" for writing\n", filename);
 		return -1;
 	}
 
-	const size_t file_data_size = length - FILENAME_LEN;
-	if (fwrite(&data[FILENAME_LEN], 1, file_data_size, file) != file_data_size) {
-		xprintf(RED, "Error writing to file \"%s\"\n", filename);
+	const size_t file_data_size = wire_pack64(&data[FILE_SIZE_START]);
+	if (fwrite(&data[FILE_DATA_START], 1, file_data_size, file) != file_data_size) {
+		xwarn("Error writing to file \"%s\"\n", filename);
 		(void)fclose(file);
+		(void)remove(filename);
+		xfree(filename);
 		return -1;
 	}
 
 	if (fflush(file) || fclose(file)) {
+		xwarn("Error closing file \"%s\"\n", filename);
+		free(filename);
 		return -1;
 	}
 
@@ -46,7 +52,7 @@ void proc_text(client_t *ctx, uint8_t *wire_data)
 
 int proc_ctrl(client_t *ctx, uint8_t *wire_data)
 {
-	size_t rounds = wire_get_raw(wire_data);
+	size_t rounds = wire_get_raw(&wire_data[0]);
 	memcpy(ctx->ctrl_key, &wire_data[16], KEY_LEN);
 	return n_party_client(ctx->socket, rounds, ctx->session_key, ctx->fingerprint);
 }

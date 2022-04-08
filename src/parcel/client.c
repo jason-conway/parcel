@@ -137,7 +137,7 @@ static int recv_handler(client_t *ctx)
 			}
 			break;
 		case TYPE_FILE: 
-			if (proc_file(wire->data, length[0])) {
+			if (proc_file(wire->data)) {
 				return -1;
 			}
 			break;
