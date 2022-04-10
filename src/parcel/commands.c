@@ -4,9 +4,9 @@
  * @brief parcel client commands
  * @version 0.9.1
  * @date 2022-03-14
- * 
+ *
  * @copyright Copyright (c) 2022 Jason Conway. All rights reserved.
- * 
+ *
  */
 
 #include "client.h"
@@ -27,7 +27,7 @@ static void prepend_username(char *username, char **plaintext, size_t *plaintext
 static int cmd_username(client_t *ctx, char **message, size_t *message_length)
 {
 	xfree(*message);
-	
+
 	size_t new_username_length = USERNAME_MAX_LENGTH;
 	char *new_username = xprompt("> New username: ", "username", &new_username_length);
 	*message = xstrcat(5, "\033[1m", ctx->username, " has changed their username to ", new_username, "\033[0m");
@@ -38,7 +38,7 @@ static int cmd_username(client_t *ctx, char **message, size_t *message_length)
 		send_connection_status(ctx, true);
 		return -1;
 	}
-	
+
 	*message_length = strlen(*message);
 	memset(ctx->username, 0, USERNAME_MAX_LENGTH);
 	memcpy(ctx->username, new_username, new_username_length);
@@ -51,13 +51,13 @@ static int cmd_send_file(client_t *ctx, char **message, size_t *message_length)
 {
 	size_t path_length = FILE_PATH_MAX_LENGTH;
 	char *file_path = xprompt("> File path: ", "path", &path_length);
-	
+
 	if (!xfexists(file_path)) {
 		xwarn("File \"%s\" not found\n", file_path);
 		goto free_path_only;
 	}
 
-	size_t file_size = xfilesize(file_path); 
+	size_t file_size = xfilesize(file_path);
 	if (!file_size) {
 		xwarn("Unable to determine size of file \"%s\"\n", file_path);
 		goto free_path_only;
@@ -74,7 +74,7 @@ static int cmd_send_file(client_t *ctx, char **message, size_t *message_length)
 	if (!file_contents) {
 		goto error;
 	}
-	
+
 	FILE *file = fopen(file_path, "rb");
 	if (!file) {
 		xwarn("Could not open file \"%s\" for reading\n", file_path);
@@ -85,7 +85,7 @@ static int cmd_send_file(client_t *ctx, char **message, size_t *message_length)
 	char *filename = xbasename(file_path);
 	memcpy(&file_contents[FILE_NAME_START], filename, FILE_NAME_LEN);
 	file_contents[FILE_NAME_LEN - 1] = '\0'; // Ensure filename string is null-terminated
-	
+
 	// Next 16 bytes hold the actual file size. Only the first 8 bytes are set
 	wire_unpack64(&file_contents[FILE_SIZE_START], file_size);
 
@@ -155,18 +155,23 @@ static int cmd_ambiguous(void)
 static enum command_id parse_command(char *command)
 {
 	static const char *command_strings[] = {
-		":\n", ":list\n", ":q\n", ":username\n", ":fingerprint\n", ":file\n"
+		":list\n", ":q\n", ":username\n", ":fingerprint\n", ":file\n"
 	};
-	
-	const size_t len = strlen(command);
+
 	const size_t commands = sizeof(command_strings) / sizeof(*command_strings);
 
+	enum command_id cmd = CMD_NONE;
+
+	const size_t len = strlen(command);
 	for (size_t i = 1; i <= commands; i++) {
 		if (!strncmp(command, command_strings[i - 1], len)) {
-			return i;
+			if (cmd) {
+				return CMD_AMBIGUOUS;
+			}
+			cmd = i;
 		}
 	}
-	return -1;
+	return cmd;
 }
 
 int parse_input(client_t *ctx, char **message, size_t *message_length)
