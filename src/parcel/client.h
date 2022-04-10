@@ -38,8 +38,8 @@ enum ParcelConstants
 
 enum command_id
 {
+	CMD_AMBIGUOUS = -1,
 	CMD_NONE = 0,
-	CMD_AMBIGUOUS,
 	CMD_LIST,
 	CMD_EXIT,
 	CMD_USERNAME,
@@ -72,7 +72,6 @@ noreturn void fatal(const char *msg);
 int proc_file(uint8_t *data);
 int proc_ctrl(client_t *ctx, uint8_t *wire_data);
 void proc_text(client_t *ctx, uint8_t *wire_data);
-
 
 void *recv_thread(void *ctx);
 int send_thread(void *ctx);

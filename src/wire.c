@@ -73,8 +73,8 @@ wire_t *init_wire(uint8_t *data, uint64_t type, size_t *len)
 size_t encrypt_wire(wire_t *wire, const uint8_t *key)
 {
 	aes128_t ctxs[2]; // ctxs[0] for encryption, ctxs[1] for CMAC
-	aes128_init(&ctxs[0], wire->iv, &key[0]);
-	aes128_init_cmac(&ctxs[1], &key[16]);
+	aes128_init(&ctxs[0], wire->iv, &key[CIPHER_OFFSET]);
+	aes128_init_cmac(&ctxs[1], &key[CMAC_OFFSET]);
 
 	// Grab length from wire
 	const size_t data_length = wire_pack64(wire->length);
@@ -82,7 +82,7 @@ size_t encrypt_wire(wire_t *wire, const uint8_t *key)
 	// Encrypt chunks
 	aes128_encrypt(&ctxs[0], wire->length, data_length + BASE_ENC_LEN);
 
-	// Authentication code for length only
+	// MAC for length only (LAC)
 	aes128_cmac(&ctxs[1], wire->length, BLOCK_LEN, wire->lac);
 
 	// MAC for LAC, IV, length, type, and chunks into the wire
@@ -93,23 +93,26 @@ size_t encrypt_wire(wire_t *wire, const uint8_t *key)
 int _decrypt_wire(wire_t *wire, size_t *len, const uint8_t *key)
 {
 	aes128_t ctxs[2];
-	aes128_init(&ctxs[0], wire->iv, &key[0]);
-	aes128_init_cmac(&ctxs[1], &key[16]);
+	aes128_init(&ctxs[0], wire->iv, &key[CIPHER_OFFSET]);
+	aes128_init_cmac(&ctxs[1], &key[CMAC_OFFSET]);
 
 	// Decrypt only the length
-	uint8_t verification_cmac[16] = { 0 };
+	uint8_t verification_cmac[16];
 	aes128_cmac(&ctxs[1], wire->length, BLOCK_LEN, verification_cmac);
 	if (memcmp(&wire->lac[0], verification_cmac, BLOCK_LEN)) {
 		return WIRE_INVALID_KEY;
 	}
 
-	uint8_t length[16] = { 0 };
+	uint8_t length[16];
 	memcpy(length, wire->length, BLOCK_LEN);
+
 	aes128_decrypt(&ctxs[0], length, BLOCK_LEN);
 	const size_t data_length = wire_pack64(length);
 	size_t wire_length = data_length + sizeof(wire_t);
 	if (*len && *len != wire_length) {
-		return WIRE_PARTIAL; // TODO
+		size_t received = *len;
+		*len = wire_length - received; // Update with bytes remaining
+		return WIRE_PARTIAL;
 	}
 	
 	*len = data_length;

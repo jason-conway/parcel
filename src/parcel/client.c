@@ -11,13 +11,13 @@
 
 #include "client.h"
 
-noreturn void fatal(const char *msg)
+void fatal(const char *msg)
 {
 	fprintf(stderr, ">\033[31m fatal error: %s\n\033[0m", msg);
 	exit(EXIT_FAILURE);
 }
 
-noreturn void error(sock_t socket, const char *msg)
+void error(sock_t socket, const char *msg)
 {
 	fprintf(stderr, ">\033[31m parcel error: %s\n\033[0m", msg);
 	(void)xclose(socket);
@@ -27,7 +27,7 @@ noreturn void error(sock_t socket, const char *msg)
 static void send_encrypted_message(int socket, uint64_t type, void *data, size_t length, const uint8_t *key)
 {
 	size_t len = length;
-	wire_t *wire = init_wire(data, type,  &len);
+	wire_t *wire = init_wire(data, type, &len);
 	encrypt_wire(wire, key);
 	if (xsendall(socket, wire, len) < 0) {
 		xfree(wire);
@@ -60,7 +60,7 @@ int send_thread(void *ctx)
 
 	while (1) {
 		pthread_mutex_lock(&client_ctx->mutex_lock);
-			memcpy(&client, client_ctx, sizeof(client_t));
+		memcpy(&client, client_ctx, sizeof(client_t));
 		pthread_mutex_unlock(&client_ctx->mutex_lock);
 
 		char *plaintext = NULL;
@@ -72,7 +72,7 @@ int send_thread(void *ctx)
 			fflush(stdout);
 			xgetline(&plaintext, &length, stdin);
 		} while (!length);
-		
+
 		if (!plaintext) {
 			error(client.socket, "malloc()");
 		}
@@ -90,11 +90,11 @@ int send_thread(void *ctx)
 				xfree(plaintext);
 				error(client.socket, "parse_input()");
 		}
-		
+
 		xfree(plaintext);
 
 		pthread_mutex_lock(&client_ctx->mutex_lock);
-			memcpy(client_ctx, &client, sizeof(client_t));
+		memcpy(client_ctx, &client, sizeof(client_t));
 		pthread_mutex_unlock(&client_ctx->mutex_lock);
 
 		struct timespec ts = { .tv_sec = 0, .tv_nsec = 1000000 };
@@ -102,11 +102,32 @@ int send_thread(void *ctx)
 	}
 }
 
+static int recv_remaining(client_t *ctx, wire_t *wire, size_t bytes_recv, size_t bytes_remaining)
+{
+	size_t wire_size = bytes_recv + bytes_remaining;
+	wire_t *_wire = xmalloc(wire_size);
+	if (!_wire) {
+		return -1;
+	}
+	memcpy(_wire, wire, bytes_recv);
+	xfree(wire);
+	if (xrecvall(ctx->socket, &_wire[bytes_recv], bytes_remaining)) {
+		xfree(_wire);
+		return -1;
+	}
+
+	if (_decrypt_wire(_wire, &wire_size, ctx->session_key)) {
+		return -1;
+	}
+	wire = _wire;
+	return 0;
+}
+
 static int recv_handler(client_t *ctx)
 {
 	wire_t *wire = new_wire();
 	if (!wire) {
-		return -1;
+		fatal("malloc() failure when initializing new wire");
 	}
 
 	const ssize_t bytes_recv = xrecv(ctx->socket, wire, DATA_LEN_MAX, 0);
@@ -114,17 +135,23 @@ static int recv_handler(client_t *ctx)
 		xfree(wire);
 		error(ctx->socket, "recv()");
 	}
-	
+
 	size_t length[1] = { bytes_recv };
 	switch (_decrypt_wire(wire, length, ctx->session_key)) {
 		case WIRE_INVALID_KEY:
 			if (_decrypt_wire(wire, length, ctx->ctrl_key)) {
+				xfree(wire);
 				return -1;
 			}
 			break;
 		case WIRE_PARTIAL:
-			break; // TODO
+			if (recv_remaining(ctx, wire, bytes_recv, *length)) {
+				xfree(wire);
+				return -1;
+			}
+			break;
 		case WIRE_CMAC_ERROR:
+			xfree(wire);
 			return -1;
 		case WIRE_OK:
 			break;
@@ -133,11 +160,13 @@ static int recv_handler(client_t *ctx)
 	switch (wire_get_raw(wire->type)) {
 		case TYPE_CTRL:
 			if (proc_ctrl(ctx, wire->data)) {
+				xfree(wire);
 				return -1;
 			}
 			break;
-		case TYPE_FILE: 
+		case TYPE_FILE:
 			if (proc_file(wire->data)) {
+				xfree(wire);
 				return -1;
 			}
 			break;
@@ -145,7 +174,7 @@ static int recv_handler(client_t *ctx)
 			proc_text(ctx, wire->data);
 			break;
 	}
-	
+
 	xfree(wire);
 	return 0;
 }
@@ -157,7 +186,7 @@ void *recv_thread(void *ctx)
 
 	while (1) {
 		pthread_mutex_lock(&client_ctx->mutex_lock);
-			memcpy(&client, client_ctx, sizeof(client_t));
+		memcpy(&client, client_ctx, sizeof(client_t));
 		pthread_mutex_unlock(&client_ctx->mutex_lock);
 
 		if (recv_handler(&client)) {
@@ -165,7 +194,7 @@ void *recv_thread(void *ctx)
 		}
 
 		pthread_mutex_lock(&client_ctx->mutex_lock);
-			memcpy(client_ctx, &client, sizeof(client_t));
+		memcpy(client_ctx, &client, sizeof(client_t));
 		pthread_mutex_unlock(&client_ctx->mutex_lock);
 
 		struct timespec ts = { .tv_nsec = 1000000 };
@@ -178,7 +207,7 @@ void connect_server(client_t *client, const char *ip, const char *port)
 	if (xstartup()) {
 		fatal("xstartup()");
 	}
-	
+
 	struct addrinfo hints = {
 		.ai_family = AF_UNSPEC,
 		.ai_socktype = SOCK_STREAM,
@@ -211,7 +240,7 @@ void connect_server(client_t *client, const char *ip, const char *port)
 	}
 
 	printf(">\033[32m Connected to server\033[0m\n");
-	
+
 	// TODO: This needs to be done after a key exchange sequence
 	// send_connection_status(client, false);
 }
@@ -219,9 +248,22 @@ void connect_server(client_t *client, const char *ip, const char *port)
 void prompt_args(char *address, char *username)
 {
 	char *args[] = { &address[0], &username[0] };
-	size_t lengths[] = { ADDRESS_MAX_LENGTH, USERNAME_MAX_LENGTH };
-	char *prompts[] = { "> Enter server address: ", "> Enter username: " };
-	char *arg_name[] = { "address", "username" };
+
+	size_t lengths[] = {
+		ADDRESS_MAX_LENGTH,
+		USERNAME_MAX_LENGTH
+	};
+
+	char *prompts[] = {
+		"> Enter server address: ",
+		"> Enter username: "
+	};
+
+	char *arg_name[] = {
+		"address",
+		"username"
+	};
+
 	for (size_t i = 0; i < 2; i++) {
 		if (!*args[i]) {
 			size_t len = lengths[i];

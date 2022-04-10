@@ -51,6 +51,12 @@ enum SectionLengths
 	BASE_DEC_LEN = sizeof(((wire_t *)0)->type)
 };
 
+enum KeyOffsets
+{
+	CIPHER_OFFSET = 0,
+	CMAC_OFFSET = 16,
+};
+
 enum SectionOffsets
 {
 	WIRE_OFFSET_MAC = offsetof(wire_t, mac),
