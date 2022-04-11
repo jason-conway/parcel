@@ -35,6 +35,12 @@ void configure_server(server_t *srv, const char *port)
 	if (xgetifaddrs()) {
 		fatal("xgetifaddrs()");
 	}
+	
+	printf("Public IP is \033[39;49;1m ");
+	if (xget_public_ip()) {
+		fatal("xget_public_ip");
+	}
+	printf("\033[0m\n");
 
 	printf("Note: this system supports a maximum of \033[39;49;1m%u\033[0m connections\n", MAX_CONNECTIONS);
 
