@@ -13,21 +13,28 @@
 
 #include "xplatform.h"
 
-typedef struct xgetopt_t
-{
+typedef struct xgetopt_t {
 	char *arg;
 	int index;
 	int option;
 	int position;
 } xgetopt_t;
 
-typedef enum ansi
-{
+typedef enum ansi {
 	RED,
 	GRN,
 	YEL,
 	MAG
 } ansi;
+
+typedef struct http_request_t {
+	char *data;
+	size_t length;
+} http_request_t;
+
+enum HTTP {
+	RESPONSE_LENGTH = 4096
+};
 
 // Print a formatted string in yellow to stdout
 void xwarn(const char *format, ...);
@@ -87,3 +94,5 @@ int xgetopt(xgetopt_t *x, int argc, char **argv, const char *optstr);
 char *xprompt(const char *prompt_msg, const char *error_msg, size_t *len);
 
 void xgetline(char **message, size_t *message_length, FILE *stream);
+
+char *xgetpublicip(void);

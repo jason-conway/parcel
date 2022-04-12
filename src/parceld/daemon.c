@@ -31,16 +31,19 @@ void configure_server(server_t *srv, const char *port)
 	}
 	
 	xprintf(MAG, "parceld: Parcel Daemon v0.9.1\n");
-	printf("Interfaces:\n");
+	printf("Local network interface:\n");
 	if (xgetifaddrs()) {
-		fatal("xgetifaddrs()");
+		fatal("failed to obtain local interfaces");
 	}
-	
-	printf("Public IP is \033[39;49;1m ");
-	if (xget_public_ip()) {
-		fatal("xget_public_ip");
+
+	char *public_ip = xgetpublicip();
+	if (!public_ip) {
+		xwarn("parceld was unable to determine its public-facing IP address\n");
 	}
-	printf("\033[0m\n");
+	else {
+		printf("Publicly accessible at \033[39;49;1m%s\033[0m\n", public_ip);
+		xfree(public_ip);
+	}
 
 	printf("Note: this system supports a maximum of \033[39;49;1m%u\033[0m connections\n", MAX_CONNECTIONS);
 
