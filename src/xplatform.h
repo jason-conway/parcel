@@ -31,7 +31,6 @@
 	#include <netdb.h>
 	#include <ifaddrs.h>
 	#include <dirent.h>
-
 	typedef int sock_t;
 #endif
 

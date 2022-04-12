@@ -142,27 +142,27 @@ int xgetifaddrs(void)
 	freeifaddrs(interfaces);
 	return 0;
 #elif _WIN32
-	ULONG ip_adapter_len[1] = { sizeof(IP_ADAPTER_INFO) };
-	PIP_ADAPTER_INFO adapter_info = (IP_ADAPTER_INFO *)HeapAlloc(GetProcessHeap(), 0, ip_adapter_len[0]);
+	ULONG ip_adapter_len = sizeof(IP_ADAPTER_INFO);
+	PIP_ADAPTER_INFO adapter_info = (IP_ADAPTER_INFO *)xmalloc(ip_adapter_len);
 	if (!adapter_info) {
 		return -1;
 	}
-	if (GetAdaptersInfo(adapter_info, ip_adapter_len) == ERROR_BUFFER_OVERFLOW) {
-		(void)HeapFree(GetProcessHeap(), 0, (adapter_info));
-		adapter_info = (IP_ADAPTER_INFO *)HeapAlloc(GetProcessHeap(), 0, ip_adapter_len[0]);
+	if (GetAdaptersInfo(adapter_info, &ip_adapter_len) == ERROR_BUFFER_OVERFLOW) {
+		xfree(adapter_info);
+		adapter_info = (IP_ADAPTER_INFO *)xmalloc(ip_adapter_len);
 		if (!adapter_info) {
 			return -1;
 		}
 	}
-	if (GetAdaptersInfo(adapter_info, ip_adapter_len)) {
-		(void)HeapFree(GetProcessHeap(), 0, adapter_info);
+	if (GetAdaptersInfo(adapter_info, &ip_adapter_len)) {
+		xfree(adapter_info);
 		return -1;
 	}
 	for (PIP_ADAPTER_INFO adapter = adapter_info; adapter; adapter = adapter->Next) {
 		printf("\t%s\n", adapter->IpAddressList.IpAddress.String);
 	}
 
-	(void)HeapFree(GetProcessHeap(), 0, adapter_info);
+	xfree(adapter_info);
 	return 0;
 #endif
 }
