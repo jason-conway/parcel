@@ -12,7 +12,7 @@
 
 #include "sha256.h"
 
- // New context
+// New context
 void sha256_init(sha256_t *ctx)
 {
 	memset(ctx, 0, sizeof(sha256_t));
