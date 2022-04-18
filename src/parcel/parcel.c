@@ -40,8 +40,13 @@ int main(int argc, char **argv)
 	
 	char port[PORT_MAX_LENGTH] = "2315";
 	
-	client_t client = { .mutex_lock = PTHREAD_MUTEX_INITIALIZER };
-	pthread_mutex_init(&client.mutex_lock, NULL);
+
+	client_t *client = xcalloc(sizeof(client_t));
+	if (!client) {
+		fatal("xmalloc()");
+	}
+
+	pthread_mutex_init(&client->mutex_lock, NULL);
 		
 	int option;
 	xgetopt_t x = { 0 };
@@ -61,12 +66,12 @@ int main(int argc, char **argv)
 				exit(EXIT_FAILURE);
 			case 'u':
 				if (strlen(x.arg) < USERNAME_MAX_LENGTH) {
-					memcpy(client.username, x.arg, strlen(x.arg));
+					memcpy(client->username, x.arg, strlen(x.arg));
 					break;
 				}
 				fatal("username too long");
 			case 'l': 
-				if (xgetlogin(client.username, USERNAME_MAX_LENGTH)) {
+				if (xgetlogin(client->username, USERNAME_MAX_LENGTH)) {
 					fatal("unable to determine login name");
 				}
 				break;
@@ -82,13 +87,13 @@ int main(int argc, char **argv)
 		}
 	}
 	if (argc < 5) {
-		prompt_args(address, client.username);
+		prompt_args(address, client->username);
 	}
 	
-	connect_server(&client, address, port);
+	connect_server(client, address, port);
 	pthread_t recv_ctx;
-	pthread_create(&recv_ctx, NULL, recv_thread, (void *)&client);
+	pthread_create(&recv_ctx, NULL, recv_thread, (void *)client);
 
 	// Handle sending from main thread
-	return send_thread((void *)&client);
+	return send_thread((void *)client);
 }

@@ -24,7 +24,32 @@ void error(sock_t socket, const char *msg)
 	exit(EXIT_FAILURE);
 }
 
-static void send_encrypted_message(int socket, uint64_t type, void *data, size_t length, const uint8_t *key)
+void refresh_local_ctx(client_t *shared, client_t *local)
+{
+	pthread_mutex_lock(&shared->mutex_lock);
+		memcpy(local, shared, sizeof(client_t));
+	pthread_mutex_unlock(&shared->mutex_lock);
+}
+
+void update_ctx_recv(client_t *shared, client_t *local)
+{
+	pthread_mutex_lock(&shared->mutex_lock);
+	memcpy(shared->ctrl_key, local->ctrl_key, KEY_LEN);
+	memcpy(shared->session_key, local->session_key, KEY_LEN);
+	memcpy(shared->fingerprint, local->fingerprint, FINGERPRINT_LENGTH);
+	pthread_mutex_unlock(&shared->mutex_lock);
+}
+
+void update_ctx_send(client_t *shared, client_t *local)
+{
+	pthread_mutex_lock(&shared->mutex_lock);
+	if (memcmp(shared->username, local->username, USERNAME_MAX_LENGTH)) {
+		memcpy(shared->username, local->username, USERNAME_MAX_LENGTH);
+	}
+	pthread_mutex_unlock(&shared->mutex_lock);
+}
+
+static void send_encrypted_message(sock_t socket, uint64_t type, void *data, size_t length, const uint8_t *key)
 {
 	size_t len = length;
 	wire_t *wire = init_wire(data, type, &len);
@@ -50,6 +75,7 @@ void send_connection_status(client_t *ctx, bool leave)
 		if (xclose(ctx->socket)) {
 			error(ctx->socket, "close()");
 		}
+		exit(EXIT_SUCCESS);
 	}
 }
 
@@ -57,12 +83,9 @@ int send_thread(void *ctx)
 {
 	client_t client;
 	client_t *client_ctx = (client_t *)ctx;
+	refresh_local_ctx(client_ctx, &client);
 
 	while (1) {
-		pthread_mutex_lock(&client_ctx->mutex_lock);
-		memcpy(&client, client_ctx, sizeof(client_t));
-		pthread_mutex_unlock(&client_ctx->mutex_lock);
-
 		char *plaintext = NULL;
 		size_t length = 0;
 
@@ -74,8 +97,10 @@ int send_thread(void *ctx)
 		} while (!length);
 
 		if (!plaintext) {
-			error(client.socket, "malloc()");
+			error(client.socket, "xmalloc()");
 		}
+
+		refresh_local_ctx(client_ctx, &client);
 
 		switch (parse_input(&client, &plaintext, &length)) {
 			case SEND_NONE:
@@ -91,13 +116,11 @@ int send_thread(void *ctx)
 				error(client.socket, "parse_input()");
 		}
 
+		update_ctx_send(client_ctx, &client);
+
 		xfree(plaintext);
 
-		pthread_mutex_lock(&client_ctx->mutex_lock);
-		memcpy(client_ctx, &client, sizeof(client_t));
-		pthread_mutex_unlock(&client_ctx->mutex_lock);
-
-		struct timespec ts = { .tv_sec = 0, .tv_nsec = 1000000 };
+		struct timespec ts = { .tv_nsec = 1000000 };
 		(void)nanosleep(&ts, NULL);
 	}
 }
@@ -123,79 +146,68 @@ static int recv_remaining(client_t *ctx, wire_t *wire, size_t bytes_recv, size_t
 	return 0;
 }
 
-static int recv_handler(client_t *ctx)
-{
-	wire_t *wire = new_wire();
-	if (!wire) {
-		fatal("malloc() failure when initializing new wire");
-	}
-
-	const ssize_t bytes_recv = xrecv(ctx->socket, wire, DATA_LEN_MAX, 0);
-	if (bytes_recv < 0) {
-		xfree(wire);
-		error(ctx->socket, "recv()");
-	}
-
-	size_t length[1] = { bytes_recv };
-	switch (_decrypt_wire(wire, length, ctx->session_key)) {
-		case WIRE_INVALID_KEY:
-			if (_decrypt_wire(wire, length, ctx->ctrl_key)) {
-				xfree(wire);
-				return -1;
-			}
-			break;
-		case WIRE_PARTIAL:
-			if (recv_remaining(ctx, wire, bytes_recv, *length)) {
-				xfree(wire);
-				return -1;
-			}
-			break;
-		case WIRE_CMAC_ERROR:
-			xfree(wire);
-			return -1;
-		case WIRE_OK:
-			break;
-	}
-
-	switch (wire_get_raw(wire->type)) {
-		case TYPE_CTRL:
-			if (proc_ctrl(ctx, wire->data)) {
-				xfree(wire);
-				return -1;
-			}
-			break;
-		case TYPE_FILE:
-			if (proc_file(wire->data)) {
-				xfree(wire);
-				return -1;
-			}
-			break;
-		case TYPE_TEXT:
-			proc_text(ctx, wire->data);
-			break;
-	}
-
-	xfree(wire);
-	return 0;
-}
-
 void *recv_thread(void *ctx)
 {
 	client_t client;
 	client_t *client_ctx = (client_t *)ctx;
+	refresh_local_ctx(client_ctx, &client);
 
 	while (1) {
-		pthread_mutex_lock(&client_ctx->mutex_lock);
-		memcpy(&client, client_ctx, sizeof(client_t));
-		pthread_mutex_unlock(&client_ctx->mutex_lock);
-
-		if (recv_handler(&client)) {
-			error(client.socket, "recv_handler()");
+		wire_t *wire = new_wire();
+		if (!wire) {
+			fatal("malloc() failure when initializing new wire");
 		}
 
-		pthread_mutex_lock(&client_ctx->mutex_lock);
-		memcpy(client_ctx, &client, sizeof(client_t));
-		pthread_mutex_unlock(&client_ctx->mutex_lock);
+		const ssize_t bytes_recv = xrecv(client.socket, wire, DATA_LEN_MAX, 0);
+		if (bytes_recv < 0) {
+			xfree(wire);
+			error(client.socket, "recv()");
+		}
+
+		size_t length = bytes_recv;
+
+		refresh_local_ctx(client_ctx, &client);
+
+		switch (_decrypt_wire(wire, &length, client.session_key)) {
+			case WIRE_INVALID_KEY:
+				if (_decrypt_wire(wire, &length, client.ctrl_key)) {
+					xfree(wire);
+					fatal("_decrypt_wire()");
+				}
+				break;
+			case WIRE_PARTIAL:
+				if (recv_remaining(&client, wire, bytes_recv, length)) {
+					xfree(wire);
+					fatal("recv_remaining()");
+				}
+				break;
+			case WIRE_CMAC_ERROR:
+				xfree(wire);
+				fatal("_decrypt_wire()");
+			case WIRE_OK:
+				break;
+		}
+
+		switch (wire_get_raw(wire->type)) {
+			case TYPE_CTRL:
+				if (proc_ctrl(&client, wire->data)) {
+					xfree(wire);
+					fatal("proc_ctrl()");
+				}
+				update_ctx_recv(client_ctx, &client);
+				break;
+			case TYPE_FILE:
+				if (proc_file(wire->data)) {
+					xfree(wire);
+					fatal("proc_file()");
+				}
+				break;
+			case TYPE_TEXT:
+				proc_text(&client, wire->data);
+				break;
+		}
+
+		xfree(wire);
 
 		struct timespec ts = { .tv_nsec = 1000000 };
 		(void)nanosleep(&ts, NULL);
