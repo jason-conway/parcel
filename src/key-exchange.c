@@ -11,19 +11,6 @@
 
 #include "key-exchange.h"
 
-void print_fingerprint(const char *str, const uint8_t *fingerprint)
-{
-	printf("\033[1m%s", str); // In yellow :D
-	for (size_t i = 0; i < 32; i += 4) {
-		uint64_t chunk = (((uint64_t)fingerprint[i + 0] << 0x18) |
-						  ((uint64_t)fingerprint[i + 1] << 0x10) |
-						  ((uint64_t)fingerprint[i + 2] << 0x08) |
-						  ((uint64_t)fingerprint[i + 3] << 0x00));
-		printf("%s%" PRIx64, i ? "-" : "", chunk);
-	}
-	printf("\033[0m\n");
-}
-
 // ECDH private key ( {d ∈ ℕ | d < n} )
 static void point_d(uint8_t *dest)
 {
@@ -39,7 +26,9 @@ static void point_q(const uint8_t *secret_key, uint8_t *public_key, uint8_t *fin
 	const uint8_t basepoint[KEY_LEN] = { 9 };
 	x25519(public_key, secret_key, basepoint);
 	if (fingerprint != NULL) {
-		sha256_digest(public_key, fingerprint);
+		uint8_t hash[KEY_LEN];
+		sha256_digest(public_key, hash);
+		memcpy(fingerprint, hash, 16);
 	}
 }
 
@@ -178,7 +167,9 @@ int n_party_server(sock_t *sockets, size_t connection_count, uint8_t *key)
 	}
 
 	for (size_t i = 0; i < connection_count - 1; i++) {
-		rotate_intermediates(sockets, connection_count);
+		if (rotate_intermediates(sockets, connection_count)) {
+			return -1;
+		}
 	}
 
 	return 0;
@@ -208,7 +199,7 @@ int n_party_client(const sock_t socket, size_t rounds, uint8_t *session_key, uin
 		point_kx(shared_secret, secret_key, intermediate_public);
 
 		if (i == rounds - 1) {
-			sha256_digest(session_key, shared_secret);
+			sha256_digest(shared_secret, session_key);
 			return 0;
 		}
 

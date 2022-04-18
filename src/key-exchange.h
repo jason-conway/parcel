@@ -13,9 +13,7 @@
 #include "x25519.h"
 #include "wire.h"
 #include "xplatform.h"
-#include <inttypes.h>
 
-void print_fingerprint(const char *str, const uint8_t *fingerprint);
 int two_party_client(const sock_t socket, uint8_t *key, uint8_t *fingerprint);
 int two_party_server(const sock_t socket, uint8_t *session_key);
 int n_party_client(const sock_t socket, size_t rounds, uint8_t *session_key, uint8_t *fingerprint);
