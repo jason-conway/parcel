@@ -24,28 +24,16 @@ void error(sock_t socket, const char *msg)
 	exit(EXIT_FAILURE);
 }
 
+static void disp_username(const char *username)
+{
+	printf("%s: ", username);
+	fflush(stdout);
+}
+
 void refresh_local_ctx(client_t *shared, client_t *local)
 {
 	pthread_mutex_lock(&shared->mutex_lock);
 		memcpy(local, shared, sizeof(client_t));
-	pthread_mutex_unlock(&shared->mutex_lock);
-}
-
-void update_ctx_recv(client_t *shared, client_t *local)
-{
-	pthread_mutex_lock(&shared->mutex_lock);
-	memcpy(shared->ctrl_key, local->ctrl_key, KEY_LEN);
-	memcpy(shared->session_key, local->session_key, KEY_LEN);
-	memcpy(shared->fingerprint, local->fingerprint, FINGERPRINT_LENGTH);
-	pthread_mutex_unlock(&shared->mutex_lock);
-}
-
-void update_ctx_send(client_t *shared, client_t *local)
-{
-	pthread_mutex_lock(&shared->mutex_lock);
-	if (memcmp(shared->username, local->username, USERNAME_MAX_LENGTH)) {
-		memcpy(shared->username, local->username, USERNAME_MAX_LENGTH);
-	}
 	pthread_mutex_unlock(&shared->mutex_lock);
 }
 
@@ -69,14 +57,8 @@ void send_connection_status(client_t *ctx, bool leave)
 	if (snprintf(msg, sizeof(msg), template, leave ? 5 : 2, ctx->username, leave ? "left" : "joined") < 0) {
 		error(ctx->socket, "send()");
 	}
-	send_encrypted_message(ctx->socket, TYPE_TEXT, msg, strlen(msg) + 1, ctx->session_key);
+	send_encrypted_message(ctx->socket, TYPE_TEXT, msg, strlen(msg) + 1, ctx->keys.session);
 
-	if (leave) {
-		if (xclose(ctx->socket)) {
-			error(ctx->socket, "close()");
-		}
-		exit(EXIT_SUCCESS);
-	}
 }
 
 int send_thread(void *ctx)
@@ -101,24 +83,35 @@ int send_thread(void *ctx)
 		}
 
 		refresh_local_ctx(client_ctx, &client);
+		enum command_id id = CMD_NONE;
 
-		switch (parse_input(&client, &plaintext, &length)) {
+		switch (parse_input(&client, &id, &plaintext, &length)) {
 			case SEND_NONE:
 				break;
 			case SEND_TEXT:
-				send_encrypted_message(client.socket, TYPE_TEXT, plaintext, length, client.session_key);
+				send_encrypted_message(client.socket, TYPE_TEXT, plaintext, length, client.keys.session);
 				break;
 			case SEND_FILE:
-				send_encrypted_message(client.socket, TYPE_FILE, plaintext, length, client.session_key);
+				send_encrypted_message(client.socket, TYPE_FILE, plaintext, length, client.keys.session);
 				break;
 			default:
 				xfree(plaintext);
 				error(client.socket, "parse_input()");
 		}
-
-		update_ctx_send(client_ctx, &client);
-
+		
 		xfree(plaintext);
+		
+		switch (id) {
+			case CMD_EXIT:
+				exit(EXIT_SUCCESS);
+			case CMD_USERNAME:
+				pthread_mutex_lock(&client_ctx->mutex_lock);
+					memcpy(client_ctx->username, client.username, USERNAME_MAX_LENGTH);
+				pthread_mutex_unlock(&client_ctx->mutex_lock);
+				break;
+			default:
+				break;
+		}
 
 		struct timespec ts = { .tv_nsec = 1000000 };
 		(void)nanosleep(&ts, NULL);
@@ -139,11 +132,27 @@ static int recv_remaining(client_t *ctx, wire_t *wire, size_t bytes_recv, size_t
 		return -1;
 	}
 
-	if (_decrypt_wire(_wire, &wire_size, ctx->session_key)) {
+	if (_decrypt_wire(_wire, &wire_size, ctx->keys.session)) {
 		return -1;
 	}
 	wire = _wire;
 	return 0;
+}
+
+wire_t *recv_new_wire(sock_t socket, size_t *wire_size)
+{
+	wire_t *wire = new_wire();
+	if (!wire) {
+		return NULL;
+	}
+
+	const ssize_t bytes_recv = xrecv(socket, wire, DATA_LEN_MAX, 0);
+	if (bytes_recv < 0) {
+		xfree(wire);
+		return NULL;
+	}
+	*wire_size = bytes_recv;
+	return wire;
 }
 
 void *recv_thread(void *ctx)
@@ -153,58 +162,67 @@ void *recv_thread(void *ctx)
 	refresh_local_ctx(client_ctx, &client);
 
 	while (1) {
-		wire_t *wire = new_wire();
+		size_t bytes_recv;
+		wire_t *wire = recv_new_wire(client.socket, &bytes_recv);
 		if (!wire) {
 			fatal("malloc() failure when initializing new wire");
-		}
-
-		const ssize_t bytes_recv = xrecv(client.socket, wire, DATA_LEN_MAX, 0);
-		if (bytes_recv < 0) {
-			xfree(wire);
-			error(client.socket, "recv()");
 		}
 
 		size_t length = bytes_recv;
 
 		refresh_local_ctx(client_ctx, &client);
 
-		switch (_decrypt_wire(wire, &length, client.session_key)) {
+		switch (_decrypt_wire(wire, &length, client.keys.session)) {
 			case WIRE_INVALID_KEY:
-				if (_decrypt_wire(wire, &length, client.ctrl_key)) {
+				xlog("session key was invalid, trying control key\n");
+				if (_decrypt_wire(wire, &length, client.keys.control)) {
+					xlog("control key was invalid, aborting\n");
 					xfree(wire);
 					fatal("_decrypt_wire()");
 				}
+				xlog("wire was encrypted with control key\n");
 				break;
 			case WIRE_PARTIAL:
+				xlog("wire is partial, continue receiving\n");
 				if (recv_remaining(&client, wire, bytes_recv, length)) {
 					xfree(wire);
 					fatal("recv_remaining()");
 				}
+				xlog("received remainder of wire\n");
 				break;
 			case WIRE_CMAC_ERROR:
+				xlog("wire CMAC was invalid\n");
 				xfree(wire);
 				fatal("_decrypt_wire()");
 			case WIRE_OK:
 				break;
 		}
 
-		switch (wire_get_raw(wire->type)) {
+		switch (wire_get_type(wire)) {
 			case TYPE_CTRL:
-				if (proc_ctrl(&client, wire->data)) {
-					xfree(wire);
-					fatal("proc_ctrl()");
+				xlog("wire contains control message\n");
+				if (!proc_ctrl(&client, wire->data)) {
+					pthread_mutex_lock(&client_ctx->mutex_lock);
+						memcpy(&client_ctx->keys, &client.keys, sizeof(parcel_keys_t));
+					pthread_mutex_unlock(&client_ctx->mutex_lock);
+					break;
 				}
-				update_ctx_recv(client_ctx, &client);
-				break;
+				goto type_proc_error;
 			case TYPE_FILE:
+				xlog("wire contains file\n");
 				if (proc_file(wire->data)) {
-					xfree(wire);
-					fatal("proc_file()");
+					goto type_proc_error;
 				}
 				break;
 			case TYPE_TEXT:
-				proc_text(&client, wire->data);
+				xlog("wire contains text\n");
+				proc_text(wire->data);
+				disp_username(client.username);
 				break;
+			default:
+			type_proc_error:
+				xfree(wire);
+				fatal("proc_ctrl()");
 		}
 
 		xfree(wire);
@@ -247,7 +265,7 @@ void connect_server(client_t *client, const char *ip, const char *port)
 
 	freeaddrinfo(srv_addr);
 
-	if (two_party_client(client->socket, client->ctrl_key, client->fingerprint)) {
+	if (two_party_client(client->socket, client->keys.control)) {
 		error(client->socket, "key_exchange()");
 	}
 

@@ -32,8 +32,7 @@ enum ParcelConstants
 {
 	USERNAME_MAX_LENGTH = 32,
 	PORT_MAX_LENGTH = 6,
-	ADDRESS_MAX_LENGTH = 32,
-	FINGERPRINT_LENGTH = 16
+	ADDRESS_MAX_LENGTH = 32
 };
 
 enum command_id
@@ -42,7 +41,6 @@ enum command_id
 	CMD_NONE = 0,
 	CMD_LIST,
 	CMD_EXIT,
-	CMD_FORCE_QUIT,
 	CMD_USERNAME,
 	CMD_ENC_INFO,
 	CMD_FILE,
@@ -55,24 +53,28 @@ enum SendType
 	SEND_FILE
 };
 
+typedef struct parcel_keys_t
+{
+	uint8_t session[KEY_LEN]; // Group-derived symmetric key
+	uint8_t control[KEY_LEN]; // Ephemeral daemon control key
+} parcel_keys_t;
+
 typedef struct client_t
 {
 	sock_t socket;
 	char username[USERNAME_MAX_LENGTH];
-	uint8_t fingerprint[FINGERPRINT_LENGTH];
-	uint8_t session_key[KEY_LEN];
-	uint8_t ctrl_key[KEY_LEN];
+	parcel_keys_t keys;
 	pthread_mutex_t mutex_lock;
 } client_t;
 
 void connect_server(client_t *client, const char *ip, const char *port);
 void send_connection_status(client_t *ctx, bool exit);
-int parse_input(client_t *ctx, char **message, size_t *message_length);
+int parse_input(client_t *ctx, enum command_id *cmd, char **message, size_t *message_length);
 void prompt_args(char *address, char *username);
 noreturn void fatal(const char *msg);
 int proc_file(uint8_t *data);
 int proc_ctrl(client_t *ctx, uint8_t *wire_data);
-void proc_text(client_t *ctx, uint8_t *wire_data);
+void proc_text(uint8_t *wire_data);
 
 void *recv_thread(void *ctx);
 int send_thread(void *ctx);
