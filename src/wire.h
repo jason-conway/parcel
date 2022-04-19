@@ -71,7 +71,7 @@ enum SectionOffsets
  * @brief WireType constants are the concatenated ascii values
  * of "text", "file", "ctrl" in hex.
  */
-enum WireType
+enum wire_type
 {
 	TYPE_TEXT = 0x74657874,
 	TYPE_FILE = 0x66696c65,
@@ -94,6 +94,6 @@ int _decrypt_wire(wire_t *wire, size_t *len, const uint8_t *key);
 
 uint64_t wire_pack64(const uint8_t *src);
 uint64_t wire_get_raw(uint8_t *src);
-
+enum wire_type wire_get_type(wire_t *ctx);
 void wire_unpack64(uint8_t *dest, uint64_t src);
 void wire_set_raw(uint8_t *dest, uint64_t src);

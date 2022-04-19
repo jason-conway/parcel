@@ -37,6 +37,11 @@ void wire_unpack64(uint8_t *dest, uint64_t src)
 	dest[7] = (uint8_t)(src >> 0x38);
 }
 
+enum wire_type wire_get_type(wire_t *ctx)
+{
+	return (enum wire_type)wire_pack64(ctx->type);
+}
+
 uint64_t wire_get_raw(uint8_t *src)
 {
 	return wire_pack64(src);
