@@ -14,7 +14,8 @@
 #include "wire.h"
 #include "xplatform.h"
 
-int two_party_client(const sock_t socket, uint8_t *key, uint8_t *fingerprint);
+int two_party_client(const sock_t socket, uint8_t *key);
 int two_party_server(const sock_t socket, uint8_t *session_key);
-int n_party_client(const sock_t socket, size_t rounds, uint8_t *session_key, uint8_t *fingerprint);
+
+int n_party_client(const sock_t socket, uint8_t *session_key, size_t rounds);
 int n_party_server(sock_t *sockets, size_t connections, uint8_t *key);

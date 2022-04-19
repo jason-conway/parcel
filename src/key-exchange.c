@@ -38,13 +38,13 @@ static void point_kx(uint8_t *shared_key, const uint8_t *secret_key, const uint8
 	x25519(shared_key, secret_key, public_key);
 }
 
-int two_party_client(const sock_t socket, uint8_t *key, uint8_t *fingerprint)
+int two_party_client(const sock_t socket, uint8_t *key)
 {
 	// Diffie-Hellman keys
 	uint8_t secret_key[KEY_LEN];
 	uint8_t public_key[KEY_LEN];
 	point_d(secret_key);
-	point_q(secret_key, public_key, fingerprint);
+	point_q(secret_key, public_key, NULL);
 
 	// Send public key to begin
 	if (xsend(socket, public_key, KEY_LEN, 0) < 0) {
@@ -176,13 +176,13 @@ int n_party_server(sock_t *sockets, size_t connection_count, uint8_t *key)
 }
 
 // An N-Party Diffie-Hellman Key Exchange
-int n_party_client(const sock_t socket, size_t rounds, uint8_t *session_key, uint8_t *fingerprint)
+int n_party_client(const sock_t socket, uint8_t *session_key, size_t rounds)
 {
 	uint8_t secret_key[KEY_LEN];
 	point_d(secret_key);
 
 	uint8_t public_key[KEY_LEN];
-	point_q(secret_key, public_key, fingerprint);
+	point_q(secret_key, public_key, NULL);
 
 	// Send our public key to the client on our right
 	if (xsend(socket, public_key, KEY_LEN, 0) != KEY_LEN) {
