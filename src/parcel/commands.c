@@ -11,7 +11,7 @@
 
 #include "client.h"
 
-// Prepend client username to message string
+ // Prepend client username to message string
 static void prepend_username(char *username, char **plaintext, size_t *plaintext_length)
 {
 	bool error = true;
@@ -105,32 +105,31 @@ static int cmd_send_file(char **message, size_t *message_length)
 
 	return 0;
 
-	error:
-		xfree(file_contents);
-	free_path_only:
-		xfree(file_path);
-		return -1;
+error:
+	xfree(file_contents);
+free_path_only:
+	xfree(file_path);
+	return -1;
 }
 
 void print_bytes(const char *str, const uint8_t *fingerprint)
 {
 	printf("\033[1m%s", str);
-	for (size_t i = 0; i < 16; i += 4) {
-		uint64_t chunk = (((uint64_t)fingerprint[i + 0] << 0x18) |
-						  ((uint64_t)fingerprint[i + 1] << 0x10) |
+	for (size_t i = 0; i < 32; i += 4) {
+		uint64_t chunk = (((uint64_t)fingerprint[i + 3] << 0x00) |
 						  ((uint64_t)fingerprint[i + 2] << 0x08) |
-						  ((uint64_t)fingerprint[i + 3] << 0x00));
+						  ((uint64_t)fingerprint[i + 1] << 0x10) |
+						  ((uint64_t)fingerprint[i + 0] << 0x18));
 		printf("%s%" PRIx64, i ? "-" : "", chunk);
 	}
 	printf("\033[0m\n");
 }
 
-static int cmd_print_enc_info(client_t *ctx)
+static int cmd_print_enc_info(parcel_keys_t *keys)
 {
-	print_bytes("Group Session Key: ", ctx->session_key);
-	print_bytes("Server Control Key: ", ctx->ctrl_key);
-	print_bytes("Public Key Fingerprint: ", ctx->fingerprint);
-	
+	print_bytes("Group Session Key: ", keys->session);
+	print_bytes("Server Control Key: ", keys->control);
+
 	return 0;
 }
 
@@ -140,17 +139,18 @@ static inline int cmd_not_found(char *message)
 	return 0;
 }
 
-noreturn void cmd_exit(client_t *ctx, char *message)
+int cmd_exit(client_t *ctx, char **message, size_t *message_length)
 {
-	xfree(message);
-	send_connection_status(ctx, true);
-	exit(EXIT_SUCCESS);
-}
+	xfree(*message);
 
-noreturn void cmd_force_quit(char *message)
-{
-	xfree(message);
-	exit(EXIT_FAILURE);
+	*message = xstrcat(3, "\033[1m", ctx->username, " has left the server\033[0m");
+	if (!*message) {
+		*message = NULL;
+		return -1;
+	}
+
+	*message_length = strlen(*message);
+	return 0;
 }
 
 static int cmd_list(void)
@@ -159,7 +159,6 @@ static int cmd_list(void)
 		"parcel commands:\n"
 		"  :list         list available commands\n"
 		"  :x            exit the server and close parcel\n"
-		"  :q!           force quit parcel\n"
 		"  :username     change username\n"
 		"  :encinfo      display current encrytion parameters\n"
 		"  :file         send a file\n";
@@ -170,14 +169,14 @@ static int cmd_list(void)
 static int cmd_ambiguous(void)
 {
 	xwarn("Ambiguous command entered\n");
-	cmd_list();
+	cmd_list( );
 	return 0;
 }
 
 static enum command_id parse_command(char *command)
 {
 	static const char *command_strings[] = {
-		":list\n", ":x\n", ":q!\n", ":username\n", ":encinfo\n", ":file\n"
+		":list\n", ":x\n", ":username\n", ":encinfo\n", ":file\n"
 	};
 
 	const size_t commands = sizeof(command_strings) / sizeof(*command_strings);
@@ -196,7 +195,7 @@ static enum command_id parse_command(char *command)
 	return cmd;
 }
 
-int parse_input(client_t *ctx, char **message, size_t *message_length)
+int parse_input(client_t *ctx, enum command_id *cmd, char **message, size_t *message_length)
 {
 	if (*message[0] != ':') { // Fast return
 		prepend_username(ctx->username, message, message_length);
@@ -206,23 +205,22 @@ int parse_input(client_t *ctx, char **message, size_t *message_length)
 		return SEND_TEXT;
 	}
 	else {
-		switch (parse_command(*message)) {
-			case CMD_AMBIGUOUS:
-				return cmd_ambiguous() ? -1 : SEND_NONE;
-			case CMD_LIST:
-				return cmd_list() ? -1 : SEND_NONE;
-			case CMD_EXIT:
-				cmd_exit(ctx, *message);
-			case CMD_FORCE_QUIT:
-				cmd_force_quit(*message);
-			case CMD_USERNAME:
-				return cmd_username(ctx, message, message_length) ? -1 : SEND_TEXT;
-			case CMD_ENC_INFO:
-				return cmd_print_enc_info(ctx) ? -1 : SEND_NONE;
-			case CMD_FILE:
-				return cmd_send_file(message, message_length) ? -1 : SEND_FILE;
-			default:
-				return cmd_not_found(*message) ? -1 : SEND_NONE;
+		*cmd = parse_command(*message);
+		switch (*cmd) {
+		case CMD_AMBIGUOUS:
+			return cmd_ambiguous( ) ? -1 : SEND_NONE;
+		case CMD_LIST:
+			return cmd_list( ) ? -1 : SEND_NONE;
+		case CMD_EXIT:
+			return cmd_exit(ctx, message, message_length) ? -1 : SEND_TEXT;
+		case CMD_USERNAME:
+			return cmd_username(ctx, message, message_length) ? -1 : SEND_TEXT;
+		case CMD_ENC_INFO:
+			return cmd_print_enc_info(&ctx->keys) ? -1 : SEND_NONE;
+		case CMD_FILE:
+			return cmd_send_file(message, message_length) ? -1 : SEND_FILE;
+		default:
+			return cmd_not_found(*message) ? -1 : SEND_NONE;
 		}
 	}
 }
