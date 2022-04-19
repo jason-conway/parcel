@@ -44,15 +44,14 @@ int proc_file(uint8_t *data)
 	return 0;
 }
 
-void proc_text(client_t *ctx, uint8_t *wire_data)
+void proc_text(uint8_t *wire_data)
 {
-	printf("\033[2K\r%s\n%s: ", wire_data, ctx->username);
-	fflush(stdout);
+	printf("\033[2K\r%s\n", (char *)wire_data);
 }
 
 int proc_ctrl(client_t *ctx, uint8_t *wire_data)
 {
 	size_t rounds = wire_get_raw(&wire_data[0]);
-	memcpy(ctx->ctrl_key, &wire_data[16], KEY_LEN);
-	return n_party_client(ctx->socket, rounds, ctx->session_key, ctx->fingerprint);
+	memcpy(ctx->keys.control, &wire_data[16], KEY_LEN);
+	return n_party_client(ctx->socket, ctx->keys.session, rounds);
 }
