@@ -78,6 +78,16 @@ void xalert(const char *format, ...)
 	va_end(ap);
 }
 
+void xlog(const char *format, ...)
+{
+	va_list ap;
+	va_start(ap, format);
+	(void)fprintf(stdout, "%s", "\033[34;3m");
+	(void)vfprintf(stdout, format, ap);
+	(void)fprintf(stdout, "\033[0m");
+	va_end(ap);
+}
+
 void xprintf(ansi color, const char *format, ...)
 {
 	static const char *escape_codes[] = {

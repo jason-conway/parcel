@@ -45,6 +45,8 @@ void xalert(const char *format, ...);
 // Print a formatted string to stdout... in color
 void xprintf(ansi color, const char *format, ...);
 
+void xlog(const char *format, ...);
+
 /**
  * @brief Duplicate a string
  * 
