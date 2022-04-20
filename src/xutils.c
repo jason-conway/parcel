@@ -80,12 +80,13 @@ void xalert(const char *format, ...)
 
 void xlog(const char *format, ...)
 {
-	va_list ap;
-	va_start(ap, format);
-	(void)fprintf(stdout, "%s", "\033[34;3m");
-	(void)vfprintf(stdout, format, ap);
-	(void)fprintf(stdout, "\033[0m");
-	va_end(ap);
+	(void)format;
+	// va_list ap;
+	// va_start(ap, format);
+	// (void)fprintf(stdout, "%s", "\033[34;3m");
+	// (void)vfprintf(stdout, format, ap);
+	// (void)fprintf(stdout, "\033[0m");
+	// va_end(ap);
 }
 
 void xprintf(ansi color, const char *format, ...)
@@ -364,7 +365,7 @@ static int http_extract_body(http_request_t *request)
 			case 1:
 				if (*pos_data == '\r') { // \r\n
 				reached_body:
-					request->length -= (pos_linefeed + 1 - request->data); // Set to body length
+					request->length = (request->length - (pos_linefeed + 1 - request->data)) + 1; // Set to body length
 					request->data = pos_linefeed + 1; // Move to first body character
 					return 0;
 				}
