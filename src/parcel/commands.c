@@ -46,7 +46,6 @@ static int cmd_username(client_t *ctx, char **message, size_t *message_length)
 	return 0;
 }
 
-// TODO: Break parts of this into their own function
 static int cmd_send_file(char **message, size_t *message_length)
 {
 	size_t path_length = FILE_PATH_MAX_LENGTH;
@@ -102,7 +101,6 @@ static int cmd_send_file(char **message, size_t *message_length)
 	xfree(*message);
 
 	*message = (char *)file_contents;
-
 	return 0;
 
 error:
