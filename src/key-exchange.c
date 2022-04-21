@@ -38,7 +38,7 @@ static void point_kx(uint8_t *shared_key, const uint8_t *secret_key, const uint8
 	x25519(shared_key, secret_key, public_key);
 }
 
-int two_party_client(const sock_t socket, uint8_t *key)
+int two_party_client(sock_t socket, uint8_t *ctrl_key)
 {
 	// Diffie-Hellman keys
 	uint8_t secret_key[KEY_LEN];
@@ -70,16 +70,17 @@ int two_party_client(const sock_t socket, uint8_t *key)
 	}
 
 	// Shared secret gets hashed in point_kx()
-	if (decrypt_wire(wire, shared_secret)) {
+	size_t data_length = 0;
+	if (decrypt_wire(wire, &data_length, shared_secret)) {
 		return -1;
 	}
 
-	memcpy(key, wire->data, KEY_LEN);
+	memcpy(ctrl_key, wire->data, KEY_LEN);
 	xfree(wire);
 	return 0;
 }
 
-int two_party_server(const sock_t socket, uint8_t *session_key)
+int two_party_server(sock_t socket, uint8_t *session_key)
 {
 	// Receive public key from the client
 	uint8_t public_key[KEY_LEN];
@@ -113,19 +114,21 @@ int two_party_server(const sock_t socket, uint8_t *session_key)
 	return 0;
 }
 
-static int send_ctrl_key(sock_t *sockets, size_t count, uint8_t *key)
+static int send_ctrl_key(sock_t *sockets, size_t count, uint8_t *ctrl_key)
 {
-	uint8_t ctrl_message[48];
-	size_t len = sizeof(ctrl_message);
-	memset(ctrl_message, 0, len);
-	wire_set_raw(&ctrl_message[0], count - 1);
-	xgetrandom(&ctrl_message[16], 32);
+	uint8_t ctrl_data[CTRL_DATA_LEN];
+	size_t len = CTRL_DATA_LEN;
 
-	wire_t *wire = init_wire(ctrl_message, TYPE_CTRL, &len);
-	encrypt_wire(wire, key);
+	memset(ctrl_data, 0, len);
+
+	wire_set_raw(&ctrl_data[0], count - 1);
+	xgetrandom(&ctrl_data[CTRL_KEY_OFFSET], KEY_LEN);
+
+	wire_t *wire = init_wire(ctrl_data, TYPE_CTRL, &len);
+	encrypt_wire(wire, ctrl_key);
 
 	// Update key
-	memcpy(key, &ctrl_message[16], 32);
+	memcpy(ctrl_key, &ctrl_data[CTRL_KEY_OFFSET], KEY_LEN);
 
 	for (size_t i = 1; i <= count; i++) {
 		if (xsend(sockets[i], wire, len, 0) < 0) {
@@ -141,7 +144,7 @@ static int send_ctrl_key(sock_t *sockets, size_t count, uint8_t *key)
 static int rotate_intermediates(sock_t *sockets, size_t count)
 {
 	for (size_t i = 1; i <= count; i++) {
-		uint8_t intermediate_key[32];
+		uint8_t intermediate_key[KEY_LEN];
 		if (xrecv(sockets[i], intermediate_key, KEY_LEN, 0) != KEY_LEN) {
 			return -1;
 		}
@@ -155,13 +158,13 @@ static int rotate_intermediates(sock_t *sockets, size_t count)
 	return 0;
 }
 
-int n_party_server(sock_t *sockets, size_t connection_count, uint8_t *key)
+int n_party_server(sock_t *sockets, size_t connection_count, uint8_t *ctrl_key)
 {
 	if (connection_count < 2) {
 		return 0;
 	}
 
-	if (send_ctrl_key(sockets, connection_count, key)) {
+	if (send_ctrl_key(sockets, connection_count, ctrl_key)) {
 		printf("> Error sending starting control keys\n");
 		return -1;
 	}
@@ -176,12 +179,12 @@ int n_party_server(sock_t *sockets, size_t connection_count, uint8_t *key)
 }
 
 // An N-Party Diffie-Hellman Key Exchange
-int n_party_client(const sock_t socket, uint8_t *session_key, size_t rounds)
+int n_party_client(sock_t socket, uint8_t *session_key, size_t rounds)
 {
 	uint8_t secret_key[KEY_LEN];
-	point_d(secret_key);
-
 	uint8_t public_key[KEY_LEN];
+	
+	point_d(secret_key);
 	point_q(secret_key, public_key, NULL);
 
 	// Send our public key to the client on our right
