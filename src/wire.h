@@ -33,7 +33,7 @@ enum Wire
 	RECV_MAX_BYTES = sizeof(wire_t) + DATA_LEN_MAX,
 };
 
-enum DataTypeFile
+enum TypeFile
 {
 	FILE_PATH_MAX_LENGTH = FILENAME_MAX,
 	FILE_NAME_START = 0,
@@ -42,6 +42,12 @@ enum DataTypeFile
 	FILE_DATA_START = FILE_NAME_LEN + BLOCK_LEN,
 	FILE_HEADER_SIZE = FILE_DATA_START,
 	FILE_DATA_MAX_SIZE = DATA_LEN_MAX - FILE_HEADER_SIZE,
+};
+
+enum TypeCtrl
+{
+	CTRL_KEY_OFFSET = 16,
+	CTRL_DATA_LEN = CTRL_KEY_OFFSET + KEY_LEN
 };
 
 enum SectionLengths
@@ -89,8 +95,8 @@ enum DecryptionStatus
 wire_t *new_wire(void);
 wire_t *init_wire(uint8_t *data, uint64_t type, size_t *len);
 size_t encrypt_wire(wire_t *wire, const uint8_t *key);
-int decrypt_wire(wire_t *wire, const uint8_t *key);
-int _decrypt_wire(wire_t *wire, size_t *len, const uint8_t *key);
+
+int decrypt_wire(wire_t *wire, size_t *len, const uint8_t *key);
 
 uint64_t wire_pack64(const uint8_t *src);
 uint64_t wire_get_raw(uint8_t *src);

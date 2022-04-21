@@ -95,7 +95,7 @@ size_t encrypt_wire(wire_t *wire, const uint8_t *key)
 	return data_length;
 }
 
-int _decrypt_wire(wire_t *wire, size_t *len, const uint8_t *key)
+int decrypt_wire(wire_t *wire, size_t *len, const uint8_t *key)
 {
 	aes128_t ctxs[2];
 	aes128_init(&ctxs[0], wire->iv, &key[CIPHER_OFFSET]);
@@ -131,10 +131,4 @@ int _decrypt_wire(wire_t *wire, size_t *len, const uint8_t *key)
 
 	aes128_decrypt(&ctxs[0], wire->type, data_length + BASE_DEC_LEN);
 	return WIRE_OK;
-}
-
-int decrypt_wire(wire_t *wire, const uint8_t *key)
-{
-	size_t length = 0;
-	return _decrypt_wire(wire, &length, key);
 }
