@@ -128,7 +128,7 @@ void print_bytes(const char *str, const uint8_t *fingerprint)
 static int cmd_print_enc_info(parcel_keys_t *keys)
 {
 	print_bytes("Group Session Key: ", keys->session);
-	print_bytes("Server Control Key: ", keys->control);
+	print_bytes("Server Control Key: ", keys->ctrl);
 
 	return 0;
 }

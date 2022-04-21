@@ -52,6 +52,6 @@ void proc_text(uint8_t *wire_data)
 int proc_ctrl(client_t *ctx, uint8_t *wire_data)
 {
 	size_t rounds = wire_get_raw(&wire_data[0]);
-	memcpy(ctx->keys.control, &wire_data[16], KEY_LEN);
+	memcpy(ctx->keys.ctrl, &wire_data[CTRL_KEY_OFFSET], KEY_LEN);
 	return n_party_client(ctx->socket, ctx->keys.session, rounds);
 }

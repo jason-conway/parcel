@@ -30,11 +30,11 @@ static void disp_username(const char *username)
 	fflush(stdout);
 }
 
-void refresh_local_ctx(client_t *shared, client_t *local)
+void memcpy_locked(pthread_mutex_t *lock, void *dest, void *src, size_t length)
 {
-	pthread_mutex_lock(&shared->mutex_lock);
-		memcpy(local, shared, sizeof(client_t));
-	pthread_mutex_unlock(&shared->mutex_lock);
+	pthread_mutex_lock(lock);
+		memcpy(dest, src, length);
+	pthread_mutex_unlock(lock);
 }
 
 static void send_encrypted_message(sock_t socket, uint64_t type, void *data, size_t length, const uint8_t *key)
@@ -65,7 +65,7 @@ int send_thread(void *ctx)
 {
 	client_t client;
 	client_t *client_ctx = (client_t *)ctx;
-	refresh_local_ctx(client_ctx, &client);
+	memcpy_locked(&client_ctx->mutex_lock, &client, client_ctx, sizeof(client_t));
 
 	while (1) {
 		char *plaintext = NULL;
@@ -82,7 +82,7 @@ int send_thread(void *ctx)
 			error(client.socket, "xmalloc()");
 		}
 
-		refresh_local_ctx(client_ctx, &client);
+		memcpy_locked(&client_ctx->mutex_lock, &client, client_ctx, sizeof(client_t));
 		enum command_id id = CMD_NONE;
 
 		switch (parse_input(&client, &id, &plaintext, &length)) {
@@ -98,16 +98,14 @@ int send_thread(void *ctx)
 				xfree(plaintext);
 				error(client.socket, "parse_input()");
 		}
-		
+
 		xfree(plaintext);
-		
+
 		switch (id) {
 			case CMD_EXIT:
 				exit(EXIT_SUCCESS);
 			case CMD_USERNAME:
-				pthread_mutex_lock(&client_ctx->mutex_lock);
-					memcpy(client_ctx->username, client.username, USERNAME_MAX_LENGTH);
-				pthread_mutex_unlock(&client_ctx->mutex_lock);
+				memcpy_locked(&client_ctx->mutex_lock, client_ctx->username, client.username, USERNAME_MAX_LENGTH);
 				break;
 			default:
 				break;
@@ -132,7 +130,7 @@ static int recv_remaining(client_t *ctx, wire_t *wire, size_t bytes_recv, size_t
 		return -1;
 	}
 
-	if (_decrypt_wire(_wire, &wire_size, ctx->keys.session)) {
+	if (decrypt_wire(_wire, &wire_size, ctx->keys.session)) {
 		return -1;
 	}
 	wire = _wire;
@@ -159,7 +157,7 @@ void *recv_thread(void *ctx)
 {
 	client_t client;
 	client_t *client_ctx = (client_t *)ctx;
-	refresh_local_ctx(client_ctx, &client);
+	memcpy(&client, client_ctx, sizeof(client_t));
 
 	while (1) {
 		size_t bytes_recv;
@@ -168,19 +166,15 @@ void *recv_thread(void *ctx)
 			fatal("malloc() failure when initializing new wire");
 		}
 
+		memcpy_locked(&client_ctx->mutex_lock, &client, client_ctx, sizeof(client_t));
+		
 		size_t length = bytes_recv;
-
-		refresh_local_ctx(client_ctx, &client);
-
-		switch (_decrypt_wire(wire, &length, client.keys.session)) {
+		switch (decrypt_wire(wire, &length, client.keys.session)) {
 			case WIRE_INVALID_KEY:
-				xlog("session key was invalid, trying control key\n");
-				if (_decrypt_wire(wire, &length, client.keys.control)) {
-					xlog("control key was invalid, aborting\n");
+				if (decrypt_wire(wire, &length, client.keys.ctrl)) {
 					xfree(wire);
-					fatal("_decrypt_wire()");
+					fatal("decrypt_wire()");
 				}
-				xlog("wire was encrypted with control key\n");
 				break;
 			case WIRE_PARTIAL:
 				xlog("wire is partial, continue receiving\n");
@@ -191,38 +185,32 @@ void *recv_thread(void *ctx)
 				xlog("received remainder of wire\n");
 				break;
 			case WIRE_CMAC_ERROR:
-				xlog("wire CMAC was invalid\n");
 				xfree(wire);
-				fatal("_decrypt_wire()");
+				fatal("decrypt_wire()");
 			case WIRE_OK:
 				break;
 		}
 
 		switch (wire_get_type(wire)) {
 			case TYPE_CTRL:
-				xlog("wire contains control message\n");
-				if (!proc_ctrl(&client, wire->data)) {
-					pthread_mutex_lock(&client_ctx->mutex_lock);
-						memcpy(&client_ctx->keys, &client.keys, sizeof(parcel_keys_t));
-					pthread_mutex_unlock(&client_ctx->mutex_lock);
-					break;
+				if (proc_ctrl(&client, wire->data)) {
+					goto type_proc_error;
 				}
-				goto type_proc_error;
+				memcpy_locked(&client_ctx->mutex_lock, &client_ctx->keys, &client.keys, sizeof(parcel_keys_t));
+				break;
 			case TYPE_FILE:
-				xlog("wire contains file\n");
 				if (proc_file(wire->data)) {
 					goto type_proc_error;
 				}
 				break;
 			case TYPE_TEXT:
-				xlog("wire contains text\n");
 				proc_text(wire->data);
 				disp_username(client.username);
 				break;
 			default:
-			type_proc_error:
-				xfree(wire);
-				fatal("proc_ctrl()");
+				type_proc_error:
+					xfree(wire);
+					fatal("proc_ctrl()");
 		}
 
 		xfree(wire);
@@ -265,7 +253,7 @@ void connect_server(client_t *client, const char *ip, const char *port)
 
 	freeaddrinfo(srv_addr);
 
-	if (two_party_client(client->socket, client->keys.control)) {
+	if (two_party_client(client->socket, client->keys.ctrl)) {
 		error(client->socket, "key_exchange()");
 	}
 

@@ -56,7 +56,7 @@ enum SendType
 typedef struct parcel_keys_t
 {
 	uint8_t session[KEY_LEN]; // Group-derived symmetric key
-	uint8_t control[KEY_LEN]; // Ephemeral daemon control key
+	uint8_t ctrl[KEY_LEN]; // Ephemeral daemon control key
 } parcel_keys_t;
 
 typedef struct client_t
