@@ -25,7 +25,10 @@ typedef union state_t
 static uint8_t galois_multiply(uint8_t x, uint8_t y)
 {
 	static const uint8_t polynomial_mask[8] = { 0x00, 0x1b, 0x36, 0x2d, 0x6c, 0x77, 0x5a, 0x41 };
-	uint16_t r = ((y & 1) * x) ^ ((y & 2) * x) ^ ((y & 4) * x) ^ ((y & 8) * x);
+	uint16_t r = ((x * (y & 1)) ^
+				  (x * (y & 2)) ^
+				  (x * (y & 4)) ^
+				  (x * (y & 8)));
 	return (uint8_t)(r ^ polynomial_mask[r >> 8]);
 }
 
