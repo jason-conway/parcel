@@ -2,6 +2,8 @@
 
 # `parcel`: An ultra-lightweight, cross-platform, end-to-end encrypted, terminal-based group messaging application
 
+[![CodeFactor](https://www.codefactor.io/repository/github/jason-conway/parcel/badge)](https://www.codefactor.io/repository/github/jason-conway/parcel)
+
 ## Supported Platforms
 
 Linux, BSD, Darwin/macOS, Windows, and iOS (*kind of*)
@@ -82,19 +84,21 @@ The number of active clients supported by `parceld` is determined by `FD_SETSIZE
 
 All commands start with a colon followed by the command itself.
 
-| Command        | Description                           |
-| -------------- | ------------------------------------- |
-| `:q`           | Cleanly quit parcel                   |
-| `:file`        | Send a file                           |
-| `:fingerprint` | Display fingerprint of the public key |
-| `:username`    | Change client username                |
-
+| Command     | Description                             |
+| ----------- | --------------------------------------- |
+| `:list`     | List available commands                 |
+| `:x`        | Exit the server and close parcel        |
+| `:username` | Change username                         |
+| `:encinfo`  | Display active session and control keys |
+| `:file`     | Send a file                             |
 
 ## Wire Format
 
-The wire consists of five sections: mac, iv, length, type, and data
+The wire consists of six sections: mac, lac, iv, length, type, and data
 
-`mac` contains the 16-byte MAC of the IV, length, and data sections. 
+`mac` contains the 16-byte MAC of the IV, length, and data sections.
+
+`lac` contains the 16-byte MAC of `length` only.
 
 `iv` contains the 16-byte Initialization Vector. required for ciper block chaining. Since `data` is encrypted in CBC mode, the IV only needs to be random- not secret, so it is sent as plaintext.
 
@@ -110,12 +114,12 @@ The possible message types are `TYPE_TEXT`, `TYPE_FILE`, and `TYPE_CTRL`.
 
 The parcel client can send messages of type `TYPE_TEXT` and `TYPE_FILE`. Only the parcel daemon can send `TYPE_CTRL`, which are used to trigger a GDHKD sequence to update the key.
 
-### Type-Specific `data` Section Layout
+### Type-Specific Section Layout
 
-When a message has the type `TYPE_CTRL`, the `data` section will always be 48-bytes long.
+#### TYPE_CTRL
 
-The first 8 bytes encode the value `GHDR`, representing the number of intermediate shared-key derivation rounds to perform.
+When a message has the type `TYPE_CTRL`, the `data` section will contain a populated `wire_ctrl_message` struct- containing a control function, function arguments, and the renewed control key.
 
-The second 8 bytes are set to `\0`
+#### TYPE_FILE
 
-The last 32 bytes are set to the next control message key.
+When a message has the type `TYPE_FILE`, the `data` section will contain a populated `wire_file_message` struct- containing the filename, the file size, and the file data.
