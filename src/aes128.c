@@ -7,7 +7,8 @@
  * @ref https://en.wikipedia.org/wiki/Finite_field
  * @ref https://en.wikipedia.org/wiki/Finite_field_arithmetic
  * @ref https://en.wikipedia.org/wiki/One-key_MAC
- * @version 0.1
+ * @ref https://en.wikipedia.org/wiki/AES_key_schedule
+ * @version 0.9.2
  * @date 2022-02-06
  *
  * @copyright Copyright (c) 2022 Jason Conway. All rights reserved.
@@ -25,16 +26,16 @@ typedef union state_t
 static uint8_t galois_multiply(uint8_t x, uint8_t y)
 {
 	static const uint8_t polynomial_mask[8] = { 0x00, 0x1b, 0x36, 0x2d, 0x6c, 0x77, 0x5a, 0x41 };
-	uint16_t r = ((x * (y & 1)) ^
-				  (x * (y & 2)) ^
-				  (x * (y & 4)) ^
-				  (x * (y & 8)));
+	uint16_t r = ((x * (y & 0x01)) ^
+				  (x * (y & 0x02)) ^
+				  (x * (y & 0x04)) ^
+				  (x * (y & 0x08)));
 	return (uint8_t)(r ^ polynomial_mask[r >> 8]);
 }
 
 static void xor128(uint8_t *a, const uint8_t *b)
 {
-	for (size_t i = 0; i < BLOCK_SIZE; i++) {
+	for (size_t i = 0; i < AES_BLOCK_SIZE; i++) {
 		a[i] ^= b[i];
 	}
 }
@@ -88,12 +89,15 @@ static void aes_key_expansion(uint8_t *round_key, const uint8_t *key)
 {
 	static const uint8_t round_constants[11] = { 0x8d, 0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x1b, 0x36 };
 
+	
+	// for (size_t i = 0; i < 4; i++) {
+	// 	for (size_t j = 0; j < 4; j++) {
+	// 		round_key[(4 * i) + j] = key[(i * 4) + j];
+	// 	}
+	// }
+	
 	// First round key
-	for (size_t i = 0; i < 4; i++) {
-		for (size_t j = 0; j < 4; j++) {
-			round_key[(4 * i) + j] = key[(i * 4) + j];
-		}
-	}
+	memcpy(round_key, key, AES_KEY_LEN);
 
 	uint8_t word[4];
 	for (size_t i = 4; i < 44; i++) {
@@ -127,7 +131,7 @@ static void aes_add_round_key(state_t *ctx, uint8_t round, const uint8_t *round_
 {
 	for (size_t i = 0; i < 4; i++) {
 		for (size_t j = 0; j < 4; j++) {
-			ctx->s[i][j] ^= round_key[(BLOCK_SIZE * round) + (4 * i) + j];
+			ctx->s[i][j] ^= round_key[(AES_BLOCK_SIZE * round) + (4 * i) + j];
 		}
 	}
 }
@@ -225,9 +229,9 @@ static void aes_mix_columns(state_t *ctx, bool invert)
 static void aes_xcrypt(state_t *state, const uint8_t *round_key, bool decrypt)
 {
 	if (decrypt) {
-		aes_add_round_key(state, ROUNDS, round_key);
+		aes_add_round_key(state, AES_ROUNDS, round_key);
 
-		for (ssize_t i = ROUNDS - 1; ; i--) {
+		for (ssize_t i = AES_ROUNDS - 1; ; i--) {
 			aes_shift_rows(state, true);
 			aes_substitute_bytes(state, true);
 			aes_add_round_key(state, i, round_key);
@@ -243,13 +247,13 @@ static void aes_xcrypt(state_t *state, const uint8_t *round_key, bool decrypt)
 		for (ssize_t i = 1; ; i++) {
 			aes_substitute_bytes(state, false);
 			aes_shift_rows(state, false);
-			if (i == ROUNDS) {
+			if (i == AES_ROUNDS) {
 				break;
 			}
 			aes_mix_columns(state, false);
 			aes_add_round_key(state, i, round_key);
 		}
-		aes_add_round_key(state, ROUNDS, round_key);
+		aes_add_round_key(state, AES_ROUNDS, round_key);
 	}
 }
 
@@ -271,7 +275,7 @@ void aes128_init(aes128_t *ctx, const uint8_t *iv, const uint8_t *key)
 {
 	memset(ctx, 0, sizeof(*ctx));
 	aes_key_expansion(ctx->round_key, key);
-	memcpy(ctx->iv, iv, BLOCK_SIZE);
+	memcpy(ctx->iv, iv, AES_BLOCK_SIZE);
 }
 
 void aes128_init_cmac(aes128_t *ctx, const uint8_t *key)
@@ -283,52 +287,52 @@ void aes128_init_cmac(aes128_t *ctx, const uint8_t *key)
 void aes128_encrypt(aes128_t *ctx, uint8_t *chunk, size_t length)
 {
 	uint8_t *iv = ctx->iv;
-	for (size_t i = 0; i < length; i += BLOCK_SIZE) {
+	for (size_t i = 0; i < length; i += AES_BLOCK_SIZE) {
 		xor128(chunk, iv);
 		aes_xcrypt((state_t *)chunk, ctx->round_key, false);
 		iv = chunk;
-		chunk += BLOCK_SIZE;
+		chunk += AES_BLOCK_SIZE;
 	}
-	memcpy(ctx->iv, iv, BLOCK_SIZE);
+	memcpy(ctx->iv, iv, AES_BLOCK_SIZE);
 }
 
 void aes128_decrypt(aes128_t *ctx, uint8_t *chunk, size_t length)
 {
-	uint8_t iv[BLOCK_SIZE];
-	for (size_t i = 0; i < length; i += BLOCK_SIZE) {
-		memcpy(iv, chunk, BLOCK_SIZE);
+	uint8_t iv[AES_BLOCK_SIZE];
+	for (size_t i = 0; i < length; i += AES_BLOCK_SIZE) {
+		memcpy(iv, chunk, AES_BLOCK_SIZE);
 		aes_xcrypt((state_t *)chunk, ctx->round_key, true);
 		xor128(chunk, ctx->iv);
-		memcpy(ctx->iv, iv, BLOCK_SIZE);
-		chunk += BLOCK_SIZE;
+		memcpy(ctx->iv, iv, AES_BLOCK_SIZE);
+		chunk += AES_BLOCK_SIZE;
 	}
 }
 
 void aes128_cmac(const aes128_t *ctx, const uint8_t *msg, size_t length, uint8_t *mac)
 {
 	// Subkey generation (pg 5 RFC 4493)
-	uint8_t L[BLOCK_SIZE] = { 0 }; // Output of AES(0)
+	uint8_t L[AES_BLOCK_SIZE] = { 0 }; // Output of AES(0)
 	aes_xcrypt((state_t *)L, ctx->round_key, false);
 	aes_generate_subkey(L);
 
 	// MAC generation (pg 7 RFC 4493)
-	uint8_t block[BLOCK_SIZE] = { 0 };
-	for (; length; length -= BLOCK_SIZE) {
-		if (length < BLOCK_SIZE) {
+	uint8_t block[AES_BLOCK_SIZE] = { 0 };
+	for (; length; length -= AES_BLOCK_SIZE) {
+		if (length < AES_BLOCK_SIZE) {
 			aes_generate_subkey(L);
 			L[length] ^= 128;
 		}
-		if (length <= BLOCK_SIZE) {
+		if (length <= AES_BLOCK_SIZE) {
 			for (size_t i = 0; i < length; i++) {
 				L[i] ^= msg[i];
 			}
-			length = BLOCK_SIZE;
+			length = AES_BLOCK_SIZE;
 			msg = L;
 		}
 
 		xor128(block, msg);
 		aes_xcrypt((state_t *)block, ctx->round_key, false);
-		msg += BLOCK_SIZE;
+		msg += AES_BLOCK_SIZE;
 	}
-	memcpy(mac, block, BLOCK_SIZE);
+	memcpy(mac, block, AES_BLOCK_SIZE);
 }

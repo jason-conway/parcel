@@ -19,14 +19,16 @@
 
 enum AES128
 {
-	ROUNDS = 10,
-	BLOCK_SIZE = 16
+	AES_ROUNDS = 10,
+	AES_BLOCK_SIZE = 16,
+	AES_KEY_LEN = 16,
+	CMAC_KEY_LEN = 16,
 };
 
 typedef struct aes128_t
 {
-	uint8_t round_key[176];
-	uint8_t iv[16];
+	uint8_t round_key[AES_BLOCK_SIZE * (AES_ROUNDS + 1)];
+	uint8_t iv[AES_BLOCK_SIZE];
 } aes128_t;
 
 /**
