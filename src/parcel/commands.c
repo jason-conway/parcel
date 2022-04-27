@@ -158,7 +158,7 @@ static int cmd_list(void)
 		"  :list         list available commands\n"
 		"  :x            exit the server and close parcel\n"
 		"  :username     change username\n"
-		"  :encinfo      display current encrytion parameters\n"
+		"  :encinfo      display current encryption parameters\n"
 		"  :file         send a file\n";
 	printf("%s", list);
 	return 0;
