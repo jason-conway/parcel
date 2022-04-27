@@ -339,3 +339,87 @@ void xfree(void *mem)
 	(void)HeapFree(GetProcessHeap(), 0, mem);
 #endif
 }
+
+// TODO: needs testing
+char *xgethome(void)
+{
+#if __unix__ || __APPLE__
+	char *home = getenv("HOME");
+	if (!home || *home != '/') {
+		return NULL;
+	}
+	return home;
+#elif _WIN32
+	char *home = getenv("HOMEPATH");
+	return !home ? NULL : home;
+	}
+#endif
+}
+
+// TODO: needs testing
+int xmkdir(char *path)
+{
+#if __unix__ || __APPLE__
+	char *c = strchr(path + 1, '/');
+	while (c) {
+		*c = 0;
+		if (mkdir(path, 0700)) {
+			return -1;
+		}
+		struct stat info;
+		if (!stat(path, &info) && S_ISDIR(info.st_mode)) {
+			return -1;
+		}
+
+		*c = '/';
+		c = strchr(c + 1, '/');
+	}
+	return 0;
+#elif _WIN32
+	if (!CreateDirectory(path, 0)) {
+		if (GetLastError() == ERROR_PATH_NOT_FOUND) {
+			return -1;
+		}
+		else {
+			DWORD file_attributes = GetFileAttributes(path);
+			if ((file_attributes == INVALID_FILE_ATTRIBUTES) || !(file_attributes & FILE_ATTRIBUTE_DIRECTORY)) {
+				return -1;
+			}
+		}
+	}
+	return 0;
+#endif
+}
+
+char *xstrcat(size_t count, ...);
+
+// TODO: rework
+// TODO: needs testing
+char *xget_dir(char *file)
+{
+	char *home = xgethome();
+	if (!home) {
+		return NULL;
+	}
+
+#if __unix__ || __APPLE__
+	static const char parcel[] = "/parcel";
+	static const char files[] = "/files/";
+	char *path = xstrcat(4, home, parcel, files, file);
+#elif _WIN32
+	static const char parcel[] = "\\parcel";
+	static const char files[] = "\\files\\";
+	char *path = xstrcat(3, home, parcel, files);
+#endif
+
+	if (xmkdir(path)) {
+		return NULL;
+	}
+
+#if __unix__ || __APPLE__
+	return path;
+#elif _WIN32
+	xfree(path);
+	return xstrcat(4, home, parcel, files, file);
+#endif
+}

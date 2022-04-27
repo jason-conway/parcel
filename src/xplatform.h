@@ -90,3 +90,4 @@ int xstartup(void);
 int xgetlogin(char *username, size_t len);
 void xgetrandom(void *dest, size_t len);
 size_t xfilesize(const char *filename);
+char *xget_dir(char *file);
