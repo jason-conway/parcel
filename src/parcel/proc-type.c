@@ -11,33 +11,33 @@
 
 #include "client.h"
 
-int proc_file(uint8_t *data)
+int proc_file(void *data)
 {
-	size_t filename_length = strnlen((char *)data, FILE_NAME_LEN);
-	char *filename = xcalloc(filename_length);
-	if (!filename) {
+	struct wire_file_message *wire_file = (struct wire_file_message *)data;
+
+	// size_t filename_length = strnlen(wire_file->filename, sizeof(wire_file->filename));
+
+	char *save_path = xget_dir(wire_file->filename);
+	if (!save_path) {
 		return -1;
 	}
-	memcpy(filename, &data[FILE_NAME_START], filename_length);
-
-	FILE *file = fopen(filename, "wb");
+	FILE *file = fopen(save_path, "wb");
 	if (!file) {
-		xwarn("Could not open file \"%s\" for writing\n", filename);
+		xwarn("Could not open file \"%s\" for writing\n", wire_file->filename);
 		return -1;
 	}
+	xfree(save_path);
+	const size_t file_data_size = wire_pack64(wire_file->filesize);
 
-	const size_t file_data_size = wire_pack64(&data[FILE_SIZE_START]);
-	if (fwrite(&data[FILE_DATA_START], 1, file_data_size, file) != file_data_size) {
-		xwarn("Error writing to file \"%s\"\n", filename);
+	if (fwrite(wire_file->filedata, 1, file_data_size, file) != file_data_size) {
+		xwarn("Error writing to file \"%s\"\n", wire_file->filename);
 		(void)fclose(file);
-		(void)remove(filename);
-		xfree(filename);
+		xfree(wire_file->filename);
 		return -1;
 	}
 
 	if (fflush(file) || fclose(file)) {
-		xwarn("Error closing file \"%s\"\n", filename);
-		free(filename);
+		xwarn("Error closing file \"%s\"\n", wire_file->filename);
 		return -1;
 	}
 
@@ -49,9 +49,19 @@ void proc_text(uint8_t *wire_data)
 	printf("\033[2K\r%s\n", (char *)wire_data);
 }
 
-int proc_ctrl(client_t *ctx, uint8_t *wire_data)
+int proc_ctrl(client_t *ctx, void *data)
 {
-	size_t rounds = wire_get_raw(&wire_data[0]);
-	memcpy(ctx->keys.ctrl, &wire_data[CTRL_KEY_OFFSET], KEY_LEN);
-	return n_party_client(ctx->socket, ctx->keys.session, rounds);
+	struct wire_ctrl_message *wire_ctrl = (struct wire_ctrl_message *)data;
+
+	memcpy(ctx->keys.ctrl, wire_ctrl->renewed_key, KEY_LEN);
+
+	switch (wire_get_ctrl_function(wire_ctrl)) {
+		case CTRL_EXIT:
+			return CTRL_EXIT;
+		case CTRL_DHKE: {
+			return n_party_client(ctx->socket, ctx->keys.session, wire_get_ctrl_args(wire_ctrl));
+		}
+		break;
+	}
+	return -1;
 }

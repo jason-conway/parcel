@@ -116,19 +116,22 @@ int two_party_server(sock_t socket, uint8_t *session_key)
 
 static int send_ctrl_key(sock_t *sockets, size_t count, uint8_t *ctrl_key)
 {
-	uint8_t ctrl_data[CTRL_DATA_LEN];
-	size_t len = CTRL_DATA_LEN;
+	struct wire_ctrl_message ctrl_message;
+	size_t len = sizeof(struct wire_ctrl_message);
 
-	memset(ctrl_data, 0, len);
+	memset(&ctrl_message, 0, len);
+	wire_set_ctrl_function(&ctrl_message, CTRL_DHKE);
+	wire_set_ctrl_args(&ctrl_message, count - 1);
+	
+	uint8_t renewed_key[32];
+	xgetrandom(renewed_key, KEY_LEN);
+	wire_set_ctrl_renewal(&ctrl_message, renewed_key);
 
-	wire_set_raw(&ctrl_data[0], count - 1);
-	xgetrandom(&ctrl_data[CTRL_KEY_OFFSET], KEY_LEN);
-
-	wire_t *wire = init_wire(ctrl_data, TYPE_CTRL, &len);
+	wire_t *wire = init_wire(&ctrl_message, TYPE_CTRL, &len);
 	encrypt_wire(wire, ctrl_key);
 
 	// Update key
-	memcpy(ctrl_key, &ctrl_data[CTRL_KEY_OFFSET], KEY_LEN);
+	memcpy(ctrl_key, renewed_key, KEY_LEN);
 
 	for (size_t i = 1; i <= count; i++) {
 		if (xsend(sockets[i], wire, len, 0) < 0) {

@@ -53,81 +53,81 @@ static int cmd_send_file(char **message, size_t *message_length)
 
 	if (!xfexists(file_path)) {
 		xwarn("File \"%s\" not found\n", file_path);
-		goto free_path_only;
+		goto free_path;
 	}
 
 	size_t file_size = xfilesize(file_path);
 	if (!file_size) {
 		xwarn("Unable to determine size of file \"%s\"\n", file_path);
-		goto free_path_only;
+		goto free_path;
 	}
 
 	if (file_size > FILE_DATA_MAX_SIZE) {
 		const size_t overage = file_size - FILE_DATA_MAX_SIZE;
 		xwarn("File \"%s\" is %zu bytes over the maximum size of %d bytes\n", file_path, overage, FILE_DATA_MAX_SIZE);
-		goto free_path_only;
+		goto free_path;
 	}
 
-	*message_length = file_size + FILE_HEADER_SIZE; // To hold file name and data
-	uint8_t *file_contents = xcalloc(*message_length);
+	*message_length = file_size + sizeof(struct wire_file_message); // To hold file name and data
+	struct wire_file_message *file_contents = xcalloc(*message_length);
 	if (!file_contents) {
-		goto error;
+		goto free_all;
 	}
-
+	
+	wire_unpack64(file_contents->filesize, file_size);
+	
 	FILE *file = fopen(file_path, "rb");
 	if (!file) {
 		xwarn("Could not open file \"%s\" for reading\n", file_path);
-		goto error;
+		goto free_all;
 	}
 
-	// First 64 bytes are file name
-	char *filename = xbasename(file_path);
-	memcpy(&file_contents[FILE_NAME_START], filename, FILE_NAME_LEN);
-	file_contents[FILE_NAME_LEN - 1] = '\0'; // Ensure filename string is null-terminated
 
-	// Next 16 bytes hold the actual file size. Only the first 8 bytes are set
-	wire_unpack64(&file_contents[FILE_SIZE_START], file_size);
-
+	char *path = xstrdup(file_path); // Copy since basename will mangle the original pointer
+	char *filename = xbasename(path);
+	const size_t filename_length = strnlen(filename, FILE_NAME_LEN - 1) + 1;
+	memcpy(file_contents->filename, filename, filename_length);
+	xfree(path);
+	
 	// Now read in the file contents
-	if (fread(&file_contents[FILE_DATA_START], 1, file_size, file) != file_size) {
-		xwarn("Error reading contents of file \"%s\"\n", filename);
+	if (fread(file_contents->filedata, 1, file_size, file) != file_size) {
+		xwarn("Error reading contents of file\n");
 		(void)fclose(file);
-		goto error;
+		goto free_all;
 	}
 
 	(void)fclose(file);
 
-	xfree(file_path);
 	xfree(*message);
-
 	*message = (char *)file_contents;
 	return 0;
 
-error:
+free_all:
 	xfree(file_contents);
-free_path_only:
+free_path:
 	xfree(file_path);
 	return -1;
 }
 
-void print_bytes(const char *str, const uint8_t *fingerprint)
+void memprint(const void *src, size_t len)
 {
-	printf("\033[1m%s", str);
-	for (size_t i = 0; i < 32; i += 4) {
-		uint64_t chunk = (((uint64_t)fingerprint[i + 3] << 0x00) |
-						  ((uint64_t)fingerprint[i + 2] << 0x08) |
-						  ((uint64_t)fingerprint[i + 1] << 0x10) |
-						  ((uint64_t)fingerprint[i + 0] << 0x18));
+	const uint8_t *data = src;
+	for (size_t i = 0; i < len; i += 4) {
+		uint64_t chunk = (((uint64_t)data[i + 3] << 0x00) |
+						  ((uint64_t)data[i + 2] << 0x08) |
+						  ((uint64_t)data[i + 1] << 0x10) |
+						  ((uint64_t)data[i + 0] << 0x18));
 		printf("%s%" PRIx64, i ? "-" : "", chunk);
 	}
-	printf("\033[0m\n");
 }
 
 static int cmd_print_enc_info(parcel_keys_t *keys)
 {
-	print_bytes("Group Session Key: ", keys->session);
-	print_bytes("Server Control Key: ", keys->ctrl);
-
+	printf("Session Key: ");
+	memprint(keys->session, KEY_LEN);
+	printf("\nControl Key: ");
+	memprint(keys->ctrl, KEY_LEN);
+	printf("\n");
 	return 0;
 }
 
@@ -205,19 +205,19 @@ int parse_input(client_t *ctx, enum command_id *cmd, char **message, size_t *mes
 	else {
 		*cmd = parse_command(*message);
 		switch (*cmd) {
-		case CMD_AMBIGUOUS:
-			return cmd_ambiguous( ) ? -1 : SEND_NONE;
-		case CMD_LIST:
-			return cmd_list( ) ? -1 : SEND_NONE;
-		case CMD_EXIT:
-			return cmd_exit(ctx, message, message_length) ? -1 : SEND_TEXT;
-		case CMD_USERNAME:
-			return cmd_username(ctx, message, message_length) ? -1 : SEND_TEXT;
-		case CMD_ENC_INFO:
-			return cmd_print_enc_info(&ctx->keys) ? -1 : SEND_NONE;
-		case CMD_FILE:
-			return cmd_send_file(message, message_length) ? -1 : SEND_FILE;
-		default:
+			case CMD_AMBIGUOUS:
+				return cmd_ambiguous() ? -1 : SEND_NONE;
+			case CMD_LIST:
+				return cmd_list() ? -1 : SEND_NONE;
+			case CMD_EXIT:
+				return cmd_exit(ctx, message, message_length) ? -1 : SEND_TEXT;
+			case CMD_USERNAME:
+				return cmd_username(ctx, message, message_length) ? -1 : SEND_TEXT;
+			case CMD_ENC_INFO:
+				return cmd_print_enc_info(&ctx->keys) ? -1 : SEND_NONE;
+			case CMD_FILE:
+				return cmd_send_file(message, message_length) ? -1 : SEND_FILE;
+			default:
 			return cmd_not_found(*message) ? -1 : SEND_NONE;
 		}
 	}

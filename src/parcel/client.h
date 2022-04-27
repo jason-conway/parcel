@@ -56,7 +56,7 @@ enum SendType
 typedef struct parcel_keys_t
 {
 	uint8_t session[KEY_LEN]; // Group-derived symmetric key
-	uint8_t ctrl[KEY_LEN]; // Ephemeral daemon control key
+	uint8_t ctrl[KEY_LEN];    // Ephemeral daemon control key
 } parcel_keys_t;
 
 typedef struct client_t
@@ -72,8 +72,8 @@ void send_connection_status(client_t *ctx, bool exit);
 int parse_input(client_t *ctx, enum command_id *cmd, char **message, size_t *message_length);
 void prompt_args(char *address, char *username);
 noreturn void fatal(const char *msg);
-int proc_file(uint8_t *data);
-int proc_ctrl(client_t *ctx, uint8_t *wire_data);
+int proc_file(void *data);
+int proc_ctrl(client_t *ctx, void *data);
 void proc_text(uint8_t *wire_data);
 
 void *recv_thread(void *ctx);
