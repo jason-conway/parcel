@@ -42,6 +42,31 @@ enum wire_type wire_get_type(wire_t *ctx)
 	return (enum wire_type)wire_pack64(ctx->type);
 }
 
+enum ctrl_function wire_get_ctrl_function(struct wire_ctrl_message *ctrl)
+{
+	return (enum ctrl_function)wire_pack64(ctrl->function);
+}
+
+uint64_t wire_get_ctrl_args(struct wire_ctrl_message *ctrl)
+{
+	return wire_pack64(ctrl->args);
+}
+
+void wire_set_ctrl_args(struct wire_ctrl_message *ctrl, uint64_t args)
+{
+	wire_unpack64(ctrl->args, (uint64_t)args);
+}
+
+void wire_set_ctrl_function(struct wire_ctrl_message *ctrl, enum ctrl_function function)
+{
+	wire_unpack64(ctrl->function, (uint64_t)function);
+}
+
+void wire_set_ctrl_renewal(struct wire_ctrl_message *ctrl, const uint8_t *renewed_key)
+{
+	memcpy(ctrl->renewed_key, renewed_key, KEY_LEN);
+}
+
 uint64_t wire_get_raw(uint8_t *src)
 {
 	return wire_pack64(src);
@@ -58,8 +83,17 @@ wire_t *new_wire(void)
 	return wire ? wire : NULL;
 }
 
-wire_t *init_wire(uint8_t *data, uint64_t type, size_t *len)
+/**
+ * @brief Lower-level wire init function
+ * 
+ * @param[in] data data to be on the wire
+ * @param[in] type type of wire being initiated
+ * @param[inout] len length of data added to wire, function updates value to be the total wire length
+ * @return initalized wire_t
+ */
+wire_t *init_wire(void *data, uint64_t type, size_t *len)
 {
+
 	const uint64_t data_length = BLOCK_LEN * ((*len + 15) / BLOCK_LEN);
 	const size_t wire_length = sizeof(wire_t) + data_length;
 	wire_t *wire = xcalloc(wire_length);
@@ -131,4 +165,30 @@ int decrypt_wire(wire_t *wire, size_t *len, const uint8_t *key)
 
 	aes128_decrypt(&ctxs[0], wire->type, data_length + BASE_DEC_LEN);
 	return WIRE_OK;
+}
+
+/**
+ * @brief Send data over wire
+ * 
+ * @param socket Socket to send on
+ * @param type wire type
+ * @param data data to be encrypted and sent
+ * @param length length of data
+ * @param key encryption key set
+ * @return int 
+ */
+int wire_send(sock_t socket, uint64_t type, void *data, size_t length, const uint8_t *key)
+{
+	size_t len = length;
+	wire_t *wire = init_wire(data, type, &len);
+	if (!wire) {
+		return -1;
+	}
+	encrypt_wire(wire, key);
+	if (xsendall(socket, wire, len) < 0) {
+		xfree(wire);
+		return -1;
+	}
+	xfree(wire);
+	return 0;
 }

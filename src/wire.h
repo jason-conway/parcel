@@ -14,21 +14,22 @@
 #include "aes128.h"
 #include "sha256.h"
 #include "xplatform.h"
+#include "xutils.h"
 
 typedef struct wire_t
 {
-	uint8_t mac[16];
-	uint8_t lac[16];
-	uint8_t iv[16];
-	uint8_t length[16];
-	uint8_t type[16];
-	uint8_t data[];
+	uint8_t mac[16];    // message authentication code for entire wire
+	uint8_t lac[16];    // message authentication code for wire length
+	uint8_t iv[16];     // initialization vector for AES context
+	uint8_t length[16]; // length of entire wire
+	uint8_t type[16];   // type of wire, see enum wire_type
+	uint8_t data[];     // wire data
 } wire_t;
 
 enum Wire
 {
-	KEY_LEN = 1 << 5,
-	BLOCK_LEN = 1 << 4,
+	KEY_LEN = 2 * AES_KEY_LEN,
+	BLOCK_LEN = AES_BLOCK_SIZE,
 	DATA_LEN_MAX = 1 << 20,
 	RECV_MAX_BYTES = sizeof(wire_t) + DATA_LEN_MAX,
 };
@@ -84,6 +85,12 @@ enum wire_type
 	TYPE_CTRL = 0x6374726c,
 };
 
+enum ctrl_function
+{
+	CTRL_EXIT = 0x65786974, // "exit"
+	CTRL_DHKE = 0x64686b65 // "dhke"
+};
+
 enum DecryptionStatus
 {
 	WIRE_OK,
@@ -92,14 +99,38 @@ enum DecryptionStatus
 	WIRE_PARTIAL,
 };
 
-wire_t *new_wire(void);
-wire_t *init_wire(uint8_t *data, uint64_t type, size_t *len);
-size_t encrypt_wire(wire_t *wire, const uint8_t *key);
+struct wire_ctrl_message
+{
+	uint8_t function[16];
+	uint8_t args[16];
+	uint8_t renewed_key[32];
+};
 
+struct wire_file_message
+{
+	char filename[64];
+	uint8_t filesize[16];
+	uint8_t filedata[];
+};
+
+wire_t *new_wire(void);
+wire_t *init_wire(void *data, uint64_t type, size_t *len);
+
+size_t encrypt_wire(wire_t *wire, const uint8_t *key);
 int decrypt_wire(wire_t *wire, size_t *len, const uint8_t *key);
 
 uint64_t wire_pack64(const uint8_t *src);
 uint64_t wire_get_raw(uint8_t *src);
 enum wire_type wire_get_type(wire_t *ctx);
-void wire_unpack64(uint8_t *dest, uint64_t src);
-void wire_set_raw(uint8_t *dest, uint64_t src);
+
+
+enum ctrl_function wire_get_ctrl_function(struct wire_ctrl_message *ctrl);
+void wire_set_ctrl_function(struct wire_ctrl_message *ctrl, enum ctrl_function function);
+
+uint64_t wire_get_ctrl_args(struct wire_ctrl_message *ctrl);
+void wire_set_ctrl_args(struct wire_ctrl_message *ctrl, uint64_t args);
+
+void wire_set_ctrl_renewal(struct wire_ctrl_message *ctrl, const uint8_t *renewed_key);
+
+void wire_unpack64(uint8_t *dst, uint64_t src);
+void wire_set_raw(uint8_t *dst, uint64_t src);
