@@ -40,14 +40,13 @@ int main(int argc, char **argv)
 	
 	char port[PORT_MAX_LENGTH] = "2315";
 	
-
 	client_t *client = xcalloc(sizeof(client_t));
 	if (!client) {
 		fatal("xmalloc()");
 	}
 
 	pthread_mutex_init(&client->mutex_lock, NULL);
-		
+
 	int option;
 	xgetopt_t x = { 0 };
 	while ((option = xgetopt(&x, argc, argv, "lha:p:u:")) != -1) {

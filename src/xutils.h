@@ -27,10 +27,10 @@ typedef enum ansi {
 	MAG
 } ansi;
 
-typedef struct http_request_t {
+typedef struct slice_t {
 	char *data;
-	size_t length;
-} http_request_t;
+	size_t len;
+} slice_t;
 
 enum HTTP {
 	RESPONSE_LENGTH = 4096
@@ -64,8 +64,7 @@ char *xstrdup(const char *str);
  */
 char *xstrcat(size_t count, ...);
 
-
-char *xbasename(char *path);
+void xbasename(const char *path, char *filename);
 
 bool xfexists(const char *filename);
 
@@ -93,8 +92,13 @@ bool xport_valid(char *arg);
 
 int xgetopt(xgetopt_t *x, int argc, char **argv, const char *optstr);
 
+slice_t *slice_append(slice_t *slice, const char *data, size_t len);
+char *_xprompt(const char *prompt, size_t *len);
 char *xprompt(const char *prompt_msg, const char *error_msg, size_t *len);
 
-void xgetline(char **message, size_t *message_length, FILE *stream);
+// void xgetline(char **message, size_t *message_length, FILE *stream);
 
 char *xgetpublicip(void);
+
+size_t xutoa(uint32_t value, char *str);
+void clear_screen(void);

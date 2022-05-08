@@ -11,6 +11,13 @@
 
 #pragma once
 
+#ifndef PARCEL_VERSION
+	#define PARCEL_VERSION 0.9.2
+#endif
+
+#define STR(a) XSTR(a)
+#define XSTR(a) #a
+
 #include <stdio.h>
 #include <stdint.h>
 #include <stddef.h>
@@ -26,6 +33,7 @@
 	#include <unistd.h>
 	#include <sys/stat.h>
 	#include <fcntl.h>
+	#include <sys/ioctl.h>
 	#include <termios.h>
 	#include <sys/socket.h>
 	#include <netinet/in.h>
@@ -33,7 +41,12 @@
 	#include <netdb.h>
 	#include <ifaddrs.h>
 	#include <dirent.h>
+	#include <termios.h>
+	#include <sys/time.h>
+	#include <poll.h>
+	
 	typedef int sock_t;
+	typedef struct termios console_t;
 #endif
 
 #if _WIN32
@@ -46,18 +59,17 @@
 	#include <ntsecapi.h>
 	#include <winbase.h>
 	#include <io.h>
+	#include <conio.h>
 	#ifdef _MSC_VER
 		#pragma comment(lib, "ws2_32.lib")
 		#pragma comment(lib, "advapi32")
 		#pragma comment(lib, "IPHLPAPI.lib")
 	#endif
 
-	#if __MINGW32__
-		// char *inet_ntop(int af, const void *src, char *dst, size_t size);
-	#endif
-
-	typedef unsigned short in_port_t;
+	typedef USHORT in_port_t;
 	typedef SOCKET sock_t;
+	typedef DWORD console_t;
+	typedef HANDLE fd_t;
 #endif
 
 void *xmalloc(size_t len);
@@ -91,3 +103,7 @@ int xgetlogin(char *username, size_t len);
 void xgetrandom(void *dest, size_t len);
 size_t xfilesize(const char *filename);
 char *xget_dir(char *file);
+
+size_t xwinsize(void);
+ssize_t xwrite(int fd, const void *data, size_t len);
+char xgetch(void);

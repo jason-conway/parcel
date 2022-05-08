@@ -82,12 +82,13 @@ static int cmd_send_file(char **message, size_t *message_length)
 		goto free_all;
 	}
 
+	char filename[FILE_NAME_LEN];
+	memset(filename, 0, sizeof(filename));
+	xbasename(file_path, filename);
 
-	char *path = xstrdup(file_path); // Copy since basename will mangle the original pointer
-	char *filename = xbasename(path);
 	const size_t filename_length = strnlen(filename, FILE_NAME_LEN - 1) + 1;
 	memcpy(file_contents->filename, filename, filename_length);
-	xfree(path);
+	
 	
 	// Now read in the file contents
 	if (fread(file_contents->filedata, 1, file_size, file) != file_size) {
@@ -121,14 +122,18 @@ void memprint(const void *src, size_t len)
 	}
 }
 
-static int cmd_print_enc_info(parcel_keys_t *keys)
+static void cmd_print_enc_info(parcel_keys_t *keys)
 {
 	printf("Session Key: ");
 	memprint(keys->session, KEY_LEN);
 	printf("\nControl Key: ");
 	memprint(keys->ctrl, KEY_LEN);
 	printf("\n");
-	return 0;
+}
+
+static void cmd_clear(void)
+{
+	clear_screen();
 }
 
 static inline int cmd_not_found(char *message)
@@ -159,22 +164,27 @@ static int cmd_list(void)
 		"  :x            exit the server and close parcel\n"
 		"  :username     change username\n"
 		"  :encinfo      display current encryption parameters\n"
-		"  :file         send a file\n";
-	printf("%s", list);
-	return 0;
+		"  :file         send a file\n"
+		"  :clear        clear the screen\n"
+		"  :version      print build version\n";
+	return !printf("%s", list);
+}
+
+static void cmd_version(void)
+{
+	puts("\033[1m" "parcel " STR(PARCEL_VERSION) "\033[0m");
 }
 
 static int cmd_ambiguous(void)
 {
 	xwarn("Ambiguous command entered\n");
-	cmd_list( );
-	return 0;
+	return cmd_list();
 }
 
 static enum command_id parse_command(char *command)
 {
 	static const char *command_strings[] = {
-		":list\n", ":x\n", ":username\n", ":encinfo\n", ":file\n"
+		":list", ":x", ":username", ":encinfo", ":file", ":clear", ":version"
 	};
 
 	const size_t commands = sizeof(command_strings) / sizeof(*command_strings);
@@ -214,11 +224,18 @@ int parse_input(client_t *ctx, enum command_id *cmd, char **message, size_t *mes
 			case CMD_USERNAME:
 				return cmd_username(ctx, message, message_length) ? -1 : SEND_TEXT;
 			case CMD_ENC_INFO:
-				return cmd_print_enc_info(&ctx->keys) ? -1 : SEND_NONE;
+				cmd_print_enc_info(&ctx->keys);
+				return SEND_NONE;
 			case CMD_FILE:
 				return cmd_send_file(message, message_length) ? -1 : SEND_FILE;
+			case CMD_CLEAR:
+				cmd_clear();
+				return SEND_NONE;
+			case CMD_VERSION:
+				cmd_version();
+				return SEND_NONE;
 			default:
-			return cmd_not_found(*message) ? -1 : SEND_NONE;
+				return cmd_not_found(*message) ? -1 : SEND_NONE;
 		}
 	}
 }

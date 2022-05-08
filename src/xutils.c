@@ -193,55 +193,17 @@ int xgetopt(xgetopt_t *x, int argc, char **argv, const char *optstr)
 	}
 }
 
-void xgetline(char **message, size_t *message_length, FILE *stream)
+slice_t *slice_append(slice_t *slice, const char *data, size_t len)
 {
-	size_t line_length = 64;
-	char *line = xmalloc(line_length);
-	if (!line) {
-		goto error;
+	char *new = xrealloc(slice->data, slice->len + len);
+	if (!new) {
+		return NULL;
 	}
 
-	size_t read_length = 0;
-	while (1) {
-		if (read_length == line_length - 2) {
-			line[read_length] = 0;
-			if (line_length * 2 < line_length) {
-				goto error;
-			}
-
-			// xrealloc frees original memory if reallocating fails
-			if (!(line = xrealloc(line, line_length *= 2))) {
-				goto error;
-				return;
-			}
-
-		}
-
-		int c = fgetc(stream);
-		if (c == EOF) {
-			goto eol;
-		}
-
-		line[read_length] = (char)c;
-		if (c == '\n') {
-		eol:
-			if (!read_length) {
-				xfree(line);
-				goto error;
-			}
-			line[read_length] = '\0';
-			break;
-		}
-		read_length++;
-	}
-
-	*message = line;
-	*message_length = read_length;
-	return;
-
-error:
-	*message = NULL;
-	*message_length = 0;
+	memcpy(new + slice->len, data, len);
+	slice->data = new;
+	slice->len += len;
+	return slice;
 }
 
 char *xprompt(const char *prompt_msg, const char *error_msg, size_t *len)
@@ -254,18 +216,17 @@ char *xprompt(const char *prompt_msg, const char *error_msg, size_t *len)
 		line_length = 0;
 
 		do {
-			printf("%s", prompt_msg);
-			fflush(stdout);
-			xgetline(&line, &line_length, stdin);
-		} while (!line_length);
+			line = _xprompt(prompt_msg, &line_length);
+		} while (line == NULL);
 
-		if (line_length > *len) {
+		if (*len && line_length > *len) {
 			xwarn("Maximum %s length is %zu bytes", error_msg, *len);
 			xfree(line);
 			continue;
 		}
 		break;
 	}
+	
 	*len = line_length;
 	return line;
 }
@@ -280,23 +241,23 @@ bool xfexists(const char *filename)
 	return false;
 }
 
-char *xbasename(char *path)
+/**
+ * @brief Return filename from path
+ * 
+ * @param path file path
+ * @return returns null-terminated string containing the file name
+ */
+void xbasename(const char *path, char *filename)
 {
-	if (!path || !*path) {
-		return ".";
+	char *base = strrchr(path, '/');
+	if (base) {
+		memcpy(filename, base + 1, strnlen(base + 1, FILENAME_MAX));
+		return;
 	}
-
-	size_t i = strlen(path) - 1;
-
-	for (; i && path[i] == '/'; i--) {
-		path[i] = '\0';
-	}
-	for (; i && path[i - 1] != '/'; i--) { };
-
-	return &path[i];
+	memcpy(filename, path, strnlen(path, FILENAME_MAX));
 }
 
-static int http_request(http_request_t *request)
+static int http_request(slice_t *request)
 {
 	struct addrinfo hints = {
 		.ai_family = AF_UNSPEC,
@@ -330,15 +291,15 @@ static int http_request(http_request_t *request)
 	}
 	
 	// Receive response
-	for (size_t i = 0; i < request->length;) {
+	for (size_t i = 0; i < request->len;) {
 		ssize_t bytes_recv = 0;
-		if ((bytes_recv = xrecv(http_socket, request->data + i, request->length - i, 0)) <= 0) {
+		if ((bytes_recv = xrecv(http_socket, request->data + i, request->len - i, 0)) <= 0) {
 			if (bytes_recv) {
 				(void)xclose(http_socket);
 				return -1;
 			}
 			(void)xclose(http_socket);
-			request->length = i;
+			request->len = i;
 			return 0;
 		}
 		else {
@@ -350,10 +311,10 @@ static int http_request(http_request_t *request)
 	return -1;
 }
 
-static int http_extract_body(http_request_t *request)
+static int http_extract_body(slice_t *request)
 {
 	char *pos_data = request->data;
-	for (size_t i = request->length;;) {
+	for (size_t i = request->len;;) {
 		char *pos_linefeed = memchr(pos_data, '\n', i); // Pointer to the next linefeed
 		if (!pos_linefeed) {
 			break; // No linefeeds left
@@ -365,14 +326,14 @@ static int http_extract_body(http_request_t *request)
 			case 1:
 				if (*pos_data == '\r') { // \r\n
 				reached_body:
-					request->length = (request->length - (pos_linefeed + 1 - request->data)) + 1; // Set to body length
+					request->len = (request->len - (pos_linefeed + 1 - request->data)) + 1; // Set to body length
 					request->data = pos_linefeed + 1; // Move to first body character
 					return 0;
 				}
 				// fallthrough
 			default:
 				pos_data = pos_linefeed + 1; // Move data pointer to the character after '\n'
-				i = request->length - (pos_data - request->data); // Update remaining length
+				i = request->len - (pos_data - request->data); // Update remaining length
 		}
 	}
 	return -1;
@@ -385,7 +346,7 @@ char *xgetpublicip(void)
 		return NULL;
 	}
 
-	http_request_t request = { http_response, RESPONSE_LENGTH };
+	slice_t request = { http_response, RESPONSE_LENGTH };
 
 	if (http_request(&request)) {
 		xfree(http_response);
@@ -397,12 +358,28 @@ char *xgetpublicip(void)
 		return NULL;
 	}
 
-	char *public_ip = xcalloc(request.length);
+	char *public_ip = xcalloc(request.len);
 	if (!public_ip) {
 		return NULL;
 	}
 
-	memcpy(public_ip, request.data, request.length);
+	memcpy(public_ip, request.data, request.len);
 	xfree(http_response);
 	return public_ip;
+}
+
+// Bare-minimum unsigned-int-to-string
+size_t xutoa(uint32_t value, char *str)
+{
+	char ascii[11];
+	char *digit;
+	
+	for (digit = &ascii[0]; value > 0; value /= 10) {
+		*digit++ = '0' + (char)(value % 10);
+	}
+	for (value = 0; digit != ascii;) {
+		*str++ = *--digit;
+		str[value++] = '\0';
+	}
+	return value;
 }

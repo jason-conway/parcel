@@ -30,6 +30,13 @@ static void disp_username(const char *username)
 	fflush(stdout);
 }
 
+static void format_prompt(const char *username, char *prompt)
+{
+	size_t username_length = strlen(username);
+	memcpy(prompt, username, username_length);
+	memcpy(&prompt[username_length], ": ", 3);
+}
+
 void memcpy_locked(pthread_mutex_t *lock, void *dest, void *src, size_t length)
 {
 	pthread_mutex_lock(lock);
@@ -68,15 +75,12 @@ int send_thread(void *ctx)
 	memcpy_locked(&client_ctx->mutex_lock, &client, client_ctx, sizeof(client_t));
 
 	while (1) {
-		char *plaintext = NULL;
+		
 		size_t length = 0;
 
-		// Don't send an empty message
-		do {
-			printf("%s: ", client.username);
-			fflush(stdout);
-			xgetline(&plaintext, &length, stdin);
-		} while (!length);
+		char prompt[USERNAME_MAX_LENGTH + 3];
+		format_prompt(client.username, prompt);
+		char *plaintext = xprompt(prompt, "text", &length);
 
 		if (!plaintext) {
 			error(client.socket, "xmalloc()");
@@ -205,7 +209,7 @@ void *recv_thread(void *ctx)
 				break;
 			case TYPE_TEXT:
 				proc_text(wire->data);
-				disp_username(client.username);
+				disp_username(client.username); // TODO: needed?
 				break;
 			default:
 				type_proc_error:

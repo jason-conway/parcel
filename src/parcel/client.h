@@ -38,12 +38,14 @@ enum ParcelConstants
 enum command_id
 {
 	CMD_AMBIGUOUS = -1,
-	CMD_NONE = 0,
+	CMD_NONE,
 	CMD_LIST,
 	CMD_EXIT,
 	CMD_USERNAME,
 	CMD_ENC_INFO,
 	CMD_FILE,
+	CMD_CLEAR,
+	CMD_VERSION,
 };
 
 enum SendType

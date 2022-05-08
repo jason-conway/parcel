@@ -77,12 +77,15 @@ int xstartup(void)
 #if __unix__ || __APPLE__
 	return 0; // As if
 #elif _WIN32
-	HANDLE stdout_handle = GetStdHandle(STD_OUTPUT_HANDLE);
 	DWORD mode;
-	if (GetConsoleMode(stdout_handle, &mode)) {
-		mode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
-		(void)SetConsoleMode(stdout_handle, mode);
+	if (!GetConsoleMode(GetStdHandle(STD_OUTPUT_HANDLE), &mode)) {
+		return -1;
 	}
+	mode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
+	if (!SetConsoleMode(GetStdHandle(STD_OUTPUT_HANDLE), mode)) {
+		return -1;
+	}
+
 	WSADATA wsaData;
 	if (WSAStartup(MAKEWORD(2, 2), &wsaData)) {
 		return -1;
@@ -352,7 +355,6 @@ char *xgethome(void)
 #elif _WIN32
 	char *home = getenv("HOMEPATH");
 	return !home ? NULL : home;
-	}
 #endif
 }
 
@@ -421,5 +423,43 @@ char *xget_dir(char *file)
 #elif _WIN32
 	xfree(path);
 	return xstrcat(4, home, parcel, files, file);
+#endif
+}
+
+ssize_t xwrite(int fd, const void *data, size_t len)
+{
+#if __unix__ || __APPLE__
+	return write(fd, data, len);
+#elif _WIN32
+	return (ssize_t)_write(fd, data, (unsigned int)len);
+#endif
+}
+
+char xgetch(void)
+{
+#if __unix__ || __APPLE__
+	char c;
+	return (read(STDIN_FILENO, &c, 1) == 1) ? c : 0;
+#elif _WIN32
+	char c;
+	return (_read(STDIN_FILENO, &c, 1) == 1) ? c : 0;
+#endif
+}
+
+size_t xwinsize(void)
+{
+#if __unix__ || __APPLE__
+	struct winsize w;
+	if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &w) < 0) {
+		return 0;
+	}
+	return w.ws_col;
+#elif _WIN32
+	CONSOLE_SCREEN_BUFFER_INFO info;
+	if (!GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &info)) {
+		return 0;
+	}
+
+	return (info.srWindow.Right - info.srWindow.Left + 1);
 #endif
 }
