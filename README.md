@@ -3,7 +3,7 @@
 # `parcel`: An ultra-lightweight, cross-platform, end-to-end encrypted, terminal-based group messaging application
 
 [![CodeFactor](https://www.codefactor.io/repository/github/jason-conway/parcel/badge)](https://www.codefactor.io/repository/github/jason-conway/parcel)
-
+[![goto counter](https://img.shields.io/github/search/jason-conway/parcel/goto.svg)](https://github.com/jason-conway/parcel/search?q=goto)
 ## Supported Platforms
 
 Linux, BSD, Darwin/macOS, Windows, and iOS (*kind of*)
