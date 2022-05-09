@@ -107,3 +107,10 @@ char *xget_dir(char *file);
 size_t xwinsize(void);
 ssize_t xwrite(int fd, const void *data, size_t len);
 char xgetch(void);
+
+enum console_mode
+{
+	CONSOLE_MODE_RAW,
+	CONSOLE_MODE_ORIG,
+};
+int xtcsetattr(console_t *orig, enum console_mode mode);

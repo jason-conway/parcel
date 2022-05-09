@@ -434,13 +434,10 @@ ssize_t xwrite(int fd, const void *data, size_t len)
 #elif _WIN32
  	(void)fd;
 	DWORD bytes_written = 0;
-
 	if (!WriteConsole(GetStdHandle(STD_OUTPUT_HANDLE), data, len, &bytes_written, NULL)) {
 		return -1;
 	}
-	// printf("wrote %zu bytes\n", (size_t)bytes_written);
 	return bytes_written;
-	// return (ssize_t)_write(fd, data, (unsigned int)len);
 #endif
 }
 
@@ -456,9 +453,6 @@ char xgetch(void)
 		return 0;
 	}
 	return (bytes_read == 1) ? c : 0;
-	// char c;
-	// return (_read(STDIN_FILENO, &c, 1) == 1) ? c : 0;
-	// return (char)_getch();
 #endif
 }
 
@@ -475,7 +469,56 @@ size_t xwinsize(void)
 	if (!GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &info)) {
 		return 0;
 	}
-	// printf("Columns: %zu\n", (size_t)info.srWindow.Right - info.srWindow.Left + 1);
 	return (info.srWindow.Right - info.srWindow.Left + 1);
+#endif
+}
+
+int xtcsetattr(console_t *orig, enum console_mode mode)
+{
+#if __unix__ || __APPLE__
+	console_t raw;
+	if (mode == CONSOLE_MODE_RAW) {
+		if (tcgetattr(STDIN_FILENO, orig) < 0) {
+			return -1;
+		}
+
+		memcpy(&raw, orig, sizeof(raw));
+
+		raw.c_iflag &= ~(BRKINT | ICRNL | INPCK | ISTRIP | IXON);
+		raw.c_lflag &= ~(ECHO | ICANON | IEXTEN);
+		raw.c_cflag |= CS8;
+		raw.c_cc[VMIN] = 1;
+		raw.c_cc[VTIME] = 0;
+	}
+	if (tcsetattr(STDIN_FILENO, TCSAFLUSH, (mode == CONSOLE_MODE_RAW) ? &raw : orig) < 0) {
+		return -1;
+	}
+	return 0;
+#elif _WIN32
+	console_t raw;
+	if (mode == CONSOLE_MODE_RAW) {
+		if (!GetConsoleMode(GetStdHandle(STD_INPUT_HANDLE), orig)) {
+			return -1;
+		}
+
+		memcpy(&raw, orig, sizeof(raw));
+		raw &= ~(ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT | ENABLE_PROCESSED_INPUT);
+		raw |= ENABLE_VIRTUAL_TERMINAL_INPUT;
+		// if (!SetConsoleMode(GetStdHandle(STD_INPUT_HANDLE), raw)) {
+		// 	return -1;
+		// }
+
+		DWORD mode;
+		if (GetConsoleMode(GetStdHandle(STD_OUTPUT_HANDLE), &mode)) {
+			mode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING | DISABLE_NEWLINE_AUTO_RETURN;
+			(void)SetConsoleMode(GetStdHandle(STD_OUTPUT_HANDLE), mode);
+		}
+	}
+	
+	if (!SetConsoleMode(GetStdHandle(STD_INPUT_HANDLE), (mode == CONSOLE_MODE_RAW) ? raw : *orig)) {
+		return -1;
+	}
+	return 0;
+
 #endif
 }
