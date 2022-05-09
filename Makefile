@@ -16,6 +16,11 @@ endif
 src_dir   = ./src/
 build_dir = ./build/
 
+ifeq ($(OS), Windows_NT)
+	res_dir   := ./etc/resources/
+	parcel_resources = $(res_dir)icon.res $(res_dir)parcel.res 
+endif
+
 parcel_dir = $(src_dir)parcel/
 parcel_source = $(src_dir)*.c $(parcel_dir)*.c
 parcel_all = $(src_dir)*.* $(parcel_dir)*.*
@@ -26,10 +31,11 @@ parceld_source = $(src_dir)*.c $(parceld_dir)*.c
 parceld_all = $(src_dir)*.* $(parceld_dir)*.*
 parceld_includes = -I$(src_dir) -I$(parceld_dir)
 
+
 all: parcel$(EXE) parceld$(EXE)
 
 parcel$(EXE): $(parcel_all)
-	$(CC) $(CFLAGS) $(parcel_includes) $(parcel_source) -o $(build_dir)$@ $(LDLIBS) $(LDFLAGS)
+	$(CC) $(CFLAGS) $(parcel_includes) $(parcel_source) $(parcel_resources) -o $(build_dir)$@ $(LDLIBS) $(LDFLAGS)
 
 parceld$(EXE): $(parceld_all)
 	$(CC) $(CFLAGS) $(parceld_includes) $(parceld_source) -o $(build_dir)$@ $(LDLIBS) $(LDFLAGS)
