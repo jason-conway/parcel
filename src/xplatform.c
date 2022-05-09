@@ -255,7 +255,7 @@ void xgetrandom(void *dest, size_t len)
 	}
 	(void)fclose(random); // Error checking when stream is RO?
 #elif _WIN32
-	if (!SystemFunction036(dest, len)) {
+	if (!RtlGenRandom(dest, len)) {
 		exit(EXIT_FAILURE);
 	}
 #endif
@@ -325,7 +325,8 @@ void *xrealloc(void *mem, size_t len)
 	}
 	return _mem;
 #elif _WIN32
-	void *_mem = HeapReAlloc(GetProcessHeap(), 0, mem, len);
+	// Act as malloc() when mem is null
+	void *_mem = (!mem) ? HeapAlloc(GetProcessHeap(), 0, len) : HeapReAlloc(GetProcessHeap(), 0, mem, len);
 	if (!_mem) {
 		xfree(mem);
 		return NULL;
@@ -431,7 +432,15 @@ ssize_t xwrite(int fd, const void *data, size_t len)
 #if __unix__ || __APPLE__
 	return write(fd, data, len);
 #elif _WIN32
-	return (ssize_t)_write(fd, data, (unsigned int)len);
+ 	(void)fd;
+	DWORD bytes_written = 0;
+
+	if (!WriteConsole(GetStdHandle(STD_OUTPUT_HANDLE), data, len, &bytes_written, NULL)) {
+		return -1;
+	}
+	// printf("wrote %zu bytes\n", (size_t)bytes_written);
+	return bytes_written;
+	// return (ssize_t)_write(fd, data, (unsigned int)len);
 #endif
 }
 
@@ -442,7 +451,14 @@ char xgetch(void)
 	return (read(STDIN_FILENO, &c, 1) == 1) ? c : 0;
 #elif _WIN32
 	char c;
-	return (_read(STDIN_FILENO, &c, 1) == 1) ? c : 0;
+	DWORD bytes_read;
+	if (!ReadConsole(GetStdHandle(STD_INPUT_HANDLE), &c, 1, &bytes_read, NULL)) {
+		return 0;
+	}
+	return (bytes_read == 1) ? c : 0;
+	// char c;
+	// return (_read(STDIN_FILENO, &c, 1) == 1) ? c : 0;
+	// return (char)_getch();
 #endif
 }
 
@@ -459,7 +475,7 @@ size_t xwinsize(void)
 	if (!GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &info)) {
 		return 0;
 	}
-
+	// printf("Columns: %zu\n", (size_t)info.srWindow.Right - info.srWindow.Left + 1);
 	return (info.srWindow.Right - info.srWindow.Left + 1);
 #endif
 }
