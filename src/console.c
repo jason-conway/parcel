@@ -53,66 +53,6 @@ enum cursor_direction
 	MOVE_END,
 };
 
-static int init_console(console_t *orig)
-{
-#if __unix__ || __APPLE__
-	if (tcgetattr(STDIN_FILENO, orig) < 0) {
-		return -1;
-	}
-
-	console_t raw;
-	memcpy(&raw, orig, sizeof(raw));
-
-	raw.c_iflag &= ~(BRKINT | ICRNL | INPCK | ISTRIP | IXON);
-	raw.c_lflag &= ~(ECHO | ICANON | IEXTEN);
-	raw.c_cflag |= CS8;
-	raw.c_cc[VMIN] = 1;
-	raw.c_cc[VTIME] = 0;
-
-	if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw) < 0) {
-		return -1;
-	}
-
-	return 0;
-#elif _WIN32
-	HANDLE _stdin = GetStdHandle(STD_INPUT_HANDLE);
-	if (!GetConsoleMode(_stdin, orig)) {
-		return -1;
-	}
-
-	console_t raw;
-	memcpy(&raw, orig, sizeof(raw));
-	// raw |= ENABLE_VIRTUAL_TERMINAL_INPUT;// | ENABLE_ECHO_INPUT | ENABLE_PROCESSED_INPUT);
-//	~(ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT | ENABLE_PROCESSED_INPUT)
-	if (!SetConsoleMode(_stdin, raw | ENABLE_VIRTUAL_TERMINAL_INPUT)) {
-		return -1;
-	}
-
-	DWORD mode;
-	if (GetConsoleMode(GetStdHandle(STD_OUTPUT_HANDLE), &mode)) {
-		mode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING | DISABLE_NEWLINE_AUTO_RETURN;
-		(void)SetConsoleMode(GetStdHandle(STD_OUTPUT_HANDLE), mode);
-	}
-	
-	return 0;
-#endif
-}
-
-static int restore_console(console_t *orig)
-{
-#if __unix__ || __APPLE__
-	if (tcsetattr(STDIN_FILENO, TCSAFLUSH, orig) < 0) {
-		return -1;
-	}
-	return 0;
-#elif _WIN32
-	HANDLE _stdin = GetStdHandle(STD_INPUT_HANDLE);
-	if (!SetConsoleMode(_stdin, *orig)) {
-		return -1;
-	}
-	return 0;
-#endif
-}
 
 void clear_screen(void)
 {
@@ -305,22 +245,22 @@ static ssize_t xgetline(char *line, const char *prompt)
 					case '[':
 						// printf("[\n");
 						switch (seq[1]) {
-							case 'C':
-								update_cursor_pos(&ctx, MOVE_RIGHT);
-								break;
 							case 'D':
 								update_cursor_pos(&ctx, MOVE_LEFT);
 								break;
-							case '3':
-								if (xgetch() == '~') {
-									delete_char(&ctx, true);
-								}
+							case 'C':
+								update_cursor_pos(&ctx, MOVE_RIGHT);
 								break;
 							case 'H':
 								update_cursor_pos(&ctx, MOVE_HOME);
 								break;
 							case 'F':
 								update_cursor_pos(&ctx, MOVE_END);
+								break;
+							case '3':
+								if (xgetch() == '~') {
+									delete_char(&ctx, true);
+								}
 								break;
 							default:
 								break;
@@ -344,7 +284,7 @@ static ssize_t xgetline(char *line, const char *prompt)
 char *_xprompt(const char *prompt, size_t *len)
 {
 	console_t orig;
-	if (init_console(&orig) < 0) {
+	if (xtcsetattr(&orig, CONSOLE_MODE_RAW)) {
 		return NULL;
 	}
 
@@ -358,7 +298,7 @@ char *_xprompt(const char *prompt, size_t *len)
 
 	ssize_t line_length = xgetline(line, prompt);
 	
-	if (restore_console(&orig)) {
+	if (xtcsetattr(&orig, CONSOLE_MODE_ORIG)) {
 		return NULL;
 	}
 
