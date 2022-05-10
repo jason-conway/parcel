@@ -47,16 +47,18 @@ enum KeyCodes
 
 enum cursor_direction
 {
-	MOVE_LEFT,
+	MOVE_UP,
+	MOVE_DOWN,
 	MOVE_RIGHT,
+	MOVE_LEFT,
 	MOVE_HOME,
-	MOVE_END,
+	MOVE_END
 };
 
 
 void clear_screen(void)
 {
-	printf("%s", "\033[H\033[2J");
+	(void)xwrite(STDOUT_FILENO, "\033[H\033[2J", 7);
 	fflush(stdout);
 }
 
@@ -73,7 +75,7 @@ bool set_title(void)
 
 static void flash_screen(void)
 {
-	printf("%c", BEL);
+	(void)xwrite(STDOUT_FILENO, "\a", 1);
 	fflush(stdout);
 }
 
@@ -84,21 +86,26 @@ static void update_row_count(line_t *ctx, size_t rows)
 	}
 }
 
+static void move_cursor_pos(slice_t *seq, enum cursor_direction direction, unsigned int distance)
+{
+	char ascii[11] = { 0 };
+	const size_t len = xutoa(distance, ascii);
+	const char esc_code[2] = {'A' + (char)direction };
+
+	slice_append(seq, "\033[", 2);
+	slice_append(seq, ascii, len);
+	slice_append(seq, esc_code, 1);
+}
+
 static void flush_console(line_t *ctx)
 {
-	// printf("flush:\n");
-	char ascii[11] = { 0 };
 	slice_t esc_seq = { NULL, 0 };
 
 	size_t rows = (ctx->prompt_len + ctx->line_len + ctx->console_width - 1) / ctx->console_width;
 	update_row_count(ctx, rows);
-	// printf("row: %zu\n", rows);
-	size_t cursor_row = ctx->cursor.row - ((ctx->prompt_len + ctx->cursor._column + ctx->console_width) / ctx->console_width);
-	if (cursor_row) {
-		slice_append(&esc_seq, "\033[", 2);
-		size_t len = xutoa(cursor_row, ascii);
-		slice_append(&esc_seq, ascii, len);
-		slice_append(&esc_seq, "B", 1);
+	const size_t cursor_rows = ctx->cursor.row - ((ctx->prompt_len + ctx->cursor._column + ctx->console_width) / ctx->console_width);
+	if (cursor_rows) {
+		move_cursor_pos(&esc_seq, MOVE_DOWN, cursor_rows);
 	}
 
 	for (size_t i = 0; i < ctx->cursor.row - 1; i++) {
@@ -111,8 +118,8 @@ static void flush_console(line_t *ctx)
 	slice_append(&esc_seq, ctx->line, ctx->line_len);
 
 	const bool eol = (ctx->cursor.column && ctx->cursor.column == ctx->line_len);
-	size_t column = (ctx->prompt_len + ctx->cursor.column) % ctx->console_width;
-	if (eol && !column) {
+	const size_t columns = (ctx->prompt_len + ctx->cursor.column) % ctx->console_width;
+	if (eol && !columns) {
 		slice_append(&esc_seq, "\n\r", 2);
 		rows++;
 		update_row_count(ctx, rows);
@@ -120,22 +127,15 @@ static void flush_console(line_t *ctx)
 
 	// Move cursor to correct row (when applicable)
 	if ((rows -= ((ctx->prompt_len + ctx->cursor.column + ctx->console_width) / ctx->console_width))) {
-		// Rows was non-zero
-		slice_append(&esc_seq, "\033[", 2);
-		size_t len = xutoa(rows, ascii);
-		slice_append(&esc_seq, ascii, len);
-		slice_append(&esc_seq, "A", 1);
+		move_cursor_pos(&esc_seq, MOVE_UP, rows);
 	}
 	
 	// Move to left-hand side
 	slice_append(&esc_seq, "\r", 1);
 	
 	// Slide to correct column position
-	if (column) {
-		slice_append(&esc_seq, "\033[", 2);
-		size_t len = xutoa(column, ascii);
-		slice_append(&esc_seq, ascii, len);
-		slice_append(&esc_seq, "C", 1);
+	if (columns) {
+		move_cursor_pos(&esc_seq, MOVE_RIGHT, columns);
 	}
 
 	ctx->cursor._column = ctx->cursor.column;
@@ -167,6 +167,9 @@ static bool insert_char(line_t *ctx, char c)
 static void update_cursor_pos(line_t *ctx, enum cursor_direction direction)
 {
 	switch (direction) {
+		case MOVE_UP: // TODO
+		case MOVE_DOWN:
+			break;
 		case MOVE_LEFT:
 			ctx->cursor.column -= (ctx->cursor.column > 0) ? 1 : 0;
 			break;
@@ -206,7 +209,7 @@ static size_t ansi_code_strlen(const char *str)
 {
 	size_t len = 0;
 	for (size_t i = 0; str[i]; i++) {
-		if (str[i] == 27) {
+		if (str[i] == ESC) {
 			for (; str[i] != 'm'; i++) { };
 		}
 		len++;
@@ -239,11 +242,9 @@ static ssize_t xgetline(char *line, const char *prompt)
 				flash_screen();
 				break;
 			case ESC: {
-				// printf("esc\n");
 				const char seq[2] = { xgetch(), xgetch() };
 				switch (seq[0]) {
 					case '[':
-						// printf("[\n");
 						switch (seq[1]) {
 							case 'D':
 								update_cursor_pos(&ctx, MOVE_LEFT);
@@ -293,18 +294,27 @@ char *_xprompt(const char *prompt, size_t *len)
 		return NULL;
 	}
 	
-	printf("%s", prompt);
+	const ssize_t prompt_len = strlen(prompt);
+	if (xwrite(STDOUT_FILENO, prompt, prompt_len) != prompt_len) {
+		xfree(line);
+		return NULL;
+	}
 	fflush(stdout);
 
 	ssize_t line_length = xgetline(line, prompt);
 	
 	if (xtcsetattr(&orig, CONSOLE_MODE_ORIG)) {
+		xfree(line);
 		return NULL;
 	}
 
-	(void)fputc('\n', stdout);
+	if (xwrite(STDOUT_FILENO, "\n", 1) != 1) {
+		xfree(line);
+		return NULL;
+	}
 
 	if (line_length < 0) {
+		xfree(line);
 		return NULL;
 	}
 	*len = line_length;
