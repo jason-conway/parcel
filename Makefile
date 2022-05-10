@@ -17,8 +17,10 @@ src_dir   = ./src/
 build_dir = ./build/
 
 ifeq ($(OS), Windows_NT)
-	res_dir   := ./etc/resources/
-	parcel_resources = $(res_dir)icon.res $(res_dir)parcel.res 
+	WINDRES = windres.exe
+	res_dir = ./etc/resources/
+	parcel_res = $(build_dir)parcel.res
+	parceld_res = $(build_dir)parceld.res
 endif
 
 parcel_dir = $(src_dir)parcel/
@@ -31,14 +33,17 @@ parceld_source = $(src_dir)*.c $(parceld_dir)*.c
 parceld_all = $(src_dir)*.* $(parceld_dir)*.*
 parceld_includes = -I$(src_dir) -I$(parceld_dir)
 
-
 all: parcel$(EXE) parceld$(EXE)
 
+resources: $(parcel_resources) $(parceld_resources)
+	$(WINDRES) $(res_dir)parcel.rc -O coff -o $(build_dir)parcel.res
+	$(WINDRES) $(res_dir)parceld.rc -O coff -o $(build_dir)parceld.res
+
 parcel$(EXE): $(parcel_all)
-	$(CC) $(CFLAGS) $(parcel_includes) $(parcel_source) $(parcel_resources) -o $(build_dir)$@ $(LDLIBS) $(LDFLAGS)
+	$(CC) $(CFLAGS) $(parcel_includes) $(parcel_source) $(parcel_res) -o $(build_dir)$@ $(LDLIBS) $(LDFLAGS)
 
 parceld$(EXE): $(parceld_all)
-	$(CC) $(CFLAGS) $(parceld_includes) $(parceld_source) -o $(build_dir)$@ $(LDLIBS) $(LDFLAGS)
+	$(CC) $(CFLAGS) $(parceld_includes) $(parceld_source) $(parceld_res) -o $(build_dir)$@ $(LDLIBS) $(LDFLAGS)
 
 install: parcel parceld
 	mkdir -p $(PREFIX)/parcel/
