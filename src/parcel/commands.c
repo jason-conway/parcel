@@ -46,6 +46,7 @@ static int cmd_username(client_t *ctx, char **message, size_t *message_length)
 	return 0;
 }
 
+// TODO: This should not be fatal
 static int cmd_send_file(char **message, size_t *message_length)
 {
 	size_t path_length = FILE_PATH_MAX_LENGTH;
@@ -156,6 +157,7 @@ int cmd_exit(client_t *ctx, char **message, size_t *message_length)
 	return 0;
 }
 
+// TODO: update
 static int cmd_list(void)
 {
 	static const char list[] =
