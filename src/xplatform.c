@@ -320,7 +320,7 @@ void *xrealloc(void *mem, size_t len)
 #if __unix__ || __APPLE__
 	void *_mem = realloc(mem, len);
 	if (!_mem) {
-		xfree(mem);
+		free(mem);
 		return NULL;
 	}
 	return _mem;
@@ -328,7 +328,7 @@ void *xrealloc(void *mem, size_t len)
 	// Act as malloc() when mem is null
 	void *_mem = (!mem) ? HeapAlloc(GetProcessHeap(), 0, len) : HeapReAlloc(GetProcessHeap(), 0, mem, len);
 	if (!_mem) {
-		xfree(mem);
+		(void)HeapFree(GetProcessHeap(), 0, mem);
 		return NULL;
 	}
 	return _mem;
@@ -343,6 +343,10 @@ void xfree(void *mem)
 	(void)HeapFree(GetProcessHeap(), 0, mem);
 #endif
 }
+
+/**
+ * @section unistd / win32 wrappers and portable implementations
+ */
 
 // TODO: needs testing
 char *xgethome(void)
@@ -427,6 +431,10 @@ char *xget_dir(char *file)
 #endif
 }
 
+/**
+ * @section Terminal / console wrappers
+ */
+
 ssize_t xwrite(int fd, const void *data, size_t len)
 {
 #if __unix__ || __APPLE__
@@ -473,7 +481,7 @@ size_t xwinsize(void)
 #endif
 }
 
-int xtcsetattr(console_t *orig, enum console_mode mode)
+int xtcsetattr(console_t *orig, enum xconsole_mode mode)
 {
 #if __unix__ || __APPLE__
 	console_t raw;
@@ -484,7 +492,7 @@ int xtcsetattr(console_t *orig, enum console_mode mode)
 
 		memcpy(&raw, orig, sizeof(raw));
 
-		raw.c_iflag &= ~(BRKINT | ICRNL | INPCK | ISTRIP | IXON);
+		raw.c_iflag &= ~(IXON | BRKINT | ISTRIP | ICRNL | INPCK);
 		raw.c_lflag &= ~(ECHO | ICANON | IEXTEN);
 		raw.c_cflag |= CS8;
 		raw.c_cc[VMIN] = 1;
@@ -504,14 +512,14 @@ int xtcsetattr(console_t *orig, enum console_mode mode)
 		memcpy(&raw, orig, sizeof(raw));
 		raw &= ~(ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT | ENABLE_PROCESSED_INPUT);
 		raw |= ENABLE_VIRTUAL_TERMINAL_INPUT;
-		// if (!SetConsoleMode(GetStdHandle(STD_INPUT_HANDLE), raw)) {
-		// 	return -1;
-		// }
+	
 
-		DWORD mode;
-		if (GetConsoleMode(GetStdHandle(STD_OUTPUT_HANDLE), &mode)) {
+		DWORD output_mode;
+		if (GetConsoleMode(GetStdHandle(STD_OUTPUT_HANDLE), &output_mode)) {
 			mode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING | DISABLE_NEWLINE_AUTO_RETURN;
-			(void)SetConsoleMode(GetStdHandle(STD_OUTPUT_HANDLE), mode);
+			if (!SetConsoleMode(GetStdHandle(STD_OUTPUT_HANDLE), output_mode)) {
+				return -1;
+			}
 		}
 	}
 	

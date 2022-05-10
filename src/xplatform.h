@@ -108,9 +108,9 @@ size_t xwinsize(void);
 ssize_t xwrite(int fd, const void *data, size_t len);
 char xgetch(void);
 
-enum console_mode
+enum xconsole_mode
 {
 	CONSOLE_MODE_RAW,
 	CONSOLE_MODE_ORIG,
 };
-int xtcsetattr(console_t *orig, enum console_mode mode);
+int xtcsetattr(console_t *orig, enum xconsole_mode mode);
