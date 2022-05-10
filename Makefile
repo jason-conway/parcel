@@ -35,9 +35,9 @@ parceld_includes = -I$(src_dir) -I$(parceld_dir)
 
 all: parcel$(EXE) parceld$(EXE)
 
-resources: $(parcel_resources) $(parceld_resources)
-	$(WINDRES) $(res_dir)parcel.rc -O coff -o $(build_dir)parcel.res
-	$(WINDRES) $(res_dir)parceld.rc -O coff -o $(build_dir)parceld.res
+resources:
+	$(WINDRES) $(res_dir)parcel.rc -O coff -o $(parcel_res)
+	$(WINDRES) $(res_dir)parceld.rc -O coff -o $(parceld_res)
 
 parcel$(EXE): $(parcel_all)
 	$(CC) $(CFLAGS) $(parcel_includes) $(parcel_source) $(parcel_res) -o $(build_dir)$@ $(LDLIBS) $(LDFLAGS)
