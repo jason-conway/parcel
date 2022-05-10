@@ -1,4 +1,4 @@
-1 ICON "parcel.ico"
+1 ICON "parceld.ico"
 1 VERSIONINFO
 FILEVERSION     0,9,2,1
 PRODUCTVERSION  0,9,2,1
@@ -8,11 +8,11 @@ BEGIN
     BLOCK "040904E4"
     BEGIN
       VALUE "CompanyName", "jasonconway.dev"
-      VALUE "FileDescription", "Parcel Client"
+      VALUE "FileDescription", "Parcel Daemon"
       VALUE "FileVersion", "0.9.2.1"
-      VALUE "InternalName", "parcel"
+      VALUE "InternalName", "parceld"
       VALUE "LegalCopyright", "Jason Conway"
-      VALUE "ProductName", "Parcel"
+      VALUE "ProductName", "Parceld"
       VALUE "ProductVersion", "0.9.2.1"
     END
   END
