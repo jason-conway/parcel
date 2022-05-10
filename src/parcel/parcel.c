@@ -26,8 +26,7 @@ static void usage(FILE *f)
 		"  -p PORT  server port (3724, 9216)\n"
 		"  -u NAME  username displayed alongside sent messages\n"
 		"  -l       use computer login as username\n"
-		"  -h       print this usage information\n"
-		"  -d       enable debug mode (verbose)\n";
+		"  -h       print this usage information\n";
 	fprintf(f, "%s", usage);
 }
 
@@ -73,9 +72,6 @@ int main(int argc, char **argv)
 				if (xgetlogin(client->username, USERNAME_MAX_LENGTH)) {
 					fatal("unable to determine login name");
 				}
-				break;
-			case 'd':
-				printf("> Option 'd' is not implemented yet\n");
 				break;
 			case 'h':
 				usage(stdout);
