@@ -44,11 +44,16 @@ Alternatively, download [prebuilt binaries](https://github.com/jason-conway/parc
 
 Print usage information with `-h`:
 
-    usage: parcel [-a ADDR] [-p PORT] [-u NAME]
+    usage: parcel [-lhd] [-a ADDR] [-p PORT] [-u NAME]
       -a ADDR  server address (www.example.com, 111.222.333.444)
-      -p PORT  server port (3724, 9216)
+      -p PORT  server port (default: 2315)
       -u NAME  username displayed alongside sent messages
+      -l       use computer login as username
       -h       print this usage information
+
+If the target server is on the default port, then the only required arguments are server address and username. Passing the flag `-l` on launch sets the username as the computer login.
+
+If a required argument is not provided, then it is prompted at startup.
 
 ## Security
 
@@ -91,6 +96,13 @@ All commands start with a colon followed by the command itself.
 | `:username` | Change username                         |
 | `:encinfo`  | Display active session and control keys |
 | `:file`     | Send a file                             |
+| `:clear`    | Clear the screen                        |
+| `:version`  | Display application version             |
+
+Commands can be parsed once enough has been typed to become unambiguous, i.e., the username command can be entered as `:u`, clear can be `:c`, etcetera.
+
+Commands are interactive only, no need to supply arguments.
+
 
 ## Wire Format
 
