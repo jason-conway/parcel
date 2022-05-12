@@ -2,7 +2,10 @@
  * @file console.c
  * @author Jason Conway (jpc@jasonconway.dev)
  * @brief Cross-platform console IO (thanks a lot, Terminal.app)
- * @version 0.9.1
+ * @ref https://www.asciitable.com/
+ * @ref https://gist.github.com/fnky/458719343aabd01cfb17a3a4f7296797
+ * @ref https://en.wikipedia.org/wiki/ANSI_escape_code
+ * @version 0.9.2
  * @date 2022-05-02
  * 
  * @copyright Copyright (c) 2022 Jason Conway. All rights reserved.
