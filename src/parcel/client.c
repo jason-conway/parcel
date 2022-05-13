@@ -177,20 +177,20 @@ void *recv_thread(void *ctx)
 			case WIRE_INVALID_KEY:
 				if (decrypt_wire(wire, &length, client.keys.ctrl)) {
 					xfree(wire);
-					fatal("decrypt_wire()");
+					fatal("> Recveived corrupted control key from server\n");
 				}
 				break;
 			case WIRE_PARTIAL:
-				xlog("wire is partial, continue receiving\n");
+				xwarn("> wire is partial, continue receiving\n");
 				if (recv_remaining(&client, wire, bytes_recv, length)) {
 					xfree(wire);
 					fatal("recv_remaining()");
 				}
-				xlog("received remainder of wire\n");
+				xwarn("> received remainder of wire\n");
 				break;
 			case WIRE_CMAC_ERROR:
-				xfree(wire);
-				fatal("decrypt_wire()");
+				xwarn("> CMAC error\n");
+				goto recv_error;
 			case WIRE_OK:
 				break;
 		}
@@ -217,8 +217,8 @@ void *recv_thread(void *ctx)
 					fatal("proc_ctrl()");
 		}
 
+	recv_error:
 		xfree(wire);
-
 		struct timespec ts = { .tv_nsec = 1000000 };
 		(void)nanosleep(&ts, NULL);
 	}

@@ -53,19 +53,19 @@ static int cmd_send_file(char **message, size_t *message_length)
 	char *file_path = xprompt("> File path: ", "path", &path_length);
 
 	if (!xfexists(file_path)) {
-		xwarn("File \"%s\" not found\n", file_path);
+		xwarn("> File \"%s\" not found\n", file_path);
 		goto free_path;
 	}
 
 	size_t file_size = xfilesize(file_path);
 	if (!file_size) {
-		xwarn("Unable to determine size of file \"%s\"\n", file_path);
+		xwarn("> Unable to determine size of file \"%s\"\n", file_path);
 		goto free_path;
 	}
 
 	if (file_size > FILE_DATA_MAX_SIZE) {
 		const size_t overage = file_size - FILE_DATA_MAX_SIZE;
-		xwarn("File \"%s\" is %zu bytes over the maximum size of %d bytes\n", file_path, overage, FILE_DATA_MAX_SIZE);
+		xwarn("> File \"%s\" is %zu bytes over the maximum size of %d bytes\n", file_path, overage, FILE_DATA_MAX_SIZE);
 		goto free_path;
 	}
 
@@ -79,7 +79,7 @@ static int cmd_send_file(char **message, size_t *message_length)
 	
 	FILE *file = fopen(file_path, "rb");
 	if (!file) {
-		xwarn("Could not open file \"%s\" for reading\n", file_path);
+		xwarn("> Could not open file \"%s\" for reading\n", file_path);
 		goto free_all;
 	}
 
@@ -93,7 +93,7 @@ static int cmd_send_file(char **message, size_t *message_length)
 	
 	// Now read in the file contents
 	if (fread(file_contents->filedata, 1, file_size, file) != file_size) {
-		xwarn("Error reading contents of file\n");
+		xwarn("> Error reading contents of file\n");
 		(void)fclose(file);
 		goto free_all;
 	}
@@ -229,7 +229,7 @@ int parse_input(client_t *ctx, enum command_id *cmd, char **message, size_t *mes
 				cmd_print_enc_info(&ctx->keys);
 				return SEND_NONE;
 			case CMD_FILE:
-				return cmd_send_file(message, message_length) ? -1 : SEND_FILE;
+				return cmd_send_file(message, message_length) ? SEND_NONE : SEND_FILE;
 			case CMD_CLEAR:
 				cmd_clear();
 				return SEND_NONE;
