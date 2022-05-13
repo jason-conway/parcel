@@ -513,10 +513,9 @@ int xtcsetattr(console_t *orig, enum xconsole_mode mode)
 		raw &= ~(ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT | ENABLE_PROCESSED_INPUT);
 		raw |= ENABLE_VIRTUAL_TERMINAL_INPUT;
 	
-
 		DWORD output_mode;
 		if (GetConsoleMode(GetStdHandle(STD_OUTPUT_HANDLE), &output_mode)) {
-			mode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING | DISABLE_NEWLINE_AUTO_RETURN;
+			output_mode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
 			if (!SetConsoleMode(GetStdHandle(STD_OUTPUT_HANDLE), output_mode)) {
 				return -1;
 			}
