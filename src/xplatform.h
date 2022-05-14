@@ -69,13 +69,41 @@
 	typedef USHORT in_port_t;
 	typedef SOCKET sock_t;
 	typedef DWORD console_t;
-	typedef HANDLE fd_t;
 #endif
 
+/**
+ * @brief Platform-specific malloc(3)
+ * 
+ * @param len bytes to be allocated
+ * @return pointer to allocated memory
+ */
 void *xmalloc(size_t len);
+
+/**
+ * @brief Platform-specific calloc(3)-like
+ * 
+ * @param len bytes to be allocated
+ * @return pointer to allocated and zeroed memory
+ */
 void *xcalloc(size_t len);
+
+/**
+ * @brief Platform-specific realloc(3)
+ * 
+ * @param[in] mem pointer to previous allocation or NULL
+ * @param[in] len bytes to be allocated
+ * @return pointer to allocation
+ */
 void *xrealloc(void *mem, size_t len);
-void xfree(void *mem);
+
+/**
+ * @brief Frees allocations created via xmalloc, xcalloc, or xrealloc
+ * 
+ * @param[inout] mem pointer to allocation, set NULL after freeing
+ * @return returns NULL to allow for return chaining
+ */
+void *xfree(void *mem);
+
 
 int xsocket(sock_t *xsocket, int domain, int type, int protocol);
 int xaccept(sock_t *connection_socket, sock_t listening_socket, struct sockaddr *address, socklen_t *len);
