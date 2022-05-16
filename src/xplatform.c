@@ -437,6 +437,24 @@ char *xget_dir(char *file)
  * @section Terminal / console wrappers
  */
 
+__attribute__((constructor))
+void xinitconsole(void)
+{
+#if __unix__ || __APPLE__
+	return;
+#elif _WIN32
+	_setmode(0, _O_BINARY);
+	_setmode(1, _O_BINARY);
+	SetConsoleOutputCP(CP_UTF8);
+
+	DWORD output_mode;
+	if (GetConsoleMode(GetStdHandle(STD_OUTPUT_HANDLE), &output_mode)) {
+		output_mode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
+	}
+	(void)SetConsoleMode(GetStdHandle(STD_OUTPUT_HANDLE), output_mode))
+#endif
+}
+
 ssize_t xwrite(int fd, const void *data, size_t len)
 {
 #if __unix__ || __APPLE__
