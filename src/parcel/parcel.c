@@ -18,6 +18,24 @@ static void catch_sigint(int sig)
 	exit(EXIT_FAILURE);
 }
 
+static void splash(void)
+{
+	static const char logo[] = {
+		"⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣀⡀⠀⠀⠀\n"
+		"⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣿⣿⡇⠀⠀⠀\n"
+		"⠀⠀⠀⣀⣤⣤⣤⣤⣤⣤⣀⠀⠀⠀⠀⣤⣤⣤⣤⣤⣤⡀⠀⠀⠀⢀⣤⣤⣤⣤⣤⣤⠀⠀⣀⣤⣤⣤⣤⣤⣤⣄⠀⠀⣀⣤⣤⣤⣤⣤⣤⣀⠀⠀⣿⣿⡇⠀⠀⠀\n"
+		"⠀⠀⣼⣿⡟⠛⠛⠛⠛⢻⣿⣧⠀⠀⠀⠛⠛⠛⠛⠛⢻⣿⡆⠀⢰⣿⡟⠛⠛⠛⠛⠛⠀⣼⣿⡟⠛⠛⠛⠛⠛⠛⠀⢰⣿⡟⠛⠛⠛⠛⠻⣿⣧⠀⣿⣿⡇⠀⠀⠀\n"
+		"⠀⠀⣿⣿⡇⠀⠀⠀⠀⢸⣿⣿⠀⣰⣾⣿⠿⠿⠿⡇⢸⣿⡇⠀⢸⣿⡇⠀⠀⠀⠀⠀⠀⣿⣿⡇⠀⠀⠀⠀⠀⠀⠀⢸⣿⡇⣴⣶⣶⣶⣾⣿⠏⠀⣿⣿⡇⠀⠀⠀\n"
+		"⠀⠀⣿⣿⡇⣀⣀⣀⣀⣸⣿⡟⠀⣿⣿⣄⣀⣀⣀⣀⣼⣿⡇⠀⢸⣿⡇⠀⠀⠀⠀⠀⠀⢿⣿⣇⣀⣀⣀⣀⣀⣀⠀⢸⣿⣇⣉⣉⣉⣉⠉⠁⠀⠀⢻⣿⣧⣀⠀⠀\n"
+		"⠀⠀⣿⣿⡇⠿⠿⠿⠿⠟⠋⠀⠀⠈⠛⠿⠿⠿⠿⠿⠟⠋⠀⠀⠸⠿⠇⠀⠀⠀⠀⠀⠀⠈⠙⠻⠿⠿⠿⠿⠿⠟⠀⠀⠙⠻⠿⠿⠿⠿⠀⠀⠀⠀⠀⠙⠻⠿⠀⠀\n"
+		"⠀⠀⣿⣿⠇⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀\n"
+		"⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀"
+	};
+
+	xprintf(BLU, "%s", logo);
+	(void)fputc('\n', stdout);
+}
+
 static void usage(FILE *f)
 {
 	static const char usage[] =
@@ -33,6 +51,7 @@ static void usage(FILE *f)
 int main(int argc, char **argv)
 {
 	signal(SIGINT, catch_sigint);
+	splash();
 
 	char address[ADDRESS_MAX_LENGTH];
 	memset(address, 0, ADDRESS_MAX_LENGTH);
@@ -81,6 +100,7 @@ int main(int argc, char **argv)
 				exit(EXIT_FAILURE);
 		}
 	}
+	
 	if (argc < 5) {
 		prompt_args(address, client->username);
 	}

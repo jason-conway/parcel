@@ -150,8 +150,7 @@ wire_t *recv_new_wire(sock_t socket, size_t *wire_size)
 
 	const ssize_t bytes_recv = xrecv(socket, wire, DATA_LEN_MAX, 0);
 	if (bytes_recv < 0) {
-		xfree(wire);
-		return NULL;
+		return xfree(wire);
 	}
 	*wire_size = bytes_recv;
 	return wire;
