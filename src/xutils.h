@@ -24,7 +24,9 @@ typedef enum ansi {
 	RED,
 	GRN,
 	YEL,
-	MAG
+	BLU,
+	MAG,
+	CYA
 } ansi;
 
 typedef struct slice_t {
