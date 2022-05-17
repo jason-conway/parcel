@@ -59,6 +59,7 @@
 	#include <ntsecapi.h>
 	#include <winbase.h>
 	#include <io.h>
+	#include <fcntl.h>
 	#include <conio.h>
 	#ifdef _MSC_VER
 		#pragma comment(lib, "ws2_32.lib")

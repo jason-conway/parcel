@@ -451,7 +451,7 @@ void xinitconsole(void)
 	if (GetConsoleMode(GetStdHandle(STD_OUTPUT_HANDLE), &output_mode)) {
 		output_mode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
 	}
-	(void)SetConsoleMode(GetStdHandle(STD_OUTPUT_HANDLE), output_mode))
+	(void)SetConsoleMode(GetStdHandle(STD_OUTPUT_HANDLE), output_mode);
 #endif
 }
 
