@@ -11,6 +11,9 @@
 
 #include "daemon.h"
 
+// TODO: make the daemon not suck
+// TODO: show active connections
+
 void catch_sigint(int sig)
 {
 	(void)sig;
@@ -30,7 +33,7 @@ void configure_server(server_t *srv, const char *port)
 		fatal("xstartup()");
 	}
 	
-	xprintf(MAG, "parceld: Parcel Daemon v0.9.1\n");
+	xprintf(MAG, "%s\n", "parceld: Parcel Daemon "STR(PARCEL_VERSION) "\033[0m\n");
 	printf("Local network interface:\n");
 	if (xgetifaddrs()) {
 		fatal("failed to obtain local interfaces");
