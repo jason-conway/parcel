@@ -220,19 +220,36 @@ static size_t ansi_code_strlen(const char *str)
 	return len;
 }
 
-static ssize_t xgetline(char *line, const char *prompt)
+static ssize_t xgetline(char **line, const char *prompt)
 {
 	line_t ctx = {
 		.prompt = prompt,
 		.prompt_len = ansi_code_strlen(prompt),
-		.line = line,
 		.console_width = xwinsize(),
 	};
+	
+	// Initial allocation
+	size_t line_allocation = 64;
+	ctx.line = xmalloc(line_allocation);
+	if (!ctx.line) {
+		return -1;
+	}
 
 	while (1) {
+		// Dynamically resize line buffer as needed
+		if (ctx.line_len == line_allocation - 2) {
+			if (line_allocation * 2 < line_allocation) {
+				xfree(ctx.line);
+				return -1;
+			}
+			if (!(ctx.line = xrealloc(ctx.line, line_allocation *= 2))) {
+				return -1;
+			}
+		}
 		char c = xgetch();
 		switch (c) {
 			case NUL:
+				*line = ctx.line;
 				return ctx.line_len;
 			case TAB:
 				flash_screen();
@@ -240,6 +257,7 @@ static ssize_t xgetline(char *line, const char *prompt)
 			case ENTER:
 				if (ctx.line_len) {
 					update_cursor_pos(&ctx, MOVE_END);
+					*line = ctx.line;
 					return ctx.line_len;
 				}
 				flash_screen();
@@ -277,11 +295,13 @@ static ssize_t xgetline(char *line, const char *prompt)
 				break;
 			default:
 				if (!insert_char(&ctx, c)) {
+					xfree(ctx.line);
 					return EOF;
 				}
 				break;
 		}
 	}
+
 	return ctx.line_len;
 }
 
@@ -292,19 +312,17 @@ char *_xprompt(const char *prompt, size_t *len)
 		return NULL;
 	}
 
-	char *line = xcalloc(LINE_MAX_LEN + 1);
-	if (!line) {
-		return NULL;
-	}
-	
 	const ssize_t prompt_len = strlen(prompt);
 	if (xwrite(STDOUT_FILENO, prompt, prompt_len) != prompt_len) {
-		xfree(line);
 		return NULL;
 	}
 	fflush(stdout);
 
-	ssize_t line_length = xgetline(line, prompt);
+	char *line = NULL;
+	ssize_t line_length = xgetline(&line, prompt);
+	if (!line) {
+		return NULL;
+	}
 	
 	if (xtcsetattr(&orig, CONSOLE_MODE_ORIG)) {
 		xfree(line);
