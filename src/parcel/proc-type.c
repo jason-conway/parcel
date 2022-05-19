@@ -23,21 +23,21 @@ int proc_file(void *data)
 	}
 	FILE *file = fopen(save_path, "wb");
 	if (!file) {
-		xwarn("Could not open file \"%s\" for writing\n", wire_file->filename);
+		xwarn("> Could not open file \"%s\" for writing\n", wire_file->filename);
 		return -1;
 	}
 	xfree(save_path);
 	const size_t file_data_size = wire_pack64(wire_file->filesize);
 
 	if (fwrite(wire_file->filedata, 1, file_data_size, file) != file_data_size) {
-		xwarn("Error writing to file \"%s\"\n", wire_file->filename);
+		xwarn("> Error writing to file \"%s\"\n", wire_file->filename);
 		(void)fclose(file);
 		xfree(wire_file->filename);
 		return -1;
 	}
 
 	if (fflush(file) || fclose(file)) {
-		xwarn("Error closing file \"%s\"\n", wire_file->filename);
+		xwarn("> Error closing file \"%s\"\n", wire_file->filename);
 		return -1;
 	}
 

@@ -77,14 +77,14 @@ int xstartup(void)
 #if __unix__ || __APPLE__
 	return 0; // As if
 #elif _WIN32
-	DWORD mode;
-	if (!GetConsoleMode(GetStdHandle(STD_OUTPUT_HANDLE), &mode)) {
-		return -1;
-	}
-	mode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
-	if (!SetConsoleMode(GetStdHandle(STD_OUTPUT_HANDLE), mode)) {
-		return -1;
-	}
+	// DWORD mode;
+	// if (!GetConsoleMode(GetStdHandle(STD_OUTPUT_HANDLE), &mode)) {
+	// 	return -1;
+	// }
+	// mode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
+	// if (!SetConsoleMode(GetStdHandle(STD_OUTPUT_HANDLE), mode)) {
+	// 	return -1;
+	// }
 
 	WSADATA wsaData;
 	if (WSAStartup(MAKEWORD(2, 2), &wsaData)) {
@@ -112,8 +112,8 @@ int xsetsockopt(sock_t socket, int level, int optname, const void *optval, sockl
 #if __unix__ || __APPLE__
 	return setsockopt(socket, level, optname, optval, optlen);
 #elif _WIN32
-	(void)optlen;
 	const char *opt = optval;
+	optlen = sizeof(*opt);
 	if (setsockopt(socket, level, optname, opt, optlen)) {
 		(void)WSACleanup();
 		return -1;

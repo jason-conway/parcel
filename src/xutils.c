@@ -139,7 +139,6 @@ bool xport_valid(char *arg)
 	long port = strtol(arg, NULL, 10);
 	if (port < 0 || port > 65535) {
 		xwarn("Port cannot be %s\n", port < 0 ? "negative" : "greater than 65535");
-		xwarn("Using default port: 2315\n");
 		return false;
 	}
 	return true;

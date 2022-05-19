@@ -65,7 +65,8 @@ int main(int argc, char **argv)
 					memcpy(port, x.arg, strlen(x.arg));
 					break;
 				}
-				exit(EXIT_FAILURE);
+				xwarn("> Using default port: 2315\n");
+				break;
 			case 'u':
 				if (strlen(x.arg) < USERNAME_MAX_LENGTH) {
 					memcpy(client->username, x.arg, strlen(x.arg));
@@ -74,7 +75,7 @@ int main(int argc, char **argv)
 				fatal("username too long");
 			case 'l': 
 				if (xgetlogin(client->username, USERNAME_MAX_LENGTH)) {
-					fatal("unable to determine login name");
+					xwarn("> Unable to determine login name\n");
 				}
 				break;
 			case 'h':
@@ -82,6 +83,9 @@ int main(int argc, char **argv)
 				exit(EXIT_SUCCESS);
 			case ':':
 				printf("> Option is missing an argument\n");
+				exit(EXIT_FAILURE);
+			default:
+				usage(stderr);
 				exit(EXIT_FAILURE);
 		}
 	}
