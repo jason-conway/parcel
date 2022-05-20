@@ -369,21 +369,29 @@ char *xgethome(void)
 int xmkdir(char *path)
 {
 #if __unix__ || __APPLE__
-	char *c = strchr(path + 1, '/');
-	while (c) {
-		*c = 0;
-		if (mkdir(path, 0700)) {
-			return -1;
-		}
-		struct stat info;
-		if (!stat(path, &info) && S_ISDIR(info.st_mode)) {
-			return -1;
-		}
+	struct stat info = { 0 };
 
-		*c = '/';
-		c = strchr(c + 1, '/');
+	if (!stat(path, &info) && S_ISDIR(info.st_mode)) {
+		if (!mkdir(path, 0700)) {
+			return -1;
+		}
 	}
 	return 0;
+	// char *c = strchr(path + 1, '/');
+	// while (c) {
+	// 	*c = 0;
+	// 	if (mkdir(path, 0700)) {
+	// 		return -1;
+	// 	}
+	// 	struct stat info;
+	// 	if (!stat(path, &info) && S_ISDIR(info.st_mode)) {
+	// 		return -1;
+	// 	}
+
+	// 	*c = '/';
+	// 	c = strchr(c + 1, '/');
+	// }
+	// return 0;
 #elif _WIN32
 	if (!CreateDirectory(path, 0)) {
 		if (GetLastError() == ERROR_PATH_NOT_FOUND) {
@@ -412,25 +420,27 @@ char *xget_dir(char *file)
 	}
 
 #if __unix__ || __APPLE__
-	static const char parcel[] = "/parcel";
-	static const char files[] = "/files/";
-	char *path = xstrcat(4, home, parcel, files, file);
+	static const char parcel[] = "/parcel/files/";
+	// static const char files[] = "/files/";
+	// char *path = xstrcat(4, home, parcel, files, file);
 #elif _WIN32
-	static const char parcel[] = "\\parcel";
-	static const char files[] = "\\files\\";
-	char *path = xstrcat(3, home, parcel, files);
+	static const char parcel[] = "\\parcel\\files\\";
+	// static const char files[] = "\\files\\";
+	// char *path = xstrcat(3, home, parcel, files);
 #endif
 
+	char *path = xstrcat(2, home, parcel);
 	if (xmkdir(path)) {
+		xfree(path);
 		return NULL;
 	}
 
-#if __unix__ || __APPLE__
-	return path;
-#elif _WIN32
+// #if __unix__ || __APPLE__
+	// return path;
+// #elif _WIN32
 	xfree(path);
-	return xstrcat(4, home, parcel, files, file);
-#endif
+	return xstrcat(3, home, parcel, file);
+// #endif
 }
 
 /**

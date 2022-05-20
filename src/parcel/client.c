@@ -197,13 +197,15 @@ void *recv_thread(void *ctx)
 		switch (wire_get_type(wire)) {
 			case TYPE_CTRL:
 				if (proc_ctrl(&client, wire->data)) {
-					goto type_proc_error;
+					xfree(wire);
+					fatal("proc_ctrl()");
 				}
 				memcpy_locked(&client_ctx->mutex_lock, &client_ctx->keys, &client.keys, sizeof(parcel_keys_t));
 				break;
 			case TYPE_FILE:
 				if (proc_file(wire->data)) {
-					goto type_proc_error;
+					xfree(wire);
+					fatal("proc_file()");
 				}
 				break;
 			case TYPE_TEXT:
@@ -211,9 +213,8 @@ void *recv_thread(void *ctx)
 				disp_username(client.username); // TODO: needed?
 				break;
 			default:
-				type_proc_error:
-					xfree(wire);
-					fatal("proc_ctrl()");
+				xfree(wire);
+				fatal("unknown wire type");
 		}
 
 	recv_error:
