@@ -240,6 +240,62 @@ bool xfexists(const char *filename)
 	return false;
 }
 
+bool xisdir(const char *path)
+{
+	struct stat info;
+	return (stat(path, &info) == 0 && S_ISDIR(info.st_mode));
+}
+
+/**
+ * @brief Make a directory if it doesn't exist
+ * 
+ * @param depth depth of target directory
+ * @param ... path of new directory, one arg for each depth
+ * @return Zero on success
+ */
+int xmkdirs(size_t depth, ...)
+{
+	va_list ap;
+	va_start(ap, depth);
+	slice_t path_slice = { NULL, 0 };
+	for (size_t i = 0; i < depth; i++) {
+		char *directory = va_arg(ap, char *);
+		slice_append(&path_slice, directory, strlen(directory));
+		char *path = xmalloc(path_slice.len + 1);
+		memcpy(path, path_slice.data, path_slice.len);
+		path[path_slice.len] = '\0';
+
+		if (!xisdir(path)) {
+			if (xmkdir(path, 0700)) {
+				xfree(path);
+				return -1;
+			}
+		}
+		xfree(path);
+	}
+
+	xfree(path_slice.data);
+	va_end(ap);
+	return 0;
+}
+
+char *xget_dir(char *file)
+{
+	char *home = xgethome();
+	if (!home) {
+		return NULL;
+	}
+
+	static const char parcel_dir[] = "/parcel/";
+	static const char files_dir[] = "files/";
+
+	if (xmkdirs(3, home, parcel_dir, files_dir)) {
+		xwarn("> Unable to create directory\n");
+		return NULL;
+	}
+	return xstrcat(4, home, parcel_dir, files_dir, file);
+}
+
 /**
  * @brief Return filename from path
  * 

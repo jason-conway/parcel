@@ -98,9 +98,10 @@ slice_t *slice_append(slice_t *slice, const char *data, size_t len);
 char *_xprompt(const char *prompt, size_t *len);
 char *xprompt(const char *prompt_msg, const char *error_msg, size_t *len);
 
-// void xgetline(char **message, size_t *message_length, FILE *stream);
-
 char *xgetpublicip(void);
 
 size_t xutoa(uint32_t value, char *str);
 void clear_screen(void);
+
+int xmkdirs(size_t depth, ...);
+char *xsavepath(const char *file);

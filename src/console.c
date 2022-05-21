@@ -58,7 +58,6 @@ enum cursor_direction
 	MOVE_END
 };
 
-
 void clear_screen(void)
 {
 	(void)xwrite(STDOUT_FILENO, "\033[H\033[2J", 7);

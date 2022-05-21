@@ -132,6 +132,8 @@ int xgetlogin(char *username, size_t len);
 void xgetrandom(void *dest, size_t len);
 size_t xfilesize(const char *filename);
 char *xget_dir(char *file);
+int xmkdir(const char *path, mode_t mode);
+char *xgethome(void);
 
 size_t xwinsize(void);
 ssize_t xwrite(int fd, const void *data, size_t len);

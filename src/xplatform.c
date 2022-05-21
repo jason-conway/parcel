@@ -77,15 +77,6 @@ int xstartup(void)
 #if __unix__ || __APPLE__
 	return 0; // As if
 #elif _WIN32
-	// DWORD mode;
-	// if (!GetConsoleMode(GetStdHandle(STD_OUTPUT_HANDLE), &mode)) {
-	// 	return -1;
-	// }
-	// mode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
-	// if (!SetConsoleMode(GetStdHandle(STD_OUTPUT_HANDLE), mode)) {
-	// 	return -1;
-	// }
-
 	WSADATA wsaData;
 	if (WSAStartup(MAKEWORD(2, 2), &wsaData)) {
 		return -1;
@@ -355,93 +346,24 @@ char *xgethome(void)
 {
 #if __unix__ || __APPLE__
 	char *home = getenv("HOME");
-	if (!home || *home != '/') {
-		return NULL;
-	}
-	return home;
+	return (!home || *home != '/') ? NULL : home;
 #elif _WIN32
 	char *home = getenv("HOMEPATH");
 	return !home ? NULL : home;
 #endif
 }
 
-// TODO: needs testing
-int xmkdir(char *path)
+int xmkdir(const char *path, mode_t mode)
 {
 #if __unix__ || __APPLE__
-	struct stat info = { 0 };
-
-	if (!stat(path, &info) && S_ISDIR(info.st_mode)) {
-		if (!mkdir(path, 0700)) {
-			return -1;
-		}
-	}
-	return 0;
-	// char *c = strchr(path + 1, '/');
-	// while (c) {
-	// 	*c = 0;
-	// 	if (mkdir(path, 0700)) {
-	// 		return -1;
-	// 	}
-	// 	struct stat info;
-	// 	if (!stat(path, &info) && S_ISDIR(info.st_mode)) {
-	// 		return -1;
-	// 	}
-
-	// 	*c = '/';
-	// 	c = strchr(c + 1, '/');
-	// }
-	// return 0;
+	return mkdir(path, mode);
 #elif _WIN32
-	if (!CreateDirectory(path, 0)) {
-		if (GetLastError() == ERROR_PATH_NOT_FOUND) {
-			return -1;
-		}
-		else {
-			DWORD file_attributes = GetFileAttributes(path);
-			if ((file_attributes == INVALID_FILE_ATTRIBUTES) || !(file_attributes & FILE_ATTRIBUTE_DIRECTORY)) {
-				return -1;
-			}
-		}
-	}
-	return 0;
+	(void)mode;
+	return _mkdir(path);
 #endif
 }
 
 char *xstrcat(size_t count, ...);
-
-// TODO: rework
-// TODO: needs testing
-char *xget_dir(char *file)
-{
-	char *home = xgethome();
-	if (!home) {
-		return NULL;
-	}
-
-#if __unix__ || __APPLE__
-	static const char parcel[] = "/parcel/files/";
-	// static const char files[] = "/files/";
-	// char *path = xstrcat(4, home, parcel, files, file);
-#elif _WIN32
-	static const char parcel[] = "\\parcel\\files\\";
-	// static const char files[] = "\\files\\";
-	// char *path = xstrcat(3, home, parcel, files);
-#endif
-
-	char *path = xstrcat(2, home, parcel);
-	if (xmkdir(path)) {
-		xfree(path);
-		return NULL;
-	}
-
-// #if __unix__ || __APPLE__
-	// return path;
-// #elif _WIN32
-	xfree(path);
-	return xstrcat(3, home, parcel, file);
-// #endif
-}
 
 /**
  * @section Terminal / console wrappers
@@ -453,15 +375,15 @@ void xinitconsole(void)
 #if __unix__ || __APPLE__
 	return;
 #elif _WIN32
-	_setmode(0, _O_BINARY);
-	_setmode(1, _O_BINARY);
-	SetConsoleOutputCP(CP_UTF8);
+	(void)_setmode(STDIN_FILENO, _O_BINARY);
+	(void)_setmode(STDOUT_FILENO, _O_BINARY);
+	(void)SetConsoleOutputCP(CP_UTF8);
 
 	DWORD output_mode;
 	if (GetConsoleMode(GetStdHandle(STD_OUTPUT_HANDLE), &output_mode)) {
 		output_mode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
+		(void)SetConsoleMode(GetStdHandle(STD_OUTPUT_HANDLE), output_mode);
 	}
-	(void)SetConsoleMode(GetStdHandle(STD_OUTPUT_HANDLE), output_mode);
 #endif
 }
 
@@ -497,11 +419,11 @@ char xgetch(void)
 size_t xwinsize(void)
 {
 #if __unix__ || __APPLE__
-	struct winsize w;
-	if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &w) < 0) {
+	struct winsize size;
+	if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &size) < 0) {
 		return 0;
 	}
-	return w.ws_col;
+	return size.ws_col;
 #elif _WIN32
 	CONSOLE_SCREEN_BUFFER_INFO info;
 	if (!GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &info)) {

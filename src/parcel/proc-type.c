@@ -15,8 +15,6 @@ int proc_file(void *data)
 {
 	struct wire_file_message *wire_file = (struct wire_file_message *)data;
 
-	// size_t filename_length = strnlen(wire_file->filename, sizeof(wire_file->filename));
-
 	char *save_path = xget_dir(wire_file->filename);
 	if (!save_path) {
 		return -1;
@@ -27,8 +25,8 @@ int proc_file(void *data)
 		return -1;
 	}
 	xfree(save_path);
-	const size_t file_data_size = wire_pack64(wire_file->filesize);
 
+	const size_t file_data_size = wire_pack64(wire_file->filesize);
 	if (fwrite(wire_file->filedata, 1, file_data_size, file) != file_data_size) {
 		xwarn("> Error writing to file \"%s\"\n", wire_file->filename);
 		(void)fclose(file);
