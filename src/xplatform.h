@@ -28,11 +28,11 @@
 #include <pthread.h>
 #include <stdarg.h>
 #include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 
 #if __unix__ || __APPLE__
 	#include <unistd.h>
-	#include <sys/stat.h>
-	#include <fcntl.h>
 	#include <sys/ioctl.h>
 	#include <termios.h>
 	#include <sys/socket.h>
@@ -44,7 +44,6 @@
 	#include <termios.h>
 	#include <sys/time.h>
 	#include <poll.h>
-	
 	typedef int sock_t;
 	typedef struct termios console_t;
 #endif
@@ -59,7 +58,7 @@
 	#include <ntsecapi.h>
 	#include <winbase.h>
 	#include <io.h>
-	#include <fcntl.h>
+	#include <direct.h>
 	#include <conio.h>
 	#ifdef _MSC_VER
 		#pragma comment(lib, "ws2_32.lib")
