@@ -18,24 +18,22 @@
 typedef struct cursor_pos_t
 {
 	size_t row;
-	size_t column;
-	size_t _column;
+	size_t offset; // Cursor index in bytes
+	size_t column; // Cursor index in characters
+	size_t rendered_column; // Active cursor column
 } cursor_pos_t;
 
 typedef struct line_t
 {
 	const char *prompt;
-	size_t prompt_len;
+	size_t prompt_len; // Rendered length
+	size_t prompt_size; // Prompt size in bytes
 	char *line;
-	size_t line_len;
+	size_t line_len; // Rendered length
+	size_t line_size; // Line size in bytes
 	cursor_pos_t cursor;
 	size_t console_width;
 } line_t;
-
-enum Console
-{
-	LINE_MAX_LEN = (1 << 12) - 1,
-};
 
 enum KeyCodes
 {
@@ -81,6 +79,78 @@ static void flash_screen(void)
 	fflush(stdout);
 }
 
+static size_t sizeof_cp_prev(const char *str)
+{
+	const char *s = (const char *)str;
+	size_t len = 0; // Bytes in codepoint
+	do {
+		len++;
+		s--;
+	} while (((s[0] & 0x80)) && ((s[0] & 0xc0) == 0x80));
+
+	return len;
+}
+
+static size_t sizeof_cp_next(const char *str)
+{
+	if ((str[0] & 0xf8) == 0xf0) { // 11110xxx
+		return 4;
+	}
+	else if ((str[0] & 0xf0) == 0xe0) { // 1110xxxx
+		return 3;
+	}
+	else if ((str[0] & 0xe0) == 0xc0) { // 110xxxxx
+		return 2;
+	}
+	return 1;
+}
+
+// Length of rendered unicode string
+static size_t utf8_strnlen(const char *str, size_t len)
+{
+	const char *s = str;
+	size_t length = 0;
+
+	while ((size_t)(str - s) < len && str[0]) {
+		if ((str[0] & 0xf8) == 0xf0) { // 11110xxx
+			str += 4;
+		}
+		else if ((str[0] & 0xf0) == 0xe0) { // 1110xxxx
+			str += 3;
+		}
+		else if ((str[0] & 0xe0) == 0xc0) { // 110xxxxx
+			str += 2;
+		}
+		else {
+			str += 1;
+		}
+
+		length++;
+	}
+
+	return ((size_t)(str - s) > len) ? length - 1 : length;
+}
+
+static size_t utf8_rendered_length(const char *str)
+{
+	char *stripped = xcalloc(strlen(str));
+	if (!stripped) {
+		return 0;
+	}
+
+	size_t len = 0;
+	for (size_t i = 0; str[i]; i++) {
+		if (str[i] == ESC) {
+			for (; str[i] != 'm'; i++) { };
+		}
+		stripped[len++] = str[i];
+	}
+	
+	len = utf8_strnlen(stripped, len);
+	xfree(stripped);
+	return len;
+}
+
 static void update_row_count(line_t *ctx, size_t rows)
 {
 	if (rows > ctx->cursor.row) {
@@ -105,7 +175,7 @@ static void flush_console(line_t *ctx)
 
 	size_t rows = (ctx->prompt_len + ctx->line_len + ctx->console_width - 1) / ctx->console_width;
 	update_row_count(ctx, rows);
-	const size_t cursor_rows = ctx->cursor.row - ((ctx->prompt_len + ctx->cursor._column + ctx->console_width) / ctx->console_width);
+	const size_t cursor_rows = ctx->cursor.row - ((ctx->prompt_len + ctx->cursor.rendered_column + ctx->console_width) / ctx->console_width);
 	if (cursor_rows) {
 		move_cursor_pos(&esc_seq, MOVE_DOWN, cursor_rows);
 	}
@@ -116,10 +186,10 @@ static void flush_console(line_t *ctx)
 	slice_append(&esc_seq, "\r" "\033[0K", 5);
 
 	// Restore prompt and text
-	slice_append(&esc_seq, ctx->prompt, ctx->prompt_len);
-	slice_append(&esc_seq, ctx->line, ctx->line_len);
+	slice_append(&esc_seq, ctx->prompt, ctx->prompt_size);
+	slice_append(&esc_seq, ctx->line, ctx->line_size);
 
-	const bool eol = (ctx->cursor.column && ctx->cursor.column == ctx->line_len);
+	const bool eol = (ctx->cursor.offset && ctx->cursor.offset == ctx->line_size);
 	const size_t columns = (ctx->prompt_len + ctx->cursor.column) % ctx->console_width;
 	if (eol && !columns) {
 		slice_append(&esc_seq, "\n\r", 2);
@@ -140,7 +210,7 @@ static void flush_console(line_t *ctx)
 		move_cursor_pos(&esc_seq, MOVE_RIGHT, columns);
 	}
 
-	ctx->cursor._column = ctx->cursor.column;
+	ctx->cursor.rendered_column = ctx->cursor.column;
 
 	if (xwrite(STDOUT_FILENO, esc_seq.data, esc_seq.len) < 0) {
 		xfree(esc_seq.data);
@@ -149,19 +219,20 @@ static void flush_console(line_t *ctx)
 	xfree(esc_seq.data);
 }
 
-// Insert char 'c' at the current cursor position
-static bool insert_char(line_t *ctx, char c)
+// Insert a 'len' byte unicode char 'c' at the current cursor position
+static bool insert_char(line_t *ctx, const unsigned char *c, size_t len)
 {
-	if (ctx->line_len > LINE_MAX_LEN) {
-		return false;
+	if (ctx->line_size != ctx->cursor.offset) { // Add char at pos
+		memmove(&ctx->line[ctx->cursor.offset + len], &ctx->line[ctx->cursor.offset], ctx->line_size - ctx->cursor.offset);
 	}
 
-	if (ctx->line_len != ctx->cursor.column) { // Add char at pos
-		memmove(&ctx->line[ctx->cursor.column + 1], &ctx->line[ctx->cursor.column], ctx->line_len - ctx->cursor.column);
-	}
-
-	ctx->line[ctx->cursor.column++] = c;
-	ctx->line[++ctx->line_len] = '\0';
+	memcpy(&ctx->line[ctx->cursor.offset], c, len);
+	ctx->cursor.offset += len;
+	ctx->line_size += len;
+	ctx->line_len++;
+	ctx->cursor.column++;
+	ctx->line[ctx->line_size] = '\0';
+	
 	flush_console(ctx);
 	return true;
 }
@@ -173,15 +244,23 @@ static void update_cursor_pos(line_t *ctx, enum cursor_direction direction)
 		case MOVE_DOWN:
 			break;
 		case MOVE_LEFT:
-			ctx->cursor.column -= (ctx->cursor.column > 0) ? 1 : 0;
+			if (ctx->cursor.offset > 0) {
+				ctx->cursor.offset -= sizeof_cp_prev(&ctx->line[ctx->cursor.offset]);
+				ctx->cursor.column--;
+			}
 			break;
 		case MOVE_RIGHT:
-			ctx->cursor.column += (ctx->cursor.column != ctx->line_len) ? 1 : 0;
+			if (ctx->cursor.offset != ctx->line_size) {
+				ctx->cursor.offset += sizeof_cp_next(&ctx->line[ctx->cursor.offset]);
+				ctx->cursor.column++;
+			}
 			break;
 		case MOVE_HOME:
+			ctx->cursor.offset = 0;
 			ctx->cursor.column = 0;
 			break;
 		case MOVE_END:
+			ctx->cursor.offset = ctx->line_size;
 			ctx->cursor.column = ctx->line_len;
 			break;
 	}
@@ -190,40 +269,35 @@ static void update_cursor_pos(line_t *ctx, enum cursor_direction direction)
 
 static void delete_char(line_t *ctx, bool del)
 {
+	size_t cp_size;
 	bool block = true;
-	if (!del && ctx->cursor.column > 0 && ctx->line_len > 0) { // just backspace
-		memmove(ctx->line + ctx->cursor.column - 1, ctx->line + ctx->cursor.column, ctx->line_len - ctx->cursor.column);
+
+	if (!del && ctx->cursor.offset > 0 && ctx->line_size > 0) { // just backspace
+		cp_size = sizeof_cp_prev(&ctx->line[ctx->cursor.offset]);
+		memmove(&ctx->line[ctx->cursor.offset - cp_size], &ctx->line[ctx->cursor.offset], ctx->line_size - ctx->cursor.offset);
+		ctx->cursor.offset -= cp_size;
 		ctx->cursor.column--;
 		block = false;
 	}
-	if (del && ctx->line_len > 0 && ctx->cursor.column < ctx->line_len) { // delete
-		memmove(ctx->line + ctx->cursor.column, ctx->line + ctx->cursor.column + 1, ctx->line_len - ctx->cursor.column - 1);
+	if (del && ctx->line_size > 0 && ctx->cursor.offset < ctx->line_size) { // delete
+		cp_size = sizeof_cp_next(&ctx->line[ctx->cursor.offset]);
+		memmove(&ctx->line[ctx->cursor.offset], &ctx->line[ctx->cursor.offset + cp_size], ctx->line_size - ctx->cursor.offset - cp_size);
 		block = false;
 	}
 	if (!block) {
-		ctx->line[--ctx->line_len] = '\0';
+		ctx->line_size -= cp_size;
+		ctx->line[ctx->line_size] = '\0';
+		ctx->line_len--;
 		flush_console(ctx);
 	}
-}
-
-// Length of a string exclusing ASCII control codes (for colors)
-static size_t ansi_code_strlen(const char *str)
-{
-	size_t len = 0;
-	for (size_t i = 0; str[i]; i++) {
-		if (str[i] == ESC) {
-			for (; str[i] != 'm'; i++) { };
-		}
-		len++;
-	}
-	return len;
 }
 
 static ssize_t xgetline(char **line, const char *prompt)
 {
 	line_t ctx = {
 		.prompt = prompt,
-		.prompt_len = ansi_code_strlen(prompt),
+		.prompt_len = utf8_rendered_length(prompt),
+		.prompt_size = strlen(prompt),
 		.console_width = xwinsize(),
 	};
 	
@@ -236,7 +310,7 @@ static ssize_t xgetline(char **line, const char *prompt)
 
 	while (1) {
 		// Dynamically resize line buffer as needed
-		if (ctx.line_len == line_allocation - 2) {
+		if (ctx.line_size == line_allocation - 2) {
 			if (line_allocation * 2 < line_allocation) {
 				xfree(ctx.line);
 				return -1;
@@ -245,19 +319,22 @@ static ssize_t xgetline(char **line, const char *prompt)
 				return -1;
 			}
 		}
-		char c = xgetch();
-		switch (c) {
+		// char c = xgetch();
+		unsigned char c[4] = {0, 0, 0, 0};
+		size_t len = xgetcp(c);
+
+		switch (*c) {
 			case NUL:
 				*line = ctx.line;
-				return ctx.line_len;
+				return ctx.line_size;
 			case TAB:
 				flash_screen();
 				break;
 			case ENTER:
-				if (ctx.line_len) {
+				if (ctx.line_size) {
 					update_cursor_pos(&ctx, MOVE_END);
 					*line = ctx.line;
-					return ctx.line_len;
+					return ctx.line_size;
 				}
 				flash_screen();
 				break;
@@ -293,15 +370,12 @@ static ssize_t xgetline(char **line, const char *prompt)
 				delete_char(&ctx, false);
 				break;
 			default:
-				if (!insert_char(&ctx, c)) {
-					xfree(ctx.line);
-					return EOF;
-				}
+				insert_char(&ctx, c, len);
 				break;
 		}
 	}
 
-	return ctx.line_len;
+	return ctx.line_size;
 }
 
 char *_xprompt(const char *prompt, size_t *len)

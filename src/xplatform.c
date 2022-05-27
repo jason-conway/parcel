@@ -401,6 +401,7 @@ ssize_t xwrite(int fd, const void *data, size_t len)
 #endif
 }
 
+// Get single ascii character
 char xgetch(void)
 {
 #if __unix__ || __APPLE__
@@ -413,6 +414,39 @@ char xgetch(void)
 		return 0;
 	}
 	return (bytes_read == 1) ? c : 0;
+#endif
+}
+
+// Get single (variably-sized) codepoint
+size_t xgetcp(unsigned char *c)
+{
+#if __unix__ || __APPLE__
+	if (read(STDIN_FILENO, &c[0], 1) != 1) {
+		return 0;
+	}
+	if (c[0] < 0x80) {
+		return 1;
+	}
+
+	size_t len = 0;
+	if ((c[0] & 0xe0) == 0xc0) {
+		len = 2; // 110xxxxx
+	}
+	if ((c[0] & 0xf0) == 0xe0) {
+		len = 3; // 1110xxxx
+	}
+	if ((c[0] & 0xf8) == 0xf0 && (c[0] <= 0xf4)) {
+		len = 4; // 11110xxx
+	}
+	if (len) {
+		if (read(STDIN_FILENO, &c[1], len - 1) != (ssize_t)(len - 1)) {
+			len = 0;
+		}
+	}
+	return len;
+
+#elif _WIN32
+	// TODO
 #endif
 }
 

@@ -137,6 +137,7 @@ char *xgethome(void);
 size_t xwinsize(void);
 ssize_t xwrite(int fd, const void *data, size_t len);
 char xgetch(void);
+size_t xgetcp(unsigned char *c);
 
 enum xconsole_mode
 {
