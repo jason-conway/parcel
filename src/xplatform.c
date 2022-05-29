@@ -377,6 +377,7 @@ void xinitconsole(void)
 #elif _WIN32
 	(void)_setmode(STDIN_FILENO, _O_BINARY);
 	(void)_setmode(STDOUT_FILENO, _O_BINARY);
+	(void)SetConsoleCP(CP_UTF8);
 	(void)SetConsoleOutputCP(CP_UTF8);
 
 	DWORD output_mode;
@@ -394,7 +395,7 @@ ssize_t xwrite(int fd, const void *data, size_t len)
 #elif _WIN32
  	(void)fd;
 	DWORD bytes_written = 0;
-	if (!WriteConsole(GetStdHandle(STD_OUTPUT_HANDLE), data, len, &bytes_written, NULL)) {
+	if (!WriteConsoleA(GetStdHandle(STD_OUTPUT_HANDLE), data, len, &bytes_written, NULL)) {
 		return -1;
 	}
 	return bytes_written;
@@ -446,7 +447,15 @@ size_t xgetcp(unsigned char *c)
 	return len;
 
 #elif _WIN32
-	// TODO
+	wchar_t wc[4] = { 0 };
+	DWORD bytes_read;
+	if (!ReadConsoleW(GetStdHandle(STD_INPUT_HANDLE), wc, 1, &bytes_read, NULL)) {
+		return 0;
+	}
+	
+	// size_t len = WideCharToMultiByte(CP_UTF8, 0, wc, -1, c, 4, NULL, NULL);
+	// printf("\nbytes: %zu\n", (size_t)bytes_read);
+	return WideCharToMultiByte(CP_UTF8, 0, wc, bytes_read, (char *)c, 4, NULL, NULL);
 #endif
 }
 
