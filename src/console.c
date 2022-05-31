@@ -12,49 +12,7 @@
  * 
  */
 
-#include "xplatform.h"
-#include "xutils.h"
-
-typedef struct cursor_pos_t
-{
-	size_t row;
-	size_t offset; // Cursor index in bytes
-	size_t column; // Cursor index in characters
-	size_t rendered_column; // Active cursor column
-} cursor_pos_t;
-
-typedef struct line_t
-{
-	const char *prompt;
-	size_t prompt_len; // Rendered length
-	size_t prompt_size; // Prompt size in bytes
-	char *line;
-	size_t line_len; // Rendered length
-	size_t line_size; // Line size in bytes
-	cursor_pos_t cursor;
-	size_t console_width;
-} line_t;
-
-enum KeyCodes
-{
-	NUL = 0,
-	BEL = 7,
-	BS = 8,
-	TAB = 9,
-	ENTER = 13,
-	ESC = 27,
-	BACKSPACE = 127
-};
-
-enum cursor_direction
-{
-	MOVE_UP,
-	MOVE_DOWN,
-	MOVE_RIGHT,
-	MOVE_LEFT,
-	MOVE_HOME,
-	MOVE_END
-};
+#include "console.h"
 
 void clear_screen(void)
 {
@@ -77,78 +35,6 @@ static void flash_screen(void)
 {
 	(void)xwrite(STDOUT_FILENO, "\a", 1);
 	fflush(stdout);
-}
-
-static size_t sizeof_cp_prev(const char *str)
-{
-	const char *s = (const char *)str;
-	size_t len = 0; // Bytes in codepoint
-	do {
-		len++;
-		s--;
-	} while (((s[0] & 0x80)) && ((s[0] & 0xc0) == 0x80));
-
-	return len;
-}
-
-static size_t sizeof_cp_next(const char *str)
-{
-	if ((str[0] & 0xf8) == 0xf0) { // 11110xxx
-		return 4;
-	}
-	else if ((str[0] & 0xf0) == 0xe0) { // 1110xxxx
-		return 3;
-	}
-	else if ((str[0] & 0xe0) == 0xc0) { // 110xxxxx
-		return 2;
-	}
-	return 1;
-}
-
-// Length of rendered unicode string
-static size_t utf8_strnlen(const char *str, size_t len)
-{
-	const char *s = str;
-	size_t length = 0;
-
-	while ((size_t)(str - s) < len && str[0]) {
-		if ((str[0] & 0xf8) == 0xf0) { // 11110xxx
-			str += 4;
-		}
-		else if ((str[0] & 0xf0) == 0xe0) { // 1110xxxx
-			str += 3;
-		}
-		else if ((str[0] & 0xe0) == 0xc0) { // 110xxxxx
-			str += 2;
-		}
-		else {
-			str += 1;
-		}
-
-		length++;
-	}
-
-	return ((size_t)(str - s) > len) ? length - 1 : length;
-}
-
-static size_t utf8_rendered_length(const char *str)
-{
-	char *stripped = xcalloc(strlen(str));
-	if (!stripped) {
-		return 0;
-	}
-
-	size_t len = 0;
-	for (size_t i = 0; str[i]; i++) {
-		if (str[i] == ESC) {
-			for (; str[i] != 'm'; i++) { };
-		}
-		stripped[len++] = str[i];
-	}
-	
-	len = utf8_strnlen(stripped, len);
-	xfree(stripped);
-	return len;
 }
 
 static void update_row_count(line_t *ctx, size_t rows)
@@ -229,8 +115,10 @@ static bool insert_char(line_t *ctx, const unsigned char *c, size_t len)
 	memcpy(&ctx->line[ctx->cursor.offset], c, len);
 	ctx->cursor.offset += len;
 	ctx->line_size += len;
-	ctx->line_len++;
-	ctx->cursor.column++;
+
+	const size_t cp_len = codepoint_width((char *)c, len);
+	ctx->line_len += cp_len;
+	ctx->cursor.column += cp_len;
 	ctx->line[ctx->line_size] = '\0';
 	
 	flush_console(ctx);
@@ -243,18 +131,26 @@ static void update_cursor_pos(line_t *ctx, enum cursor_direction direction)
 		case MOVE_UP: // TODO
 		case MOVE_DOWN:
 			break;
-		case MOVE_LEFT:
+		case MOVE_LEFT: {
 			if (ctx->cursor.offset > 0) {
-				ctx->cursor.offset -= sizeof_cp_prev(&ctx->line[ctx->cursor.offset]);
-				ctx->cursor.column--;
+				size_t cp_size = 0;
+				size_t cp_len = 0;
+				sizeof_cp_prev(&ctx->line[ctx->cursor.offset], &cp_size, &cp_len);
+				ctx->cursor.offset -= cp_size;
+				ctx->cursor.column -= cp_len;
 			}
 			break;
-		case MOVE_RIGHT:
+		}
+		case MOVE_RIGHT: {
 			if (ctx->cursor.offset != ctx->line_size) {
-				ctx->cursor.offset += sizeof_cp_next(&ctx->line[ctx->cursor.offset]);
-				ctx->cursor.column++;
+				size_t cp_size = 0;
+				size_t cp_len = 0;
+				sizeof_cp_next(&ctx->line[ctx->cursor.offset], &cp_size, &cp_len);
+				ctx->cursor.offset += cp_size;
+				ctx->cursor.column += cp_len;
 			}
 			break;
+		}
 		case MOVE_HOME:
 			ctx->cursor.offset = 0;
 			ctx->cursor.column = 0;
@@ -269,25 +165,28 @@ static void update_cursor_pos(line_t *ctx, enum cursor_direction direction)
 
 static void delete_char(line_t *ctx, bool del)
 {
-	size_t cp_size;
+	size_t cp_size = 0;
+	size_t cp_len = 0;
 	bool block = true;
 
 	if (!del && ctx->cursor.offset > 0 && ctx->line_size > 0) { // just backspace
-		cp_size = sizeof_cp_prev(&ctx->line[ctx->cursor.offset]);
+		sizeof_cp_prev(&ctx->line[ctx->cursor.offset], &cp_size, &cp_len);
+		// cp_size = sizeof_cp_prev(&ctx->line[ctx->cursor.offset]);
 		memmove(&ctx->line[ctx->cursor.offset - cp_size], &ctx->line[ctx->cursor.offset], ctx->line_size - ctx->cursor.offset);
 		ctx->cursor.offset -= cp_size;
-		ctx->cursor.column--;
+		ctx->cursor.column -= cp_len;
 		block = false;
 	}
 	if (del && ctx->line_size > 0 && ctx->cursor.offset < ctx->line_size) { // delete
-		cp_size = sizeof_cp_next(&ctx->line[ctx->cursor.offset]);
+		// cp_size = sizeof_cp_next(&ctx->line[ctx->cursor.offset]);
+		sizeof_cp_next(&ctx->line[ctx->cursor.offset], &cp_size, &cp_len);
 		memmove(&ctx->line[ctx->cursor.offset], &ctx->line[ctx->cursor.offset + cp_size], ctx->line_size - ctx->cursor.offset - cp_size);
 		block = false;
 	}
 	if (!block) {
 		ctx->line_size -= cp_size;
 		ctx->line[ctx->line_size] = '\0';
-		ctx->line_len--;
+		ctx->line_len -= cp_len;
 		flush_console(ctx);
 	}
 }
