@@ -453,8 +453,6 @@ size_t xgetcp(unsigned char *c)
 		return 0;
 	}
 	
-	// size_t len = WideCharToMultiByte(CP_UTF8, 0, wc, -1, c, 4, NULL, NULL);
-	// printf("\nbytes: %zu\n", (size_t)bytes_read);
 	return WideCharToMultiByte(CP_UTF8, 0, wc, bytes_read, (char *)c, 4, NULL, NULL);
 #endif
 }
