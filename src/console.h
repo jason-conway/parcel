@@ -32,11 +32,11 @@ typedef struct line_t
 	size_t console_width;
 } line_t;
 
-typedef struct wchar_interval_t
+typedef struct unicode_data_table_t
 {
 	uint32_t first;
 	uint32_t last;
-} wchar_interval_t;
+} unicode_data_table_t;
 
 enum KeyCodes
 {
@@ -56,10 +56,30 @@ enum cursor_direction
 	MOVE_RIGHT,
 	MOVE_LEFT,
 	MOVE_HOME,
-	MOVE_END
+	MOVE_END,
+	JUMP_FORWARD,
+	JUMP_BACKWARD,
 };
 
 size_t utf8_rendered_length(const char *str);
 size_t codepoint_width(const char *str, size_t len);
-void sizeof_cp_prev(const char *str, size_t *cp_size, size_t *cp_len);
-void sizeof_cp_next(const char *str, size_t *cp_size, size_t *cp_len);
+
+/**
+ * @brief Get pointer to previous codepoint
+ * 
+ * @param str pointer to current codepoint
+ * @param[out] cp_size size of previous codepoint (bytes)
+ * @param[out] cp_len rendered length of previous codepoint (cells)
+ * @return pointer to the first byte of the previous codepoint
+ */
+char *prev_codepoint(const char *str, size_t *cp_size, size_t *cp_len);
+
+/**
+ * @brief Get pointer to next codepoint
+ * 
+ * @param str pointer to current codepoint
+ * @param[out] cp_size size of next codepoint (bytes)
+ * @param[out] cp_len rendered length of next codepoint (cells)
+ * @return pointer to the first byte of the next codepoint
+ */
+char *next_codepoint(const char *str, size_t *cp_size, size_t *cp_len);
