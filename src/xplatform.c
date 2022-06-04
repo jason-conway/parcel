@@ -113,7 +113,7 @@ int xsetsockopt(sock_t socket, int level, int optname, const void *optval, sockl
 #endif
 }
 
-int xgetifaddrs(void)
+int xgetifaddrs(const char *prefix, const char *suffix)
 {
 #if __unix__ || __APPLE__
 	struct ifaddrs *interfaces;
@@ -130,7 +130,7 @@ int xgetifaddrs(void)
 			if (getnameinfo(node->ifa_addr, sizeof(struct sockaddr_in), interface_name, NI_MAXHOST, NULL, 0, NI_NUMERICHOST)) {
 				return -1;
 			}
-			printf("\t%s\n", interface_name);
+			printf("%s%s:%s\n", prefix, interface_name, suffix);
 		}
 	}
 	freeifaddrs(interfaces);
@@ -153,7 +153,7 @@ int xgetifaddrs(void)
 		return -1;
 	}
 	for (PIP_ADAPTER_INFO adapter = adapter_info; adapter; adapter = adapter->Next) {
-		printf("\t%s\n", adapter->IpAddressList.IpAddress.String);
+		printf("%s%s:%s\n", prefix, adapter->IpAddressList.IpAddress.String, suffix);
 	}
 
 	xfree(adapter_info);
