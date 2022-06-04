@@ -11,15 +11,6 @@
 
 #pragma once
 
-#include <string.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <stdbool.h>
-#include <signal.h>
-#include <stdatomic.h>
-#include <inttypes.h>
-#include <stdnoreturn.h>
-
 #include "xplatform.h"
 #include "xutils.h"
 #include "x25519.h"
@@ -32,13 +23,18 @@ enum ParceldConstants
 	SOCK_LEN = sizeof(struct sockaddr),
 	MAX_CONNECTIONS = FD_SETSIZE,
 	MAX_QUEUE = 32,
-	
 	DEFAULT_PORT = 2315,
-	PORT_MAX_LENGTH = 6,
+	PORT_MAX_LENGTH = 6
+};
+
+enum SocketIndices
+{
+	DAEMON_SOCKET = 0,
 };
 
 typedef struct server_t
 {
+	char server_port[PORT_MAX_LENGTH];
 	uint8_t server_key[KEY_LEN];
 	fd_set descriptors;
 	size_t descriptor_count;
@@ -52,5 +48,6 @@ typedef struct msg_t
 	ssize_t length;
 } msg_t;
 
-void configure_server(server_t *srv, const char *port);
+bool configure_server(server_t *ctx);
+void server_ready(server_t *ctx);
 int main_thread(void *ctx);

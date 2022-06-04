@@ -25,19 +25,18 @@ static void usage(FILE *f)
 
 int main(int argc, char *argv[])
 {
-	server_t server;
-	memset(&server, 0, sizeof(server_t));
+	server_t server = {
+		.server_port = "2315"
+	};
 
 	int option;
 	xgetopt_t x = { 0 };
-
-	char port[6] = "2315";
 
 	while ((option = xgetopt(&x, argc, argv, "dhp:q:m:")) != -1) {
 		switch (option) {
 			case 'p':
 				if (xport_valid(x.arg)) {
-					memcpy(port, x.arg, strlen(x.arg));
+					memcpy(server.server_port, x.arg, strlen(x.arg));
 				}
 				break;
 			case 'h':
@@ -49,6 +48,10 @@ int main(int argc, char *argv[])
 		}
 	}
 
-	configure_server(&server, port);
+	if (!configure_server(&server)) {
+		return 1;
+	}
+	
+	server_ready(&server);
 	return main_thread((void *)&server);
 }
