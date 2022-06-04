@@ -11,13 +11,6 @@
 
 #pragma once
 
-#ifndef PARCEL_VERSION
-	#define PARCEL_VERSION 0.9.2
-#endif
-
-#define STR(a) XSTR(a)
-#define XSTR(a) #a
-
 #include <stdio.h>
 #include <stdint.h>
 #include <stddef.h>
@@ -30,6 +23,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <signal.h>
 
 #if __unix__ || __APPLE__
 	#include <unistd.h>
@@ -69,6 +63,22 @@
 	typedef USHORT in_port_t;
 	typedef SOCKET sock_t;
 	typedef DWORD console_t;
+#endif
+
+#ifndef PARCEL_VERSION
+	#define PARCEL_VERSION 0.9.2
+#endif
+
+#define STR(a) XSTR(a)
+#define XSTR(a) #a
+
+#ifdef DEBUG
+	#define debug_print(fmt, ...) \
+		do { \
+			fprintf(stderr, "%s:%d:%s(): " fmt, __FILE__, __LINE__, __func__, __VA_ARGS__); \
+		} while (0)
+#else
+	#define debug_print(fmt, ...)
 #endif
 
 /**
@@ -124,7 +134,7 @@ int xsetsockopt(sock_t socket, int level, int optname, const void *optval, sockl
 int xclose(sock_t socket);
 void xexit(int status);
 
-int xgetifaddrs(void);
+int xgetifaddrs(const char *prefix, const char *suffix);
 int xstartup(void);
 
 int xgetlogin(char *username, size_t len);
