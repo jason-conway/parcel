@@ -75,7 +75,7 @@ static int cmd_send_file(char **message, size_t *message_length)
 		goto free_all;
 	}
 	
-	wire_unpack64(file_contents->filesize, file_size);
+	wire_set_raw(file_contents->filesize, file_size);
 	
 	FILE *file = fopen(file_path, "rb");
 	if (!file) {

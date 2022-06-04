@@ -121,9 +121,9 @@ int decrypt_wire(wire_t *wire, size_t *len, const uint8_t *key);
 
 uint64_t wire_pack64(const uint8_t *src);
 uint64_t wire_get_raw(uint8_t *src);
+void wire_set_raw(uint8_t *dst, uint64_t src);
+
 enum wire_type wire_get_type(wire_t *ctx);
-
-
 enum ctrl_function wire_get_ctrl_function(struct wire_ctrl_message *ctrl);
 void wire_set_ctrl_function(struct wire_ctrl_message *ctrl, enum ctrl_function function);
 
@@ -131,6 +131,3 @@ uint64_t wire_get_ctrl_args(struct wire_ctrl_message *ctrl);
 void wire_set_ctrl_args(struct wire_ctrl_message *ctrl, uint64_t args);
 
 void wire_set_ctrl_renewal(struct wire_ctrl_message *ctrl, const uint8_t *renewed_key);
-
-void wire_unpack64(uint8_t *dst, uint64_t src);
-void wire_set_raw(uint8_t *dst, uint64_t src);
