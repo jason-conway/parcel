@@ -56,10 +56,8 @@ int proc_ctrl(client_t *ctx, void *data)
 	switch (wire_get_ctrl_function(wire_ctrl)) {
 		case CTRL_EXIT:
 			return CTRL_EXIT;
-		case CTRL_DHKE: {
-			return n_party_client(ctx->socket, ctx->keys.session, wire_get_ctrl_args(wire_ctrl));
-		}
-		break;
+		case CTRL_DHKE:
+			return n_party_client(ctx->socket, ctx->keys.session, wire_get_ctrl_args(wire_ctrl)) ? -1 : CTRL_DHKE;
 	}
 	return -1;
 }
