@@ -11,17 +11,6 @@
 
 #pragma once
 
-#include <stdbool.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <signal.h>
-#include <stdatomic.h>
-#include <errno.h>
-#include <pthread.h>
-#include <unistd.h>
-#include <stdnoreturn.h>
-
 #include "xplatform.h"
 #include "xutils.h"
 #include "x25519.h"
@@ -73,10 +62,11 @@ void connect_server(client_t *client, const char *ip, const char *port);
 void send_connection_status(client_t *ctx, bool exit);
 int parse_input(client_t *ctx, enum command_id *cmd, char **message, size_t *message_length);
 void prompt_args(char *address, char *username);
-noreturn void fatal(const char *msg);
+void fatal(const char *msg);
 int proc_file(void *data);
 int proc_ctrl(client_t *ctx, void *data);
 void proc_text(uint8_t *wire_data);
+int cmd_exit(client_t *ctx, char **message, size_t *message_length);
 
 void *recv_thread(void *ctx);
 int send_thread(void *ctx);
