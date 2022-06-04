@@ -165,6 +165,7 @@ static size_t cp_rendered_width(uint32_t c)
 	}
 	
 	if (search_table(c, zero_width, sizeof_zero_width_table)) {
+		debug_print("%s\n", "> zero width unicode char");
 		return 0;
 	}
 	if (search_table(c, wide_width, sizeof_wide_width_table)) {
@@ -285,8 +286,7 @@ size_t utf8_rendered_length(const char *str)
 	size_t len = 0;
 	for (size_t i = 0; str[i]; i++) {
 		if (str[i] == ESC) {
-			for (; str[i] != 'm'; i++) {
-			};
+			for (; str[i] != 'm'; i++) { };
 		}
 		stripped[len++] = str[i];
 	}

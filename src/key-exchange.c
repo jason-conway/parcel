@@ -134,6 +134,7 @@ static int send_ctrl_key(sock_t *sockets, size_t count, uint8_t *ctrl_key)
 	memcpy(ctrl_key, renewed_key, KEY_LEN);
 
 	for (size_t i = 1; i <= count; i++) {
+		debug_print("Sending CTRL key to socket %zu\n", i);
 		if (xsend(sockets[i], wire, len, 0) < 0) {
 			xfree(wire);
 			return -1;
@@ -148,11 +149,13 @@ static int rotate_intermediates(sock_t *sockets, size_t count)
 {
 	for (size_t i = 1; i <= count; i++) {
 		uint8_t intermediate_key[KEY_LEN];
+		debug_print("Receiving intermediate key from socket %zu\n", i);
 		if (xrecv(sockets[i], intermediate_key, KEY_LEN, 0) != KEY_LEN) {
 			return -1;
 		}
 
 		const size_t next = (i == count) ? 1 : i + 1; // Rotate right, skip server's socket
+		debug_print("Sending intermediate key to socket %zu\n", next);
 		if (xsend(sockets[next], intermediate_key, KEY_LEN, 0) < 0) {
 			printf("\n> Error sending to slot %zu\n", next);
 			return -1;
@@ -167,15 +170,19 @@ int n_party_server(sock_t *sockets, size_t connection_count, uint8_t *ctrl_key)
 		return 0;
 	}
 
+	debug_print("%s\n", "Sending CTRL to signal start of sequence");
 	if (send_ctrl_key(sockets, connection_count, ctrl_key)) {
 		printf("> Error sending starting control keys\n");
 		return -1;
 	}
+	debug_print("%s\n", "CTRL signals sent");
 
 	for (size_t i = 0; i < connection_count - 1; i++) {
+		debug_print("Starting exchange round %zu of %zu\n", i + 1, connection_count - 1);
 		if (rotate_intermediates(sockets, connection_count)) {
 			return -1;
 		}
+		debug_print("Finished round %zu\n", i + 1);
 	}
 
 	return 0;

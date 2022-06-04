@@ -24,24 +24,26 @@ void error(sock_t socket, const char *msg)
 	exit(EXIT_FAILURE);
 }
 
-static void disp_username(const char *username)
+void memcpy_locked(pthread_mutex_t *lock, void *dest, void *src, size_t length)
 {
-	printf("%s: ", username);
-	fflush(stdout);
+	pthread_mutex_lock(lock);
+		memcpy(dest, src, length);
+	pthread_mutex_unlock(lock);
 }
 
-static void format_prompt(const char *username, char *prompt)
+static void create_prefix(const char *username, char *prompt)
 {
 	size_t username_length = strlen(username);
 	memcpy(prompt, username, username_length);
 	memcpy(&prompt[username_length], ": ", 3);
 }
 
-void memcpy_locked(pthread_mutex_t *lock, void *dest, void *src, size_t length)
+static void disp_username(const char *username)
 {
-	pthread_mutex_lock(lock);
-		memcpy(dest, src, length);
-	pthread_mutex_unlock(lock);
+	char msg_prefix[USERNAME_MAX_LENGTH + 3];
+	create_prefix(username, msg_prefix);
+	(void)xwrite(STDOUT_FILENO, msg_prefix, strlen(msg_prefix));
+	fflush(stdout);
 }
 
 static void send_encrypted_message(sock_t socket, uint64_t type, void *data, size_t length, const uint8_t *key)
@@ -79,7 +81,7 @@ int send_thread(void *ctx)
 		size_t length = 0;
 
 		char prompt[USERNAME_MAX_LENGTH + 3];
-		format_prompt(client.username, prompt);
+		create_prefix(client.username, prompt);
 		char *plaintext = xprompt(prompt, "text", &length);
 
 		if (!plaintext) {
@@ -180,15 +182,16 @@ void *recv_thread(void *ctx)
 				}
 				break;
 			case WIRE_PARTIAL:
-				xwarn("> wire is partial, continue receiving\n");
+				debug_print("%s\n", "> wire is partial, continue receiving");
+				
 				if (recv_remaining(&client, wire, bytes_recv, length)) {
 					xfree(wire);
 					fatal("recv_remaining()");
 				}
-				xwarn("> received remainder of wire\n");
+				debug_print("%s\n", "> received remainder of wire");
 				break;
 			case WIRE_CMAC_ERROR:
-				xwarn("> CMAC error\n");
+				debug_print("%s\n", "> CMAC error");
 				goto recv_error;
 			case WIRE_OK:
 				break;
@@ -196,12 +199,25 @@ void *recv_thread(void *ctx)
 
 		switch (wire_get_type(wire)) {
 			case TYPE_CTRL:
-				if (proc_ctrl(&client, wire->data)) {
-					xfree(wire);
-					fatal("proc_ctrl()");
+				switch (proc_ctrl(&client, wire->data)) {
+					case CTRL_EXIT:
+						xfree(wire);
+						xalert("> Received EXIT\n");
+						exit(EXIT_SUCCESS);
+					case CTRL_DHKE:
+						memcpy_locked(&client_ctx->mutex_lock, &client_ctx->keys, &client.keys, sizeof(parcel_keys_t));
+						break;
+					default:
+						xfree(wire);
+						fatal("proc_ctrl()");
 				}
-				memcpy_locked(&client_ctx->mutex_lock, &client_ctx->keys, &client.keys, sizeof(parcel_keys_t));
 				break;
+				// if (proc_ctrl(&client, wire->data)) {
+				// 	xfree(wire);
+				// 	fatal("proc_ctrl()");
+				// }
+				// memcpy_locked(&client_ctx->mutex_lock, &client_ctx->keys, &client.keys, sizeof(parcel_keys_t));
+				// break;
 			case TYPE_FILE:
 				if (proc_file(wire->data)) {
 					xfree(wire);
