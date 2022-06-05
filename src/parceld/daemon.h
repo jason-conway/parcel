@@ -32,14 +32,19 @@ enum SocketIndices
 	DAEMON_SOCKET = 0,
 };
 
+typedef struct fd_set_t
+{
+	fd_set fds;
+	size_t nfds;
+} fd_set_t;
+
 typedef struct server_t
 {
 	char server_port[PORT_MAX_LENGTH];
 	uint8_t server_key[KEY_LEN];
-	fd_set descriptors;
-	size_t descriptor_count;
+	fd_set_t descriptors;
 	sock_t sockets[MAX_CONNECTIONS];
-	size_t connection_count;
+	size_t active_connections;
 } server_t;
 
 typedef struct msg_t
@@ -48,6 +53,6 @@ typedef struct msg_t
 	ssize_t length;
 } msg_t;
 
-bool configure_server(server_t *ctx);
-void server_ready(server_t *ctx);
+int init_daemon(server_t *ctx);
+int display_daemon_info(server_t *ctx);
 int main_thread(void *ctx);

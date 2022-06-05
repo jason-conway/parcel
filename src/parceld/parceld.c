@@ -1,7 +1,7 @@
 /**
  * @file parceld.c
  * @author Jason Conway (jpc@jasonconway.dev)
- * @brief Entry point for parcel client
+ * @brief Entry point for parcel daemon
  * @version 0.9.1
  * @date 2022-01-28
  *
@@ -14,11 +14,10 @@
 static void usage(FILE *f)
 {
 	static const char usage[] =
-		"usage: parceld [-dh] [-p PORT] [-M CONNS]\n"
+		"usage: parceld [-h] [-p PORT] [-M CONNS]\n"
 		"  -p PORT  start daemon on port PORT\n"
 		"  -q LMAX  limit length of pending connections queue to LMAX\n"
 		"  -m CMAX  limit number of active server connections to CMAX\n"
-		"  -d        enable debug mode\n"
 		"  -h        print this usage information\n";
 	fprintf(f, "%s", usage);
 }
@@ -32,7 +31,7 @@ int main(int argc, char *argv[])
 	int option;
 	xgetopt_t x = { 0 };
 
-	while ((option = xgetopt(&x, argc, argv, "dhp:q:m:")) != -1) {
+	while ((option = xgetopt(&x, argc, argv, "hp:q:m:")) != -1) {
 		switch (option) {
 			case 'p':
 				if (xport_valid(x.arg)) {
@@ -41,17 +40,20 @@ int main(int argc, char *argv[])
 				break;
 			case 'h':
 				usage(stdout);
-				exit(EXIT_SUCCESS);
+				return 0;
 			case ':':
 				printf("Option is missing an argument\n");
-				exit(EXIT_FAILURE);
+				return 1;
 		}
 	}
 
-	if (!configure_server(&server)) {
+	if (init_daemon(&server)) {
 		return 1;
 	}
-	
-	server_ready(&server);
+
+	if (display_daemon_info(&server)) {
+		return 1;
+	}
+
 	return main_thread((void *)&server);
 }
