@@ -329,10 +329,14 @@ void *xrealloc(void *mem, size_t len)
 void *xfree(void *mem)
 {
 #if __unix__ || __APPLE__
-	free(mem);
+	if (mem) {
+		free(mem);
+	}
 	return NULL;
 #elif _WIN32
-	(void)HeapFree(GetProcessHeap(), 0, mem);
+	if (mem) {
+		(void)HeapFree(GetProcessHeap(), 0, mem);
+	}
 	return NULL;
 #endif
 }
