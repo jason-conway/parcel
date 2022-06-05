@@ -6,7 +6,7 @@
 [![goto counter](https://img.shields.io/github/search/jason-conway/parcel/goto.svg)](https://github.com/jason-conway/parcel/search?q=goto)
 ## Supported Platforms
 
-Linux, BSD, Darwin/macOS, Windows, and iOS (*kind of*)
+Linux, BSD, Darwin/macOS, Windows, and iOS (*kind of*) on x86-64, x86, AArch32, and AArch64 architectures.
 
 ## Installation
 
@@ -28,11 +28,18 @@ $ make PREFIX=~/.parcel install
 
 #### iOS
 
-The parcel client works without modification on iOS devices using [ish](https://github.com/ish-app/ish). `parceld` does not work as of this version.
+The parcel client works without modification on iOS devices using [ish](https://github.com/ish-app/ish). `parceld` will not work due to limitations of `ish`, but it might work with [a-shell](https://github.com/holzschu/a-shell).
 
 ### Windows
 
-The simplest way to build parcel on Windows is using [w64devkit](https://github.com/skeeto/w64devkit). The [pre-built *mini* release](https://github.com/skeeto/w64devkit/releases/) variant is just over 50 MB and contains everything needed to build from source following the same steps shown above.
+The simplest way to build parcel on Windows is using [w64devkit](https://github.com/skeeto/w64devkit). The [pre-built *mini* release](https://github.com/skeeto/w64devkit/releases/) variant is just over 50 MB and contains everything needed to build parcel from source.
+
+Once cloned, simply
+
+```console
+$ make resources
+$ make install
+```
 
 Note that, by default, the binaries will be installed at %HOMEPATH%\parcel
 
@@ -84,6 +91,9 @@ REG ADD HKCU\CONSOLE /f /v VirtualTerminalLevel /t REG_DWORD /d 1
 If an earlier version of Windows is being used or if parcel is being run from a different shell, the extra console configuration will fail silently and parcel will continue as normal.
 
 The number of active clients supported by `parceld` is determined by `FD_SETSIZE`. As a result, `parceld` supports a maximum of 64 active clients when running on Windows.
+
+Windows support for UTF-8 has been improving in recent years, with Windows Version 1903 introducing the ability to set UTF-8 as an active process's codepage. Parcel takes advantage of this and embeds the required XML to set the process codepage directly into the application binary. Additionally, the console's codepage is set to UTF-8 at runtime, although this only works for console output... because despite UTF-8 becoming standarized in 1993, there remains no way to read UTF-8 input in Windows.
+To combat this, UTF-16 input is read in one character at a time using `ReadConsoleW()` and encoded as UTF-8 with `WideCharToMultiByte()`. It might not be ideal but gets the job done.
 
 ## Client-Side Commands
 
