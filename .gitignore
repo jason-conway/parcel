@@ -2,3 +2,5 @@
 build/*
 .vscode
 etc/resources/*.res
+etc/utf8/EastAsianWidth.txt
+etc/utf8/UnicodeData.txt
