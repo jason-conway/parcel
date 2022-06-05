@@ -64,7 +64,7 @@ If a required argument is not provided, then it is prompted at startup.
 
 ## Security
 
-Parcel encrypts and decrypts message data using AES128. Messages are authenticated using CMAC (OMAC1) to guarantee message authenticity and data integrity. The CMAC tag authenticates ciphertext rather than plaintext, allowing the message to be authenticated prior to decryption.
+Parcel encrypts and decrypts message data using [AES128](https://nvlpubs.nist.gov/nistpubs/fips/nist.fips.197.pdf). Messages are authenticated using [CMAC (OMAC1)](https://datatracker.ietf.org/doc/html/rfc4493) to guarantee message authenticity and data integrity. The CMAC tag authenticates ciphertext rather than plaintext, allowing the message to be authenticated prior to decryption.
 
 ### Key Exchange
 
@@ -92,7 +92,7 @@ If an earlier version of Windows is being used or if parcel is being run from a 
 
 The number of active clients supported by `parceld` is determined by `FD_SETSIZE`. As a result, `parceld` supports a maximum of 64 active clients when running on Windows.
 
-Windows support for UTF-8 has been improving in recent years, with Windows Version 1903 introducing the ability to set UTF-8 as an active process's codepage. Parcel takes advantage of this and embeds the required XML to set the process codepage directly into the application binary. Additionally, the console's codepage is set to UTF-8 at runtime, although this only works for console output... because despite UTF-8 becoming standarized in 1993, there remains no way to read UTF-8 input in Windows.
+Windows support for UTF-8 has been improving in recent years, with Windows Version 1903 introducing the ability to [set UTF-8 as an active process's codepage](https://docs.microsoft.com/en-us/windows/apps/design/globalizing/use-utf8-code-page). Parcel takes advantage of this and embeds the required XML to set the process codepage directly into the application binary. Additionally, the console's codepage is set to UTF-8 at runtime, although this only works for console output... because despite UTF-8 becoming standarized in 1993, there remains no way to read UTF-8 input in Windows.
 To combat this, UTF-16 input is read in one character at a time using `ReadConsoleW()` and encoded as UTF-8 with `WideCharToMultiByte()`. It might not be ideal but gets the job done.
 
 ## Client-Side Commands
