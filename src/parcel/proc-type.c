@@ -57,7 +57,17 @@ int proc_ctrl(client_t *ctx, void *data)
 		case CTRL_EXIT:
 			return CTRL_EXIT;
 		case CTRL_DHKE:
-			return n_party_client(ctx->socket, ctx->keys.session, wire_get_ctrl_args(wire_ctrl)) ? -1 : CTRL_DHKE;
+			switch (n_party_client(ctx->socket, ctx->keys.session, wire_get_ctrl_args(wire_ctrl))) {
+				case DHKE_OK:
+					if (!ctx->conn_announced) {
+						if (announce_connection(ctx)) {
+							return -1;
+						}
+					}
+					return CTRL_DHKE;
+				case DHKE_ERROR:
+					return DHKE_ERROR;
+			}
 	}
 	return -1;
 }

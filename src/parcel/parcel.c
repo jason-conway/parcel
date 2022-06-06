@@ -45,7 +45,8 @@ int main(int argc, char **argv)
 	
 	client_t *client = xcalloc(sizeof(client_t));
 	if (!client) {
-		fatal("xmalloc()");
+		xalert("Error allocating client memory\n");
+		return 1;
 	}
 
 	pthread_mutex_init(&client->mutex_lock, NULL);
@@ -59,7 +60,8 @@ int main(int argc, char **argv)
 					memcpy(address, x.arg, strlen(x.arg));
 					break;
 				}
-				fatal("server address too long");
+				xwarn("Address argument too long\n");
+				break;
 			case 'p':
 				if (xport_valid(x.arg)) {
 					memcpy(port, x.arg, strlen(x.arg));
@@ -72,7 +74,8 @@ int main(int argc, char **argv)
 					memcpy(client->username, x.arg, strlen(x.arg));
 					break;
 				}
-				fatal("username too long");
+				xwarn("Username argument too long\n");
+				break;
 			case 'l': 
 				if (xgetlogin(client->username, USERNAME_MAX_LENGTH)) {
 					xwarn("> Unable to determine login name\n");
@@ -80,13 +83,13 @@ int main(int argc, char **argv)
 				break;
 			case 'h':
 				usage(stdout);
-				exit(EXIT_SUCCESS);
+				return 0;
 			case ':':
 				printf("> Option is missing an argument\n");
-				exit(EXIT_FAILURE);
+				return 1;
 			default:
 				usage(stderr);
-				exit(EXIT_FAILURE);
+				return 1;
 		}
 	}
 	
@@ -94,7 +97,10 @@ int main(int argc, char **argv)
 		prompt_args(address, client->username);
 	}
 	
-	connect_server(client, address, port);
+	if (connect_server(client, address, port)) {
+		return -1;
+	}
+
 	pthread_t recv_ctx;
 	pthread_create(&recv_ctx, NULL, recv_thread, (void *)client);
 

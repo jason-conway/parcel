@@ -14,6 +14,12 @@
 #include "wire.h"
 #include "xplatform.h"
 
+enum KeyExchangeStatus
+{
+	DHKE_ERROR = -1,
+	DHKE_OK,
+};
+
 int two_party_client(sock_t socket, uint8_t *ctrl_key);
 int two_party_server(sock_t socket, uint8_t *session_key);
 

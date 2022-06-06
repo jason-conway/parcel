@@ -11,16 +11,18 @@
 
 #include "client.h"
 
-void fatal(const char *msg)
+void fatal(client_t *ctx, const char *format, ...)
 {
-	fprintf(stderr, ">\033[31m fatal error: %s\n\033[0m", msg);
-	exit(EXIT_FAILURE);
-}
+	va_list ap;
+	va_start(ap, format);
 
-void error(sock_t socket, const char *msg)
-{
-	fprintf(stderr, ">\033[31m parcel error: %s\n\033[0m", msg);
-	(void)xclose(socket);
+	(void)fprintf(stderr, "%s", "\033[0;31m");
+	(void)vfprintf(stderr, format, ap);
+	(void)fprintf(stderr, "\033[0m");
+	va_end(ap);
+
+	xclose(ctx->socket);
+	xfree(ctx);
 	exit(EXIT_FAILURE);
 }
 
@@ -46,28 +48,35 @@ static void disp_username(const char *username)
 	fflush(stdout);
 }
 
-static void send_encrypted_message(sock_t socket, uint64_t type, void *data, size_t length, const uint8_t *key)
+static ssize_t send_encrypted_message(sock_t socket, uint64_t type, void *data, size_t length, const uint8_t *key)
 {
-	size_t len = length;
-	wire_t *wire = init_wire(data, type, &len);
+	wire_t *wire = init_wire(data, type, &length);
 	encrypt_wire(wire, key);
-	if (xsendall(socket, wire, len) < 0) {
+	if (xsendall(socket, wire, length) < 0) {
 		xfree(wire);
-		error(socket, "xsendall()");
+		xalert("xsendall()\n");
+		return -1;
 	}
 	xfree(wire);
+	return length;
 }
 
-void send_connection_status(client_t *ctx, bool leave)
+int announce_connection(client_t *ctx)
 {
-	char msg[USERNAME_MAX_LENGTH + 40] = { 0 };
-	static const char template[] = "\033[3%dm%s has %s the server.\033[0m";
-
-	if (snprintf(msg, sizeof(msg), template, leave ? 5 : 2, ctx->username, leave ? "left" : "joined") < 0) {
-		error(ctx->socket, "send()");
+	char *msg = xstrcat(3, "\033[1m", ctx->username, " is online\033[0m");
+	if (!msg) {
+		return -1;
 	}
-	send_encrypted_message(ctx->socket, TYPE_TEXT, msg, strlen(msg) + 1, ctx->keys.session);
 
+	if (send_encrypted_message(ctx->socket, TYPE_TEXT, msg, strlen(msg) + 1, ctx->keys.session) < 0) {
+		xfree(msg);
+		return -1;
+	}
+
+	xfree(msg);
+
+	ctx->conn_announced = 1;
+	return 0;
 }
 
 int send_thread(void *ctx)
@@ -77,7 +86,7 @@ int send_thread(void *ctx)
 	memcpy_locked(&client_ctx->mutex_lock, &client, client_ctx, sizeof(client_t));
 
 	while (1) {
-		
+
 		size_t length = 0;
 
 		char prompt[USERNAME_MAX_LENGTH + 3];
@@ -85,7 +94,7 @@ int send_thread(void *ctx)
 		char *plaintext = xprompt(prompt, "text", &length);
 
 		if (!plaintext) {
-			error(client.socket, "xmalloc()");
+			fatal(client_ctx, "xmalloc()\n");
 		}
 
 		memcpy_locked(&client_ctx->mutex_lock, &client, client_ctx, sizeof(client_t));
@@ -95,14 +104,18 @@ int send_thread(void *ctx)
 			case SEND_NONE:
 				break;
 			case SEND_TEXT:
-				send_encrypted_message(client.socket, TYPE_TEXT, plaintext, length, client.keys.session);
+				if (send_encrypted_message(client.socket, TYPE_TEXT, plaintext, length, client.keys.session) < 0) {
+					// handle
+				}
 				break;
 			case SEND_FILE:
-				send_encrypted_message(client.socket, TYPE_FILE, plaintext, length, client.keys.session);
+				if (send_encrypted_message(client.socket, TYPE_FILE, plaintext, length, client.keys.session) < 0) {
+					// handle
+				}
 				break;
 			default:
 				xfree(plaintext);
-				error(client.socket, "parse_input()");
+				fatal(client_ctx, "parse_input()\n");
 		}
 
 		xfree(plaintext);
@@ -168,25 +181,25 @@ void *recv_thread(void *ctx)
 		size_t bytes_recv;
 		wire_t *wire = recv_new_wire(client.socket, &bytes_recv);
 		if (!wire) {
-			fatal("malloc() failure when initializing new wire");
+			fatal(client_ctx, "malloc() failure when initializing new wire\n");
 		}
 
 		memcpy_locked(&client_ctx->mutex_lock, &client, client_ctx, sizeof(client_t));
-		
+
 		size_t length = bytes_recv;
 		switch (decrypt_wire(wire, &length, client.keys.session)) {
 			case WIRE_INVALID_KEY:
 				if (decrypt_wire(wire, &length, client.keys.ctrl)) {
 					xfree(wire);
-					fatal("> Recveived corrupted control key from server\n");
+					fatal(client_ctx, "> Recveived corrupted control key from server\n");
 				}
 				break;
 			case WIRE_PARTIAL:
 				debug_print("%s\n", "> wire is partial, continue receiving");
-				
+
 				if (recv_remaining(&client, wire, bytes_recv, length)) {
 					xfree(wire);
-					fatal("recv_remaining()");
+					fatal(client_ctx, "recv_remaining()\n");
 				}
 				debug_print("%s\n", "> received remainder of wire");
 				break;
@@ -203,34 +216,30 @@ void *recv_thread(void *ctx)
 					case CTRL_EXIT:
 						xfree(wire);
 						xalert("> Received EXIT\n");
+						// TODO: proper shutdown
 						exit(EXIT_SUCCESS);
 					case CTRL_DHKE:
 						memcpy_locked(&client_ctx->mutex_lock, &client_ctx->keys, &client.keys, sizeof(parcel_keys_t));
+						memcpy_locked(&client_ctx->mutex_lock, &client_ctx->conn_announced, &client.conn_announced, sizeof(bool));
 						break;
 					default:
 						xfree(wire);
-						fatal("proc_ctrl()");
+						fatal(client_ctx, "proc_ctrl()\n");
 				}
 				break;
-				// if (proc_ctrl(&client, wire->data)) {
-				// 	xfree(wire);
-				// 	fatal("proc_ctrl()");
-				// }
-				// memcpy_locked(&client_ctx->mutex_lock, &client_ctx->keys, &client.keys, sizeof(parcel_keys_t));
-				// break;
 			case TYPE_FILE:
 				if (proc_file(wire->data)) {
 					xfree(wire);
-					fatal("proc_file()");
+					fatal(client_ctx, "proc_file()\n");
 				}
 				break;
 			case TYPE_TEXT:
 				proc_text(wire->data);
-				disp_username(client.username); // TODO: needed?
+				disp_username(client.username);
 				break;
 			default:
 				xfree(wire);
-				fatal("unknown wire type");
+				fatal(client_ctx, "unknown wire type\n");
 		}
 
 	recv_error:
@@ -240,10 +249,11 @@ void *recv_thread(void *ctx)
 	}
 }
 
-void connect_server(client_t *client, const char *ip, const char *port)
+int connect_server(client_t *client, const char *ip, const char *port)
 {
 	if (xstartup()) {
-		fatal("xstartup()");
+		xalert("xstartup()\n");
+		return -1;
 	}
 
 	struct addrinfo hints = {
@@ -253,7 +263,8 @@ void connect_server(client_t *client, const char *ip, const char *port)
 
 	struct addrinfo *srv_addr;
 	if (xgetaddrinfo(ip, port, &hints, &srv_addr)) {
-		fatal("xgetaddrinfo()");
+		xalert("xgetaddrinfo()\n");
+		return -1;
 	}
 	struct addrinfo *node = NULL;
 	for (node = srv_addr; node; node = node->ai_next) {
@@ -268,19 +279,20 @@ void connect_server(client_t *client, const char *ip, const char *port)
 	}
 
 	if (!node) {
-		fatal("could not connect to server");
+		xalert("could not connect to server\n");
+		return -1;
 	}
 
 	freeaddrinfo(srv_addr);
 
 	if (two_party_client(client->socket, client->keys.ctrl)) {
-		error(client->socket, "key_exchange()");
+		(void)xclose(client->socket);
+		xalert("Failed to perform initial key exchange with server\n");
+		return -1;
 	}
 
 	printf(">\033[32m Connected to server\033[0m\n");
-
-	// TODO: This needs to be done after a key exchange sequence
-	// send_connection_status(client, false);
+	return 0;
 }
 
 void prompt_args(char *address, char *username)

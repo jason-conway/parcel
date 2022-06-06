@@ -35,7 +35,6 @@ static int cmd_username(client_t *ctx, char **message, size_t *message_length)
 		*message_length = 0;
 		*message = NULL;
 		xfree(new_username);
-		send_connection_status(ctx, true);
 		return -1;
 	}
 
@@ -147,7 +146,7 @@ int cmd_exit(client_t *ctx, char **message, size_t *message_length)
 {
 	xfree(*message);
 
-	*message = xstrcat(3, "\033[1m", ctx->username, " has left the server\033[0m");
+	*message = xstrcat(3, "\033[1m", ctx->username, " is offline\033[0m");
 	if (!*message) {
 		*message = NULL;
 		return -1;

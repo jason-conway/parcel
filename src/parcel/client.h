@@ -55,17 +55,24 @@ typedef struct client_t
 	sock_t socket;
 	char username[USERNAME_MAX_LENGTH];
 	parcel_keys_t keys;
+	bool conn_announced;
 	pthread_mutex_t mutex_lock;
 } client_t;
 
-void connect_server(client_t *client, const char *ip, const char *port);
-void send_connection_status(client_t *ctx, bool exit);
+int connect_server(client_t *client, const char *ip, const char *port);
+
+int announce_connection(client_t *ctx);
+
 int parse_input(client_t *ctx, enum command_id *cmd, char **message, size_t *message_length);
+
 void prompt_args(char *address, char *username);
-void fatal(const char *msg);
+
+// void fatal(const char *msg);
+
 int proc_file(void *data);
 int proc_ctrl(client_t *ctx, void *data);
 void proc_text(uint8_t *wire_data);
+
 int cmd_exit(client_t *ctx, char **message, size_t *message_length);
 
 void *recv_thread(void *ctx);
