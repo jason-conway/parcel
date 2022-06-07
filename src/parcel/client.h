@@ -16,6 +16,7 @@
 #include "x25519.h"
 #include "key-exchange.h"
 #include "wire.h"
+#include "console.h"
 
 enum ParcelConstants
 {
@@ -56,6 +57,7 @@ typedef struct client_t
 	char username[USERNAME_MAX_LENGTH];
 	parcel_keys_t keys;
 	bool conn_announced;
+	bool kill_threads;
 	pthread_mutex_t mutex_lock;
 } client_t;
 

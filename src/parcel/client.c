@@ -48,13 +48,22 @@ static void disp_username(const char *username)
 	fflush(stdout);
 }
 
+/**
+ * @brief 
+ * 
+ * @param socket 
+ * @param type 
+ * @param data 
+ * @param length 
+ * @param key 
+ * @return returns number of bytes sent on success, otherwise a negative value is returned
+ */
 static ssize_t send_encrypted_message(sock_t socket, uint64_t type, void *data, size_t length, const uint8_t *key)
 {
 	wire_t *wire = init_wire(data, type, &length);
 	encrypt_wire(wire, key);
 	if (xsendall(socket, wire, length) < 0) {
 		xfree(wire);
-		xalert("xsendall()\n");
 		return -1;
 	}
 	xfree(wire);
@@ -84,18 +93,14 @@ int send_thread(void *ctx)
 	client_t client;
 	client_t *client_ctx = (client_t *)ctx;
 	memcpy_locked(&client_ctx->mutex_lock, &client, client_ctx, sizeof(client_t));
+	int status = 0;
 
 	while (1) {
-
-		size_t length = 0;
-
 		char prompt[USERNAME_MAX_LENGTH + 3];
 		create_prefix(client.username, prompt);
-		char *plaintext = xprompt(prompt, "text", &length);
 
-		if (!plaintext) {
-			fatal(client_ctx, "xmalloc()\n");
-		}
+		size_t length = 0;
+		char *plaintext = xprompt(prompt, "text", &length); // xprompt() will never return null by design
 
 		memcpy_locked(&client_ctx->mutex_lock, &client, client_ctx, sizeof(client_t));
 		enum command_id id = CMD_NONE;
@@ -105,34 +110,41 @@ int send_thread(void *ctx)
 				break;
 			case SEND_TEXT:
 				if (send_encrypted_message(client.socket, TYPE_TEXT, plaintext, length, client.keys.session) < 0) {
-					// handle
+					xalert("Error sending encrypted text\n");
+					status = -1;
 				}
 				break;
 			case SEND_FILE:
 				if (send_encrypted_message(client.socket, TYPE_FILE, plaintext, length, client.keys.session) < 0) {
-					// handle
+					xalert("Error sending encrypted file\n");
+					status = -1;
 				}
 				break;
-			default:
-				xfree(plaintext);
-				fatal(client_ctx, "parse_input()\n");
 		}
 
 		xfree(plaintext);
 
 		switch (id) {
+			default:
+				if (!status) {
+					break;
+				} // fallthrough
 			case CMD_EXIT:
-				exit(EXIT_SUCCESS);
+				goto cleanup;
 			case CMD_USERNAME:
 				memcpy_locked(&client_ctx->mutex_lock, client_ctx->username, client.username, USERNAME_MAX_LENGTH);
-				break;
-			default:
 				break;
 		}
 
 		struct timespec ts = { .tv_nsec = 1000000 };
 		(void)nanosleep(&ts, NULL);
 	}
+
+	cleanup:
+		// memcpy_locked(&client_ctx->mutex_lock, &client_ctx->kill_threads, &(bool[]){ 1 }, sizeof(bool));
+		xclose(client.socket);
+		xfree(client_ctx);
+		exit(status);
 }
 
 static int recv_remaining(client_t *ctx, wire_t *wire, size_t bytes_recv, size_t bytes_remaining)
@@ -176,12 +188,16 @@ void *recv_thread(void *ctx)
 	client_t client;
 	client_t *client_ctx = (client_t *)ctx;
 	memcpy(&client, client_ctx, sizeof(client_t));
+	
+	int status = 0;
 
 	while (1) {
 		size_t bytes_recv;
 		wire_t *wire = recv_new_wire(client.socket, &bytes_recv);
 		if (!wire) {
-			fatal(client_ctx, "malloc() failure when initializing new wire\n");
+			xalert("malloc() failure when initializing new wire\n");
+			status = -1;
+			break;
 		}
 
 		memcpy_locked(&client_ctx->mutex_lock, &client, client_ctx, sizeof(client_t));
@@ -190,16 +206,17 @@ void *recv_thread(void *ctx)
 		switch (decrypt_wire(wire, &length, client.keys.session)) {
 			case WIRE_INVALID_KEY:
 				if (decrypt_wire(wire, &length, client.keys.ctrl)) {
-					xfree(wire);
-					fatal(client_ctx, "> Recveived corrupted control key from server\n");
+					xalert("> Recveived corrupted control key from server\n");
+					status = -1;
+					goto recv_error;
 				}
 				break;
 			case WIRE_PARTIAL:
 				debug_print("%s\n", "> wire is partial, continue receiving");
-
 				if (recv_remaining(&client, wire, bytes_recv, length)) {
-					xfree(wire);
-					fatal(client_ctx, "recv_remaining()\n");
+					xalert("recv_remaining()\n");
+					status = -1;
+					goto recv_error;
 				}
 				debug_print("%s\n", "> received remainder of wire");
 				break;
@@ -216,37 +233,38 @@ void *recv_thread(void *ctx)
 					case CTRL_EXIT:
 						xfree(wire);
 						xalert("> Received EXIT\n");
-						// TODO: proper shutdown
-						exit(EXIT_SUCCESS);
+						goto end_thread;
 					case CTRL_DHKE:
 						memcpy_locked(&client_ctx->mutex_lock, &client_ctx->keys, &client.keys, sizeof(parcel_keys_t));
 						memcpy_locked(&client_ctx->mutex_lock, &client_ctx->conn_announced, &client.conn_announced, sizeof(bool));
 						break;
-					default:
-						xfree(wire);
-						fatal(client_ctx, "proc_ctrl()\n");
 				}
 				break;
 			case TYPE_FILE:
 				if (proc_file(wire->data)) {
-					xfree(wire);
-					fatal(client_ctx, "proc_file()\n");
+					xalert("proc_file()\n");
+					status = -1;
 				}
 				break;
 			case TYPE_TEXT:
 				proc_text(wire->data);
 				disp_username(client.username);
 				break;
-			default:
-				xfree(wire);
-				fatal(client_ctx, "unknown wire type\n");
 		}
 
 	recv_error:
 		xfree(wire);
 		struct timespec ts = { .tv_nsec = 1000000 };
 		(void)nanosleep(&ts, NULL);
+		
+		if (status) {
+			break;
+		}
 	}
+	end_thread:
+		xclose(client.socket);
+		xfree(client_ctx);
+		exit(status);
 }
 
 int connect_server(client_t *client, const char *ip, const char *port)

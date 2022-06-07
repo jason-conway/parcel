@@ -205,31 +205,6 @@ slice_t *slice_append(slice_t *slice, const char *data, size_t len)
 	return slice;
 }
 
-char *xprompt(const char *prompt_msg, const char *error_msg, size_t *len)
-{
-	char *line;
-	size_t line_length;
-
-	while (1) {
-		line = NULL;
-		line_length = 0;
-
-		do {
-			line = _xprompt(prompt_msg, &line_length);
-		} while (line == NULL);
-
-		if (*len && line_length > *len) {
-			xwarn("Maximum %s length is %zu bytes", error_msg, *len);
-			xfree(line);
-			continue;
-		}
-		break;
-	}
-	
-	*len = line_length;
-	return line;
-}
-
 bool xfexists(const char *filename)
 {
 	FILE *f = fopen(filename, "r");
