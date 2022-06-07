@@ -83,3 +83,25 @@ char *prev_codepoint(const char *str, size_t *cp_size, size_t *cp_len);
  * @return pointer to the first byte of the next codepoint
  */
 char *next_codepoint(const char *str, size_t *cp_size, size_t *cp_len);
+
+/**
+ * @brief Prompt for console input
+ * 
+ * @param[in] prompt_msg prompt text
+ * @param[in] error_msg error message if entered length exceeds len
+ * @param[inout] len if non-zero, a maximum of len bytes will be accepted; is set to number of bytes returned
+ * @return Returns pointer to null-terminated UTF-8 string
+ */
+char *xprompt(const char *prompt_msg, const char *error_msg, size_t *len);
+
+/**
+ * @brief Clears the console
+ * 
+ */
+void clear_screen(void);
+
+/**
+ * @brief Ring terminal bell
+ * 
+ */
+void ring_bell(void);

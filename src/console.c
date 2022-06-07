@@ -31,7 +31,7 @@ bool set_title(void)
 	return true;
 }
 
-static void flash_screen(void)
+void ring_bell(void)
 {
 	(void)xwrite(STDOUT_FILENO, "\a", 1);
 	fflush(stdout);
@@ -48,7 +48,7 @@ static void move_cursor_pos(slice_t *seq, enum cursor_direction direction, unsig
 {
 	char ascii[11] = { 0 };
 	const size_t len = xutoa(distance, ascii);
-	const char esc_code[2] = {'A' + (char)direction };
+	const char esc_code[2] = { 'A' + (char)direction };
 
 	slice_append(seq, "\033[", 2);
 	slice_append(seq, ascii, len);
@@ -281,7 +281,7 @@ static ssize_t xgetline(char **line, const char *prompt)
 				*line = ctx.line;
 				return ctx.line_size;
 			case TAB:
-				flash_screen();
+				ring_bell();
 				break;
 			case ENTER:
 				if (ctx.line_size) {
@@ -289,7 +289,7 @@ static ssize_t xgetline(char **line, const char *prompt)
 					*line = ctx.line;
 					return ctx.line_size;
 				}
-				flash_screen();
+				ring_bell();
 				break;
 			case ESC: {
 				const char seq[2] = { xgetch(), xgetch() };
@@ -343,7 +343,7 @@ static ssize_t xgetline(char **line, const char *prompt)
 	return ctx.line_size;
 }
 
-char *_xprompt(const char *prompt, size_t *len)
+static char *_xprompt(const char *prompt, size_t *len)
 {
 	console_t orig;
 	if (xtcsetattr(&orig, CONSOLE_MODE_RAW)) {
@@ -376,6 +376,39 @@ char *_xprompt(const char *prompt, size_t *len)
 		xfree(line);
 		return NULL;
 	}
+	*len = line_length;
+	return line;
+}
+
+/**
+ * @brief 
+ * 
+ * @param prompt_msg 
+ * @param error_msg 
+ * @param len 
+ * @return char* 
+ */
+char *xprompt(const char *prompt_msg, const char *error_msg, size_t *len)
+{
+	char *line;
+	size_t line_length;
+
+	while (1) {
+		line = NULL;
+		line_length = 0;
+
+		do {
+			line = _xprompt(prompt_msg, &line_length);
+		} while (line == NULL);
+
+		if (*len && line_length > *len) {
+			xwarn("Maximum %s length is %zu bytes", error_msg, *len);
+			xfree(line);
+			continue;
+		}
+		break;
+	}
+	
 	*len = line_length;
 	return line;
 }
