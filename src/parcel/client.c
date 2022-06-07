@@ -91,7 +91,7 @@ int announce_connection(client_t *ctx)
 int send_thread(void *ctx)
 {
 	client_t client;
-	client_t *client_ctx = (client_t *)ctx;
+	client_t *client_ctx = ctx;
 	memcpy_locked(&client_ctx->mutex_lock, &client, client_ctx, sizeof(client_t));
 	int status = 0;
 
@@ -141,16 +141,16 @@ int send_thread(void *ctx)
 	}
 
 	cleanup:
-		// memcpy_locked(&client_ctx->mutex_lock, &client_ctx->kill_threads, &(bool[]){ 1 }, sizeof(bool));
+		memcpy_locked(&client_ctx->mutex_lock, &client_ctx->kill_threads, &(bool[]){ 1 }, sizeof(bool));
 		xclose(client.socket);
-		xfree(client_ctx);
-		exit(status);
+		return status;
+		// xfree(client_ctx);
 }
 
 static int recv_remaining(client_t *ctx, wire_t *wire, size_t bytes_recv, size_t bytes_remaining)
 {
 	size_t wire_size = bytes_recv + bytes_remaining;
-	wire_t *_wire = xmalloc(wire_size);
+	wire_t *_wire = xcalloc(wire_size);
 	if (!_wire) {
 		return -1;
 	}
@@ -186,7 +186,7 @@ wire_t *recv_new_wire(sock_t socket, size_t *wire_size)
 void *recv_thread(void *ctx)
 {
 	client_t client;
-	client_t *client_ctx = (client_t *)ctx;
+	client_t *client_ctx = ctx;
 	memcpy(&client, client_ctx, sizeof(client_t));
 	
 	int status = 0;
@@ -194,13 +194,14 @@ void *recv_thread(void *ctx)
 	while (1) {
 		size_t bytes_recv;
 		wire_t *wire = recv_new_wire(client.socket, &bytes_recv);
+
+		// Refresh context since recv is blocking
+		memcpy_locked(&client_ctx->mutex_lock, &client, client_ctx, sizeof(client_t));
+		
 		if (!wire) {
-			xalert("malloc() failure when initializing new wire\n");
-			status = -1;
+			status = client.kill_threads ? 0 : -1;
 			break;
 		}
-
-		memcpy_locked(&client_ctx->mutex_lock, &client, client_ctx, sizeof(client_t));
 
 		size_t length = bytes_recv;
 		switch (decrypt_wire(wire, &length, client.keys.session)) {
@@ -212,7 +213,7 @@ void *recv_thread(void *ctx)
 				}
 				break;
 			case WIRE_PARTIAL:
-				debug_print("%s\n", "> wire is partial, continue receiving");
+				debug_print("> Received %zu bytes, header specifies %zu total\n", bytes_recv, length);
 				if (recv_remaining(&client, wire, bytes_recv, length)) {
 					xalert("recv_remaining()\n");
 					status = -1;
@@ -257,14 +258,14 @@ void *recv_thread(void *ctx)
 		struct timespec ts = { .tv_nsec = 1000000 };
 		(void)nanosleep(&ts, NULL);
 		
-		if (status) {
+		if (client.kill_threads || status) {
 			break;
 		}
 	}
 	end_thread:
 		xclose(client.socket);
 		xfree(client_ctx);
-		exit(status);
+		return NULL;
 }
 
 int connect_server(client_t *client, const char *ip, const char *port)

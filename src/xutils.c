@@ -78,17 +78,6 @@ void xalert(const char *format, ...)
 	va_end(ap);
 }
 
-void xlog(const char *format, ...)
-{
-	(void)format;
-	// va_list ap;
-	// va_start(ap, format);
-	// (void)fprintf(stdout, "%s", "\033[34;3m");
-	// (void)vfprintf(stdout, format, ap);
-	// (void)fprintf(stdout, "\033[0m");
-	// va_end(ap);
-}
-
 void xprintf(ansi color, const char *format, ...)
 {
 	static const char *escape_codes[] = {
@@ -105,12 +94,15 @@ void xprintf(ansi color, const char *format, ...)
 
 ssize_t xsendall(sock_t socket, const void *data, size_t len)
 {
+	debug_print("Sending %zu bytes total\n", len);
 	for (size_t i = 0; i < len;) {
+		debug_print("Trying to send %zu bytes\n", len - i);
 		ssize_t bytes_sent = xsend(socket, data + i, len - i, 0);
 		switch (bytes_sent) {
 			case -1:
 				return -1;
 			default:
+				debug_print("Sent %zu bytes\n", bytes_sent);
 				i += bytes_sent;
 		}
 	}
@@ -119,7 +111,16 @@ ssize_t xsendall(sock_t socket, const void *data, size_t len)
 
 ssize_t xrecvall(sock_t socket, void *data, size_t len)
 {
-	return xrecv(socket, data, len, MSG_WAITALL);
+	for (size_t i = 0; i < len;) {
+		ssize_t bytes_recv = xrecv(socket, data + i, len - i, 0);
+		switch (bytes_recv) {
+			case -1:
+				return -1;
+			default:
+				i += bytes_recv;
+		}
+	}
+	return 0;
 }
 
 int xgetpeeraddr(sock_t socket, char *address, in_port_t *port)
@@ -412,4 +413,10 @@ size_t xutoa(uint32_t value, char *str)
 		str[value++] = '\0';
 	}
 	return value;
+}
+
+void *xmemdup(void *mem, size_t len)
+{
+	void *_mem = xcalloc(len);
+	return mem ? memcpy(_mem, mem, len) : NULL;
 }

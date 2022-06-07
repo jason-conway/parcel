@@ -69,8 +69,6 @@ int parse_input(client_t *ctx, enum command_id *cmd, char **message, size_t *mes
 
 void prompt_args(char *address, char *username);
 
-// void fatal(const char *msg);
-
 int proc_file(void *data);
 int proc_ctrl(client_t *ctx, void *data);
 void proc_text(uint8_t *wire_data);

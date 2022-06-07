@@ -86,10 +86,10 @@ int main(int argc, char **argv)
 				return 0;
 			case ':':
 				printf("> Option is missing an argument\n");
-				return 1;
+				return -1;
 			default:
 				usage(stderr);
-				return 1;
+				return -1;
 		}
 	}
 	
@@ -102,8 +102,20 @@ int main(int argc, char **argv)
 	}
 
 	pthread_t recv_ctx;
-	pthread_create(&recv_ctx, NULL, recv_thread, (void *)client);
+	if (pthread_create(&recv_ctx, NULL, recv_thread, (void *)client)) {
+		xalert("Unable to create receiver thread\n");
+		return -1;
+	}
 
+	int thread_status[2] = { 0, 0 };
+
+	thread_status[0] = send_thread((void *)client);
+
+	if (pthread_join(recv_ctx, (void **)&thread_status[1])) {
+		xalert("Unable to join receiver thread\n");
+		return -1;
+	}
+	
 	// Handle sending from main thread
-	return send_thread((void *)client);
+	return thread_status[0] | thread_status[1];
 }

@@ -82,6 +82,7 @@ wire_t *new_wire(void)
 	wire_t *wire = xcalloc(RECV_MAX_BYTES);
 	return wire ? wire : NULL;
 }
+// return (wire_t *)xcalloc(RECV_MAX_BYTES);
 
 /**
  * @brief Lower-level wire init function
@@ -149,7 +150,7 @@ int decrypt_wire(wire_t *wire, size_t *len, const uint8_t *key)
 	const size_t data_length = wire_pack64(length);
 	size_t wire_length = data_length + sizeof(wire_t);
 	if (*len && *len != wire_length) {
-		size_t received = *len;
+		const size_t received = *len;
 		*len = wire_length - received; // Update with bytes remaining
 		return WIRE_PARTIAL;
 	}
@@ -165,30 +166,4 @@ int decrypt_wire(wire_t *wire, size_t *len, const uint8_t *key)
 
 	aes128_decrypt(&ctxs[0], wire->type, data_length + BASE_DEC_LEN);
 	return WIRE_OK;
-}
-
-/**
- * @brief Send data over wire
- * 
- * @param socket Socket to send on
- * @param type wire type
- * @param data data to be encrypted and sent
- * @param length length of data
- * @param key encryption key set
- * @return int 
- */
-int wire_send(sock_t socket, uint64_t type, void *data, size_t length, const uint8_t *key)
-{
-	size_t len = length;
-	wire_t *wire = init_wire(data, type, &len);
-	if (!wire) {
-		return -1;
-	}
-	encrypt_wire(wire, key);
-	if (xsendall(socket, wire, len) < 0) {
-		xfree(wire);
-		return -1;
-	}
-	xfree(wire);
-	return 0;
 }
