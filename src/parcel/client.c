@@ -156,15 +156,16 @@ static int recv_remaining(client_t *ctx, wire_t *wire, size_t bytes_recv, size_t
 	}
 	memcpy(_wire, wire, bytes_recv);
 	xfree(wire);
-	if (xrecvall(ctx->socket, &_wire[bytes_recv], bytes_remaining)) {
-		xfree(_wire);
+	wire = _wire;
+
+	if (xrecvall(ctx->socket, wire + bytes_recv, bytes_remaining)) {
 		return -1;
 	}
 
-	if (decrypt_wire(_wire, &wire_size, ctx->keys.session)) {
+	if (decrypt_wire(wire, &wire_size, ctx->keys.session)) {
 		return -1;
 	}
-	wire = _wire;
+	
 	return 0;
 }
 
@@ -202,6 +203,12 @@ void *recv_thread(void *ctx)
 			status = client.kill_threads ? 0 : -1;
 			break;
 		}
+		wire_t *other_wire = xmemdup(wire, bytes_recv);
+		if (!other_wire) {
+			status = -1;
+			xfree(wire);
+			break;
+		}
 
 		size_t length = bytes_recv;
 		switch (decrypt_wire(wire, &length, client.keys.session)) {
@@ -213,7 +220,9 @@ void *recv_thread(void *ctx)
 				}
 				break;
 			case WIRE_PARTIAL:
-				debug_print("> Received %zu bytes, header specifies %zu total\n", bytes_recv, length);
+				debug_print("> Received %zu bytes, header specifies %zu total\n", bytes_recv, length + bytes_recv);
+				xfree(wire);
+				wire = other_wire;
 				if (recv_remaining(&client, wire, bytes_recv, length)) {
 					xalert("recv_remaining()\n");
 					status = -1;

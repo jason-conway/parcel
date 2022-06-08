@@ -82,7 +82,6 @@ wire_t *new_wire(void)
 	wire_t *wire = xcalloc(RECV_MAX_BYTES);
 	return wire ? wire : NULL;
 }
-// return (wire_t *)xcalloc(RECV_MAX_BYTES);
 
 /**
  * @brief Lower-level wire init function
