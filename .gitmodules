@@ -1,0 +1,9 @@
+[submodule "src/aes128"]
+	path = src/aes128
+	url = https://github.com/jason-conway/aes128
+[submodule "src/sha256"]
+	path = src/sha256
+	url = https://github.com/jason-conway/sha256
+[submodule "src/x25519"]
+	path = src/x25519
+	url = https://github.com/jason-conway/x25519
