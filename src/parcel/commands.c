@@ -110,24 +110,12 @@ free_path:
 	return -1;
 }
 
-void memprint(const void *src, size_t len)
-{
-	const uint8_t *data = src;
-	for (size_t i = 0; i < len; i += 4) {
-		uint64_t chunk = (((uint64_t)data[i + 3] << 0x00) |
-						  ((uint64_t)data[i + 2] << 0x08) |
-						  ((uint64_t)data[i + 1] << 0x10) |
-						  ((uint64_t)data[i + 0] << 0x18));
-		printf("%s%" PRIx64, i ? "-" : "", chunk);
-	}
-}
-
 static void cmd_print_enc_info(parcel_keys_t *keys)
 {
 	printf("Session Key: ");
-	memprint(keys->session, KEY_LEN);
+	xmemprint(keys->session, KEY_LEN);
 	printf("\nControl Key: ");
-	memprint(keys->ctrl, KEY_LEN);
+	xmemprint(keys->ctrl, KEY_LEN);
 	printf("\n");
 }
 
