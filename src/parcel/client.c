@@ -147,26 +147,26 @@ int send_thread(void *ctx)
 		// xfree(client_ctx);
 }
 
-static int recv_remaining(client_t *ctx, wire_t *wire, size_t bytes_recv, size_t bytes_remaining)
+static int recv_remaining(client_t *ctx, wire_t **wire, size_t bytes_recv, size_t bytes_remaining)
 {
 	size_t wire_size = bytes_recv + bytes_remaining;
-	wire_t *_wire = xcalloc(wire_size);
-	if (!_wire) {
-		return -1;
-	}
-	memcpy(_wire, wire, bytes_recv);
-	xfree(wire);
-	wire = _wire;
-
-	if (xrecvall(ctx->socket, wire + bytes_recv, bytes_remaining)) {
+	*wire = xrealloc(*wire, wire_size);
+	if (!*wire) {
 		return -1;
 	}
 
-	if (decrypt_wire(wire, &wire_size, ctx->keys.session)) {
-		return -1;
+	wire_t *dest = *wire;
+	for (size_t i = 0; i < bytes_remaining;) {
+		ssize_t received = xrecv(ctx->socket, &dest->data[bytes_recv - sizeof(wire_t)] + i, bytes_remaining - i, 0);
+		switch (received) {
+			case -1:
+				return -1;
+			default:
+				i += received;
+		}
 	}
-	
-	return 0;
+
+	return decrypt_wire(*wire, &wire_size, ctx->keys.session) ? -1 : 0;
 }
 
 wire_t *recv_new_wire(sock_t socket, size_t *wire_size)
@@ -203,13 +203,7 @@ void *recv_thread(void *ctx)
 			status = client.kill_threads ? 0 : -1;
 			break;
 		}
-		wire_t *other_wire = xmemdup(wire, bytes_recv);
-		if (!other_wire) {
-			status = -1;
-			xfree(wire);
-			break;
-		}
-
+		
 		size_t length = bytes_recv;
 		switch (decrypt_wire(wire, &length, client.keys.session)) {
 			case WIRE_INVALID_KEY:
@@ -220,15 +214,13 @@ void *recv_thread(void *ctx)
 				}
 				break;
 			case WIRE_PARTIAL:
-				debug_print("> Received %zu bytes, header specifies %zu total\n", bytes_recv, length + bytes_recv);
-				xfree(wire);
-				wire = other_wire;
-				if (recv_remaining(&client, wire, bytes_recv, length)) {
+				// debug_print("> Received %zu bytes, header specifies %zu total\n", bytes_recv, length + bytes_recv);
+				if (recv_remaining(&client, &wire, bytes_recv, length)) {
 					xalert("recv_remaining()\n");
 					status = -1;
 					goto recv_error;
 				}
-				debug_print("%s\n", "> received remainder of wire");
+				// debug_print("%s\n", "> received remainder of wire");
 				break;
 			case WIRE_CMAC_ERROR:
 				debug_print("%s\n", "> CMAC error");
@@ -294,6 +286,7 @@ int connect_server(client_t *client, const char *ip, const char *port)
 		xalert("xgetaddrinfo()\n");
 		return -1;
 	}
+
 	struct addrinfo *node = NULL;
 	for (node = srv_addr; node; node = node->ai_next) {
 		if (xsocket(&client->socket, node->ai_family, node->ai_socktype, node->ai_protocol) < 0) {
