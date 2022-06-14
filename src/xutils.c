@@ -65,6 +65,7 @@ void xwarn(const char *format, ...)
 	(void)fprintf(stdout, "%s", "\033[0;33m");
 	(void)vfprintf(stdout, format, ap);
 	(void)fprintf(stdout, "\033[0m");
+	(void)fflush(stdout);
 	va_end(ap);
 }
 
@@ -75,6 +76,7 @@ void xalert(const char *format, ...)
 	(void)fprintf(stderr, "%s", "\033[0;31m");
 	(void)vfprintf(stderr, format, ap);
 	(void)fprintf(stderr, "\033[0m");
+	(void)fflush(stdout);
 	va_end(ap);
 }
 
