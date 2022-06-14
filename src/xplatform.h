@@ -24,6 +24,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <signal.h>
+#include <limits.h>
 
 #if __unix__ || __APPLE__
 	#include <unistd.h>

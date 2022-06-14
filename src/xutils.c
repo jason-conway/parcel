@@ -145,11 +145,11 @@ bool xport_valid(char *arg)
 	return true;
 }
 
-int xgetopt(xgetopt_t *x, int argc, char **argv, const char *optstr)
+int xgetopt(xgetopt_t *ctx, int argc, char **argv, const char *optstr)
 {
-	char *arg = argv[!x->index ? (x->index += !!argc) : x->index];
+	char *arg = argv[!ctx->index ? (ctx->index += !!argc) : ctx->index];
 	if (arg && arg[0] == '-' && arg[1] == '-' && !arg[2]) {
-		x->index++;
+		ctx->index++;
 		return -1;
 	}
 	else if (!arg || arg[0] != '-') {
@@ -159,36 +159,36 @@ int xgetopt(xgetopt_t *x, int argc, char **argv, const char *optstr)
 		return -1;
 	}
 	else {
-		while (*optstr && arg[x->position + 1] != *optstr) {
+		while (*optstr && arg[ctx->position + 1] != *optstr) {
 			optstr++;
 		}
-		x->option = arg[x->position + 1];
+		ctx->option = arg[ctx->position + 1];
 		if (!*optstr) {
 			return '?';
 		}
 		else if (optstr[1] == ':') {
-			if (arg[x->position + 2]) {
-				x->arg = &arg[x->position + 2];
-				x->index++;
-				x->position = 0;
-				return x->option;
+			if (arg[ctx->position + 2]) {
+				ctx->arg = &arg[ctx->position + 2];
+				ctx->index++;
+				ctx->position = 0;
+				return ctx->option;
 			}
-			else if (argv[x->index + 1]) {
-				x->arg = argv[x->index + 1];
-				x->index += 2;
-				x->position = 0;
-				return x->option;
+			else if (argv[ctx->index + 1]) {
+				ctx->arg = argv[ctx->index + 1];
+				ctx->index += 2;
+				ctx->position = 0;
+				return ctx->option;
 			}
 			else {
 				return ':';
 			}
 		}
 		else {
-			if (!arg[++x->position + 1]) {
-				x->index++;
-				x->position = 0;
+			if (!arg[++ctx->position + 1]) {
+				ctx->index++;
+				ctx->position = 0;
 			}
-			return x->option;
+			return ctx->option;
 		}
 	}
 }
@@ -280,7 +280,7 @@ char *xget_dir(char *file)
  */
 void xbasename(const char *path, char *filename)
 {
-	char *base = strrchr(path, '/');
+	char *base = xmemrchr(path, '/', strlen(path) + 1);
 	if (base) {
 		memcpy(filename, base + 1, strnlen(base + 1, FILENAME_MAX));
 		return;
@@ -346,7 +346,7 @@ static int http_extract_body(slice_t *request)
 {
 	char *pos_data = request->data;
 	for (size_t i = request->len;;) {
-		char *pos_linefeed = memchr(pos_data, '\n', i); // Pointer to the next linefeed
+		char *pos_linefeed = xmemchr(pos_data, '\n', i); // Pointer to the next linefeed
 		if (!pos_linefeed) {
 			break; // No linefeeds left
 		}
@@ -413,6 +413,23 @@ size_t xutoa(uint32_t value, char *str)
 		str[value++] = '\0';
 	}
 	return value;
+}
+
+void *xmemchr(const void *src, int c, size_t len)
+{
+	const unsigned char *s = src;
+	for (; len && *s != (unsigned char)c; s++, len--) { };
+	return len ? (void *)s : NULL;
+}
+
+void *xmemrchr(const void *src, int c, size_t len)
+{
+	for (const unsigned char *s = src;; len--) {
+		if (s[len] == (unsigned char)c) {
+			return (void *)(s + len);
+		}
+	}
+	return NULL;
 }
 
 void *xmemdup(void *mem, size_t len)

@@ -90,7 +90,7 @@ ssize_t xrecvall(sock_t socket, void *data, size_t len);
 
 bool xport_valid(char *arg);
 
-int xgetopt(xgetopt_t *x, int argc, char **argv, const char *optstr);
+int xgetopt(xgetopt_t *optctx, int argc, char **argv, const char *optstr);
 
 slice_t *slice_append(slice_t *slice, const char *data, size_t len);
 
@@ -102,3 +102,5 @@ int xmkdirs(size_t depth, ...);
 char *xsavepath(const char *file);
 
 void *xmemdup(void *mem, size_t len);
+void *xmemchr(const void *src, int c, size_t len);
+void *xmemrchr(const void *src, int c, size_t len);
