@@ -89,20 +89,24 @@ void xprintf(ansi color, const char *format, ...)
 	(void)fprintf(stdout, "%s", escape_codes[color]);
 	(void)vfprintf(stdout, format, ap);
 	(void)fprintf(stdout, "\033[0m");
+	(void)fflush(stdout);
 	va_end(ap);
 }
 
 ssize_t xsendall(sock_t socket, const void *data, size_t len)
 {
-	debug_print("Sending %zu bytes total\n", len);
+	// debug_print("Sending %zu bytes total\n", len);
+	uint8_t *_data = (uint8_t *)data;
 	for (size_t i = 0; i < len;) {
-		debug_print("Trying to send %zu bytes\n", len - i);
-		ssize_t bytes_sent = xsend(socket, data + i, len - i, 0);
+		// const size_t to_send = (len - i) > 4096 ? 4096 : (len - i);
+		// debug_print("Trying to send %zu bytes\n", to_send);
+
+		ssize_t bytes_sent = xsend(socket, &_data[i], len - i, 0);
 		switch (bytes_sent) {
 			case -1:
 				return -1;
 			default:
-				debug_print("Sent %zu bytes\n", bytes_sent);
+				// debug_print("Sent %zu bytes\n", bytes_sent);
 				i += bytes_sent;
 		}
 	}
@@ -224,7 +228,7 @@ bool xisdir(const char *path)
 
 /**
  * @brief Make a directory if it doesn't exist
- * 
+ *
  * @param depth depth of target directory
  * @param ... path of new directory, one arg for each depth
  * @return Zero on success
@@ -274,7 +278,7 @@ char *xget_dir(char *file)
 
 /**
  * @brief Return filename from path
- * 
+ *
  * @param path file path
  * @return returns null-terminated string containing the file name
  */
@@ -320,7 +324,7 @@ static int http_request(slice_t *request)
 		(void)xclose(http_socket);
 		return -1;
 	}
-	
+
 	// Receive response
 	for (size_t i = 0; i < request->len;) {
 		ssize_t bytes_recv = 0;
@@ -404,7 +408,7 @@ size_t xutoa(uint32_t value, char *str)
 {
 	char ascii[11];
 	char *digit;
-	
+
 	for (digit = &ascii[0]; value > 0; value /= 10) {
 		*digit++ = '0' + (char)(value % 10);
 	}
@@ -436,4 +440,95 @@ void *xmemdup(void *mem, size_t len)
 {
 	void *_mem = xcalloc(len);
 	return mem ? memcpy(_mem, mem, len) : NULL;
+}
+
+void xhexdump(const void *src, size_t len)
+{
+	static const char hex[16] = "0123456789abcdef";
+
+	//              offset                        bytes                             ascii
+	//            00000000  00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  |................|
+	char row[] = "--------  -- -- -- -- -- -- -- --  -- -- -- -- -- -- -- --  |----------------|";
+	//                      ^  ^  ^  ^  ^  ^  ^  ^   ^  ^  ^  ^  ^  ^  ^  ^    ^
+	//                     10 13 16 19 22 25 28 31  35 38 41 44 47 50 53 56   61
+
+	static const uint8_t map[] = {
+		10, 61, 13, 62, 16, 63, 19, 64,
+		22, 65, 25, 66, 28, 67, 31, 68,
+		35, 69, 38, 70, 41, 71, 44, 72,
+		47, 73, 50, 74, 53, 75, 56, 76
+	};
+
+	static const char ascii_table[] = {
+		0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e,
+		0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e,
+		0x20, 0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28, 0x29, 0x2a, 0x2b, 0x2c, 0x2d, 0x2e, 0x2f,
+		0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x3a, 0x3b, 0x3c, 0x3d, 0x3e, 0x3f,
+		0x40, 0x41, 0x42, 0x43, 0x44, 0x45, 0x46, 0x47, 0x48, 0x49, 0x4a, 0x4b, 0x4c, 0x4d, 0x4e, 0x4f,
+		0x50, 0x51, 0x52, 0x53, 0x54, 0x55, 0x56, 0x57, 0x58, 0x59, 0x5a, 0x5b, 0x5c, 0x5d, 0x5e, 0x5f,
+		0x60, 0x61, 0x62, 0x63, 0x64, 0x65, 0x66, 0x67, 0x68, 0x69, 0x6a, 0x6b, 0x6c, 0x6d, 0x6e, 0x6f,
+		0x70, 0x71, 0x72, 0x73, 0x74, 0x75, 0x76, 0x77, 0x78, 0x79, 0x7a, 0x7b, 0x7c, 0x7d, 0x7e, 0x2e,
+		0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e,
+		0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e,
+		0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e,
+		0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e,
+		0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e,
+		0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e,
+		0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e,
+		0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e, 0x2e
+	};
+
+	const uint8_t *mem = src;
+
+	for (size_t offset = 0;; offset += 16) {
+		size_t line_len = ((len - offset) > 16) ? 16 : len - offset;
+		if (!line_len) {
+			break;
+		}
+
+		uint8_t line[16] = { 0 };
+		memcpy(line, mem + offset, line_len);
+
+		// Offset
+		for (size_t i = 0; i < 8; i++) {
+			row[i] = hex[(offset >> (28 - 4 * i)) & 0xf];
+		}
+
+		for (size_t i = 0; i < 16; i++) {
+			// Hex
+			row[map[2 * i] + 0] = hex[line[i] >> 4];
+			row[map[2 * i] + 1] = hex[line[i] & 15];
+
+			// ASCII
+			row[map[2 * i + 1]] = ascii_table[line[i]];
+		}
+
+		// Clear on last loop
+		for (size_t i = line_len; i < 16; i++) {
+			// Hex
+			row[map[2 * i] + 0] = 0x20;
+			row[map[2 * i] + 1] = 0x20;
+
+			// ASCII
+			row[map[2 * i + 1]] = 0x20;
+		}
+
+		printf("\033[33m%s\033[0m\n", row);
+
+		if (line_len != 16) {
+			break;
+		}
+	}
+}
+
+void xmemprint(const void *src, size_t len)
+{
+	const uint8_t *data = src;
+	for (size_t i = 0; i < len; i += 4) {
+		uint64_t chunk = (((uint64_t)data[i + 3] << 0x00) |
+						  ((uint64_t)data[i + 2] << 0x08) |
+						  ((uint64_t)data[i + 1] << 0x10) |
+						  ((uint64_t)data[i + 0] << 0x18));
+		printf("%s%" PRIx64, i ? "-" : "", chunk);
+	}
 }

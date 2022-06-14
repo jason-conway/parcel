@@ -104,3 +104,5 @@ char *xsavepath(const char *file);
 void *xmemdup(void *mem, size_t len);
 void *xmemchr(const void *src, int c, size_t len);
 void *xmemrchr(const void *src, int c, size_t len);
+void xmemprint(const void *src, size_t len);
+void xhexdump(const void *src, size_t len);
