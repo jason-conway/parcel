@@ -89,13 +89,6 @@ static void aes_key_expansion(uint8_t *round_key, const uint8_t *key)
 {
 	static const uint8_t round_constants[11] = { 0x8d, 0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x1b, 0x36 };
 
-	
-	// for (size_t i = 0; i < 4; i++) {
-	// 	for (size_t j = 0; j < 4; j++) {
-	// 		round_key[(4 * i) + j] = key[(i * 4) + j];
-	// 	}
-	// }
-	
 	// First round key
 	memcpy(round_key, key, AES_KEY_LEN);
 
