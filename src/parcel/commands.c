@@ -89,7 +89,6 @@ static int cmd_send_file(char **message, size_t *message_length)
 	const size_t filename_length = strnlen(filename, FILE_NAME_LEN - 1) + 1;
 	memcpy(file_contents->filename, filename, filename_length);
 	
-	
 	// Now read in the file contents
 	if (fread(file_contents->filedata, 1, file_size, file) != file_size) {
 		xwarn("> Error reading contents of file\n");
@@ -149,13 +148,13 @@ static int cmd_list(void)
 {
 	static const char list[] =
 		"parcel commands:\n"
-		"  :list         list available commands\n"
-		"  :x            exit the server and close parcel\n"
-		"  :username     change username\n"
-		"  :encinfo      display current encryption parameters\n"
-		"  :file         send a file\n"
-		"  :clear        clear the screen\n"
-		"  :version      print build version\n";
+		"  /list         list available commands\n"
+		"  /x            exit the server and close parcel\n"
+		"  /username     change username\n"
+		"  /encinfo      display current encryption parameters\n"
+		"  /file         send a file\n"
+		"  /clear        clear the screen\n"
+		"  /version      print build version\n";
 	return !printf("%s", list);
 }
 
@@ -173,7 +172,7 @@ static int cmd_ambiguous(void)
 static enum command_id parse_command(char *command)
 {
 	static const char *command_strings[] = {
-		":list", ":x", ":username", ":encinfo", ":file", ":clear", ":version"
+		"/list", "/x", "/username", "/encinfo", "/file", "/clear", "/version"
 	};
 
 	const size_t commands = sizeof(command_strings) / sizeof(*command_strings);
@@ -194,7 +193,7 @@ static enum command_id parse_command(char *command)
 
 int parse_input(client_t *ctx, enum command_id *cmd, char **message, size_t *message_length)
 {
-	if (*message[0] != ':') { // Fast return
+	if (*message[0] != '/') { // Fast return
 		prepend_username(ctx->username, message, message_length);
 		if (!*message) {
 			return -1;

@@ -97,19 +97,19 @@ To combat this, UTF-16 input is read in one character at a time using `ReadConso
 
 ## Client-Side Commands
 
-All commands start with a colon followed by the command itself.
+All commands start with a slash followed by the command itself.
 
 | Command     | Description                             |
 | ----------- | --------------------------------------- |
-| `:list`     | List available commands                 |
-| `:x`        | Exit the server and close parcel        |
-| `:username` | Change username                         |
-| `:encinfo`  | Display active session and control keys |
-| `:file`     | Send a file                             |
-| `:clear`    | Clear the screen                        |
-| `:version`  | Display application version             |
+| `/list`     | List available commands                 |
+| `/x`        | Exit the server and close parcel        |
+| `/username` | Change username                         |
+| `/encinfo`  | Display active session and control keys |
+| `/file`     | Send a file                             |
+| `/clear`    | Clear the screen                        |
+| `/version`  | Display application version             |
 
-Commands can be parsed once enough has been typed to become unambiguous, i.e., the username command can be entered as `:u`, clear can be `:c`, etcetera.
+Commands can be parsed once enough has been typed to become unambiguous, i.e., the username command can be entered as `/u`, clear can be `/c`, etcetera.
 
 Commands are interactive only, no need to supply arguments.
 

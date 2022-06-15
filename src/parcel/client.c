@@ -11,21 +11,6 @@
 
 #include "client.h"
 
-void fatal(client_t *ctx, const char *format, ...)
-{
-	va_list ap;
-	va_start(ap, format);
-
-	(void)fprintf(stderr, "%s", "\033[0;31m");
-	(void)vfprintf(stderr, format, ap);
-	(void)fprintf(stderr, "\033[0m");
-	va_end(ap);
-
-	xclose(ctx->socket);
-	xfree(ctx);
-	exit(EXIT_FAILURE);
-}
-
 void memcpy_locked(pthread_mutex_t *lock, void *dest, void *src, size_t length)
 {
 	pthread_mutex_lock(lock);
