@@ -117,7 +117,17 @@ int xgetifaddrs(const char *prefix, const char *suffix)
 {
 #if __unix__ || __APPLE__
 	struct ifaddrs *interfaces;
+	bool failure = true;
+
 	if (getifaddrs(&interfaces)) {
+		debug_print("%s\n", "getifaddrs() error")
+		// Fallback on using machine_name.local
+		char device_name[MAXNAMLEN];
+		memset(device_name, 0, sizeof(device_name));
+		if (!xgetlogin(device_name, sizeof(device_name))) {
+			printf("%s%s.local:%s\n", prefix, device_name, suffix);
+			return 0;
+		}
 		return -1;
 	}
 
@@ -128,22 +138,25 @@ int xgetifaddrs(const char *prefix, const char *suffix)
 		if (node->ifa_addr->sa_family == AF_INET) {
 			char interface_name[NI_MAXHOST] = { 0 };
 			if (getnameinfo(node->ifa_addr, sizeof(struct sockaddr_in), interface_name, NI_MAXHOST, NULL, 0, NI_NUMERICHOST)) {
-				return -1;
+				goto free_interfaces;
 			}
 			printf("%s%s:%s\n", prefix, interface_name, suffix);
 		}
 	}
-	freeifaddrs(interfaces);
-	return 0;
+	failure = false;
+	free_interfaces:
+		freeifaddrs(interfaces);
+		return failure ? -1 : 0;
+
 #elif _WIN32
 	ULONG ip_adapter_len = sizeof(IP_ADAPTER_INFO);
-	PIP_ADAPTER_INFO adapter_info = (IP_ADAPTER_INFO *)xmalloc(ip_adapter_len);
+	IP_ADAPTER_INFO *adapter_info = xmalloc(ip_adapter_len);
 	if (!adapter_info) {
 		return -1;
 	}
 	if (GetAdaptersInfo(adapter_info, &ip_adapter_len) == ERROR_BUFFER_OVERFLOW) {
 		xfree(adapter_info);
-		adapter_info = (IP_ADAPTER_INFO *)xmalloc(ip_adapter_len);
+		adapter_info = xmalloc(ip_adapter_len);
 		if (!adapter_info) {
 			return -1;
 		}
@@ -152,7 +165,10 @@ int xgetifaddrs(const char *prefix, const char *suffix)
 		xfree(adapter_info);
 		return -1;
 	}
-	for (PIP_ADAPTER_INFO adapter = adapter_info; adapter; adapter = adapter->Next) {
+	for (IP_ADAPTER_INFO *adapter = adapter_info; adapter; adapter = adapter->Next) {
+		if (adapter->IpAddressList.IpAddress.String[0] == '0') {
+			continue;
+		}
 		printf("%s%s:%s\n", prefix, adapter->IpAddressList.IpAddress.String, suffix);
 	}
 
