@@ -122,7 +122,7 @@ int xgetifaddrs(const char *prefix, const char *suffix)
 	if (getifaddrs(&interfaces)) {
 		debug_print("%s\n", "getifaddrs() error")
 		// Fallback on using machine_name.local
-		char device_name[MAXNAMLEN];
+		char device_name[64];
 		memset(device_name, 0, sizeof(device_name));
 		if (!xgetlogin(device_name, sizeof(device_name))) {
 			printf("%s%s.local:%s\n", prefix, device_name, suffix);
