@@ -119,13 +119,14 @@ int xgetifaddrs(const char *prefix, const char *suffix)
 	struct ifaddrs *interfaces;
 	bool failure = true;
 
-	if (getifaddrs(&interfaces)) {
-		debug_print("%s\n", "getifaddrs() error")
-		// Fallback on using machine_name.local
-		char device_name[64];
-		memset(device_name, 0, sizeof(device_name));
-		if (!xgetlogin(device_name, sizeof(device_name))) {
-			printf("%s%s.local:%s\n", prefix, device_name, suffix);
+	const bool status = !!getifaddrs(&interfaces);
+	if (status) {
+		debug_print("getifaddrs() returned %d, falling back on \"hostname.local\"\n", status);
+		const size_t HOST_MAX = 255;
+		char hostname[HOST_MAX];
+		memset(hostname, 0, HOST_MAX);
+		if (!gethostname(hostname, HOST_MAX)) {
+			printf("%s%s.local:%s\n", prefix, hostname, suffix);
 			return 0;
 		}
 		return -1;
