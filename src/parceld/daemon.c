@@ -222,7 +222,7 @@ int display_daemon_info(server_t *ctx)
 		xalert("Failed to obtain local interfaces\n");
 		return -1;
 	}
-	debug_print("%s\n", "Daemon running");
+	printf("\033[1mDaemon started...\033[0m\n");
 	return 0;
 }
 
