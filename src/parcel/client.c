@@ -2,7 +2,7 @@
  * @file client.c
  * @author Jason Conway (jpc@jasonconway.dev)
  * @brief The `parcel` Client
- * @version 0.9.1
+ * @version 0.9.2
  * @date 2021-11-08
  *
  * @copyright Copyright (c) 2021-2022 Jason Conway. All rights reserved.
@@ -10,13 +10,6 @@
  */
 
 #include "client.h"
-
-void memcpy_locked(pthread_mutex_t *lock, void *dest, void *src, size_t length)
-{
-	pthread_mutex_lock(lock);
-		memcpy(dest, src, length);
-	pthread_mutex_unlock(lock);
-}
 
 static void create_prefix(const char *username, char *prompt)
 {
@@ -77,7 +70,7 @@ int send_thread(void *ctx)
 {
 	client_t client;
 	client_t *client_ctx = ctx;
-	memcpy_locked(&client_ctx->mutex_lock, &client, client_ctx, sizeof(client_t));
+	xmemcpy_locked(&client_ctx->mutex_lock, &client, client_ctx, sizeof(client_t));
 	int status = 0;
 
 	while (1) {
@@ -87,7 +80,7 @@ int send_thread(void *ctx)
 		size_t length = 0;
 		char *plaintext = xprompt(prompt, "text", &length); // xprompt() will never return null by design
 
-		memcpy_locked(&client_ctx->mutex_lock, &client, client_ctx, sizeof(client_t));
+		xmemcpy_locked(&client_ctx->mutex_lock, &client, client_ctx, sizeof(client_t));
 		enum command_id id = CMD_NONE;
 
 		switch (parse_input(&client, &id, &plaintext, &length)) {
@@ -117,7 +110,7 @@ int send_thread(void *ctx)
 			case CMD_EXIT:
 				goto cleanup;
 			case CMD_USERNAME:
-				memcpy_locked(&client_ctx->mutex_lock, client_ctx->username, client.username, USERNAME_MAX_LENGTH);
+				xmemcpy_locked(&client_ctx->mutex_lock, client_ctx->username, client.username, USERNAME_MAX_LENGTH);
 				break;
 		}
 
@@ -126,10 +119,9 @@ int send_thread(void *ctx)
 	}
 
 	cleanup:
-		memcpy_locked(&client_ctx->mutex_lock, &client_ctx->kill_threads, &(bool[]){ 1 }, sizeof(bool));
+		xmemcpy_locked(&client_ctx->mutex_lock, &client_ctx->kill_threads, &(bool[]){ 1 }, sizeof(bool));
 		xclose(client.socket);
 		return status;
-		// xfree(client_ctx);
 }
 
 static int recv_remaining(client_t *ctx, wire_t **wire, size_t bytes_recv, size_t bytes_remaining)
@@ -178,11 +170,11 @@ void *recv_thread(void *ctx)
 	int status = 0;
 
 	while (1) {
-		size_t bytes_recv;
+		size_t bytes_recv = 0;
 		wire_t *wire = recv_new_wire(client.socket, &bytes_recv);
 
 		// Refresh context since recv is blocking
-		memcpy_locked(&client_ctx->mutex_lock, &client, client_ctx, sizeof(client_t));
+		xmemcpy_locked(&client_ctx->mutex_lock, &client, client_ctx, sizeof(client_t));
 		
 		if (!wire) {
 			status = client.kill_threads ? 0 : -1;
@@ -199,13 +191,13 @@ void *recv_thread(void *ctx)
 				}
 				break;
 			case WIRE_PARTIAL:
-				// debug_print("> Received %zu bytes, header specifies %zu total\n", bytes_recv, length + bytes_recv);
+				debug_print("> Received %zu bytes, header specifies %zu total\n", bytes_recv, length + bytes_recv);
 				if (recv_remaining(&client, &wire, bytes_recv, length)) {
 					xalert("recv_remaining()\n");
 					status = -1;
 					goto recv_error;
 				}
-				// debug_print("%s\n", "> received remainder of wire");
+				debug_print("%s\n", "> received remainder of wire");
 				break;
 			case WIRE_CMAC_ERROR:
 				debug_print("%s\n", "> CMAC error");
@@ -219,11 +211,10 @@ void *recv_thread(void *ctx)
 				switch (proc_ctrl(&client, wire->data)) {
 					case CTRL_EXIT:
 						xfree(wire);
-						xalert("> Received EXIT\n");
 						goto end_thread;
 					case CTRL_DHKE:
-						memcpy_locked(&client_ctx->mutex_lock, &client_ctx->keys, &client.keys, sizeof(parcel_keys_t));
-						memcpy_locked(&client_ctx->mutex_lock, &client_ctx->conn_announced, &client.conn_announced, sizeof(bool));
+						xmemcpy_locked(&client_ctx->mutex_lock, &client_ctx->keys, &client.keys, sizeof(parcel_keys_t));
+						xmemcpy_locked(&client_ctx->mutex_lock, &client_ctx->conn_announced, &client.conn_announced, sizeof(bool));
 						break;
 				}
 				break;
@@ -297,7 +288,7 @@ int connect_server(client_t *client, const char *ip, const char *port)
 		return -1;
 	}
 
-	printf(">\033[32m Connected to server\033[0m\n");
+	xprintf(GRN, BOLD, "=== Connected to server ===\n");
 	return 0;
 }
 
