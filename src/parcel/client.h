@@ -18,15 +18,13 @@
 #include "wire.h"
 #include "console.h"
 
-enum ParcelConstants
-{
+enum ParcelConstants {
 	USERNAME_MAX_LENGTH = 32,
 	PORT_MAX_LENGTH = 6,
 	ADDRESS_MAX_LENGTH = 32
 };
 
-enum command_id
-{
+enum command_id {
 	CMD_AMBIGUOUS = -1,
 	CMD_NONE,
 	CMD_LIST,
@@ -38,21 +36,18 @@ enum command_id
 	CMD_VERSION,
 };
 
-enum SendType
-{
+enum SendType {
 	SEND_NONE = 0,
 	SEND_TEXT,
 	SEND_FILE
 };
 
-typedef struct parcel_keys_t
-{
+typedef struct parcel_keys_t {
 	uint8_t session[KEY_LEN]; // Group-derived symmetric key
 	uint8_t ctrl[KEY_LEN];    // Ephemeral daemon control key
 } parcel_keys_t;
 
-typedef struct client_t
-{
+typedef struct client_t {
 	sock_t socket;
 	char username[USERNAME_MAX_LENGTH];
 	parcel_keys_t keys;

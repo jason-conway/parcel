@@ -143,7 +143,6 @@ int cmd_exit(client_t *ctx, char **message, size_t *message_length)
 	return 0;
 }
 
-// TODO: update
 static int cmd_list(void)
 {
 	static const char list[] =

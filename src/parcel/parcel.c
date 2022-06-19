@@ -18,7 +18,7 @@
 static void catch_sigint(int sig)
 {
 	(void)sig;
-	xprintf(RED, "\nAborting application\n");
+	xprintf(RED, BOLD, "\nAborting application\n");
 	exit(EXIT_FAILURE);
 }
 
@@ -67,7 +67,7 @@ int main(int argc, char **argv)
 					memcpy(port, x.arg, strlen(x.arg));
 					break;
 				}
-				xwarn("> Using default port: 2315\n");
+				xwarn("Using default port: 2315\n");
 				break;
 			case 'u':
 				if (strlen(x.arg) < USERNAME_MAX_LENGTH) {
@@ -78,14 +78,14 @@ int main(int argc, char **argv)
 				break;
 			case 'l': 
 				if (xgetlogin(client->username, USERNAME_MAX_LENGTH)) {
-					xwarn("> Unable to determine login name\n");
+					xwarn("Unable to determine login name\n");
 				}
 				break;
 			case 'h':
 				usage(stdout);
 				return 0;
 			case ':':
-				printf("> Option is missing an argument\n");
+				printf("Option is missing an argument\n");
 				return -1;
 			default:
 				usage(stderr);
@@ -116,6 +116,5 @@ int main(int argc, char **argv)
 		return -1;
 	}
 	
-	// Handle sending from main thread
 	return thread_status[0] | thread_status[1];
 }
