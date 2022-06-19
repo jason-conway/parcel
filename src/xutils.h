@@ -20,14 +20,24 @@ typedef struct xgetopt_t {
 	int position;
 } xgetopt_t;
 
-typedef enum ansi {
-	RED,
-	GRN,
-	YEL,
-	BLU,
-	MAG,
-	CYA
-} ansi;
+enum color {
+	DEF = '\0', // No color
+	BLK = '0', // 30
+	RED = '1', // 31
+	GRN = '2', // 32
+	YEL = '3', // 33
+	BLU = '4', // 34
+	MAG = '5', // 35
+	CYA = '6', // 36
+	WHT = '7'  // 37
+};
+
+enum style {
+	NONE = '0',
+	BOLD = '1',
+	ITALIC = '3',
+	UNDERLINE = '4'
+};
 
 typedef struct slice_t {
 	char *data;
@@ -45,7 +55,7 @@ void xwarn(const char *format, ...);
 void xalert(const char *format, ...);
 
 // Print a formatted string to stdout... in color
-void xprintf(ansi color, const char *format, ...);
+void xprintf(enum color color, enum style style, const char *format, ...);
 
 /**
  * @brief Duplicate a string
@@ -105,4 +115,5 @@ void *xmemdup(void *mem, size_t len);
 void *xmemchr(const void *src, int c, size_t len);
 void *xmemrchr(const void *src, int c, size_t len);
 void xmemprint(const void *src, size_t len);
+void xmemcpy_locked(pthread_mutex_t *lock, void *dest, void *src, size_t len);
 void xhexdump(const void *src, size_t len);

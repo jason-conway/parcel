@@ -80,15 +80,12 @@ void xalert(const char *format, ...)
 	va_end(ap);
 }
 
-void xprintf(ansi color, const char *format, ...)
+void xprintf(enum color color, enum style style, const char *format, ...)
 {
-	static const char *escape_codes[] = {
-		"\033[0;31m", "\033[0;32m", "\033[0;33m", "\033[0;34m", "\033[0;35m", "\033[0;36m"
-	};
-
 	va_list ap;
 	va_start(ap, format);
-	(void)fprintf(stdout, "%s", escape_codes[color]);
+	// No style- \033[1m
+	(void)fprintf(stdout, "\033[%c%c%c%cm", color ? '3' : '\0', color ? color : '\0', style ? ';' : '\0', style ? style : '\0');
 	(void)vfprintf(stdout, format, ap);
 	(void)fprintf(stdout, "\033[0m");
 	(void)fflush(stdout);
@@ -97,18 +94,15 @@ void xprintf(ansi color, const char *format, ...)
 
 ssize_t xsendall(sock_t socket, const void *data, size_t len)
 {
-	// debug_print("Sending %zu bytes total\n", len);
+	debug_print("Sending %zu bytes total\n", len);
 	uint8_t *_data = (uint8_t *)data;
 	for (size_t i = 0; i < len;) {
-		// const size_t to_send = (len - i) > 4096 ? 4096 : (len - i);
-		// debug_print("Trying to send %zu bytes\n", to_send);
-
 		ssize_t bytes_sent = xsend(socket, &_data[i], len - i, 0);
 		switch (bytes_sent) {
 			case -1:
 				return -1;
 			default:
-				// debug_print("Sent %zu bytes\n", bytes_sent);
+				debug_print("Sent %zu bytes\n", bytes_sent);
 				i += bytes_sent;
 		}
 	}
@@ -117,8 +111,9 @@ ssize_t xsendall(sock_t socket, const void *data, size_t len)
 
 ssize_t xrecvall(sock_t socket, void *data, size_t len)
 {
+	uint8_t *_data = (uint8_t *)data;
 	for (size_t i = 0; i < len;) {
-		ssize_t bytes_recv = xrecv(socket, data + i, len - i, 0);
+		ssize_t bytes_recv = xrecv(socket, &_data[i], len - i, 0);
 		switch (bytes_recv) {
 			case -1:
 				return -1;
@@ -440,8 +435,15 @@ void *xmemrchr(const void *src, int c, size_t len)
 
 void *xmemdup(void *mem, size_t len)
 {
-	void *_mem = xcalloc(len);
+	void *_mem = xmalloc(len);
 	return mem ? memcpy(_mem, mem, len) : NULL;
+}
+
+void xmemcpy_locked(pthread_mutex_t *lock, void *dest, void *src, size_t len)
+{
+	pthread_mutex_lock(lock);
+	memcpy(dest, src, len);
+	pthread_mutex_unlock(lock);
 }
 
 void xhexdump(const void *src, size_t len)
