@@ -14,7 +14,7 @@
 int proc_file(void *data)
 {
 	struct wire_file_message *wire_file = (struct wire_file_message *)data;
-
+	printf("\n\033[1mReceived file \"%s\"\033[0m\n", wire_file->filename);
 	char *save_path = xget_dir(wire_file->filename);
 	if (!save_path) {
 		return -1;
@@ -50,7 +50,6 @@ void proc_text(uint8_t *wire_data)
 int proc_ctrl(client_t *ctx, void *data)
 {
 	struct wire_ctrl_message *wire_ctrl = (struct wire_ctrl_message *)data;
-
 	memcpy(ctx->keys.ctrl, wire_ctrl->renewed_key, KEY_LEN);
 
 	switch (wire_get_ctrl_function(wire_ctrl)) {
