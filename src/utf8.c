@@ -277,17 +277,26 @@ static size_t utf8_strnlen(const char *str, size_t len)
 	return ((size_t)(str - s) > len) ? length - 1 : length;
 }
 
+/**
+ * @brief utf8_strnlen() capable of handling strings containing escape sequences
+ * 
+ * @param[in] str Input string
+ * @return Number of "cells" required to render `str`
+ */
 size_t utf8_rendered_length(const char *str)
 {
+	// Rendered length will be <= the number of bytes in `str`
 	char *stripped = xcalloc(strlen(str));
 	if (!stripped) {
 		return 0;
 	}
 
+	// Create a copy of the original, but with escape sequences stripped away
 	size_t len = 0;
 	for (size_t i = 0; str[i]; i++) {
 		if (str[i] == ESC) {
 			for (; str[i] != 'm'; i++) { };
+			i++; // Increment past 'm' before copying to `stripped`
 		}
 		stripped[len++] = str[i];
 	}
