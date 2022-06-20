@@ -39,8 +39,10 @@ static int cmd_username(client_t *ctx, char **message, size_t *message_length)
 	}
 
 	*message_length = strlen(*message);
-	memset(ctx->username, 0, USERNAME_MAX_LENGTH);
-	memcpy(ctx->username, new_username, new_username_length);
+	ctx->username.length = new_username_length;
+
+	memset(ctx->username.data, 0, USERNAME_MAX_LENGTH);
+	memcpy(ctx->username.data, new_username, ctx->username.length);
 	xfree(new_username);
 	return 0;
 }
@@ -193,7 +195,7 @@ static enum command_id parse_command(char *command)
 int parse_input(client_t *ctx, enum command_id *cmd, char **message, size_t *message_length)
 {
 	if (*message[0] != '/') { // Fast return
-		prepend_username(ctx->username, message, message_length);
+		prepend_username(ctx->username.data, message, message_length);
 		if (!*message) {
 			return -1;
 		}

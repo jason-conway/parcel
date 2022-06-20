@@ -76,7 +76,7 @@ static int proc_ctrl(client_t *ctx, void *data)
  * 
  * @param ctx Client context
  * @param wire Wire to process
- * @return Returns a wire_type enum on success, otherwise...
+ * @return Returns a wire_type enum on success, otherwise -1
  */
 int proc_type(client_t *ctx, wire_t *wire)
 {
@@ -101,7 +101,7 @@ int proc_type(client_t *ctx, wire_t *wire)
 			break;
 		case TYPE_TEXT:
 			proc_text(wire->data);
-			disp_username(ctx->username);
+			disp_username(&ctx->username);
 			break;
 	}
 	return type;

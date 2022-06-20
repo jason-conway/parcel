@@ -51,34 +51,37 @@ int main(int argc, char **argv)
 	client->shctx = client;
 
 	int option;
-	xgetopt_t x = { 0 };
-	while ((option = xgetopt(&x, argc, argv, "lha:p:u:")) != -1) {
+	xgetopt_t optctx = { 0 };
+	while ((option = xgetopt(&optctx, argc, argv, "lha:p:u:")) != -1) {
 		switch (option) {
 			case 'a':
-				if (strlen(x.arg) < ADDRESS_MAX_LENGTH) {
-					memcpy(address, x.arg, strlen(x.arg));
+				if (strlen(optctx.arg) < ADDRESS_MAX_LENGTH) {
+					memcpy(address, optctx.arg, strlen(optctx.arg));
 					break;
 				}
 				xwarn("Address argument too long\n");
 				break;
 			case 'p':
-				if (xport_valid(x.arg)) {
-					memcpy(port, x.arg, strlen(x.arg));
+				if (xport_valid(optctx.arg)) {
+					memcpy(port, optctx.arg, strlen(optctx.arg));
 					break;
 				}
 				xwarn("Using default port: 2315\n");
 				break;
 			case 'u':
-				if (strlen(x.arg) < USERNAME_MAX_LENGTH) {
-					memcpy(client->username, x.arg, strlen(x.arg));
+				if (strlen(optctx.arg) < USERNAME_MAX_LENGTH) {
+					client->username.length = strlen(optctx.arg);
+					memcpy(client->username.data, optctx.arg, client->username.length);
 					break;
 				}
 				xwarn("Username argument too long\n");
 				break;
 			case 'l': 
-				if (xgetlogin(client->username, USERNAME_MAX_LENGTH)) {
-					xwarn("Unable to determine login name\n");
+				if (!xgetlogin(client->username.data, USERNAME_MAX_LENGTH)) {
+					client->username.length = strlen(client->username.data);
+					break;
 				}
+				xwarn("Could not determine login name\n");
 				break;
 			case 'h':
 				usage(stdout);
@@ -93,7 +96,7 @@ int main(int argc, char **argv)
 	}
 	
 	if (argc < 5) {
-		prompt_args(address, client->username);
+		prompt_args(address, &client->username);
 	}
 	
 	if (connect_server(client, address, port)) {

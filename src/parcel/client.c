@@ -11,14 +11,13 @@
 
 #include "client.h"
 
-static void create_prefix(const char *username, char *prompt)
+static void create_prefix(username_t *username, char *prompt)
 {
-	size_t username_length = strlen(username);
-	memcpy(prompt, username, username_length);
-	memcpy(&prompt[username_length], ": ", 3);
+	memcpy(prompt, username->data, username->length);
+	memcpy(&prompt[username->length], ": ", 3);
 }
 
-void disp_username(const char *username)
+void disp_username(username_t *username)
 {
 	char msg_prefix[USERNAME_MAX_LENGTH + 3];
 	create_prefix(username, msg_prefix);
@@ -68,7 +67,7 @@ int send_thread(void *ctx)
 
 	while (1) {
 		char prompt[USERNAME_MAX_LENGTH + 3];
-		create_prefix(client.username, prompt);
+		create_prefix(&client.username, prompt);
 
 		size_t length = 0;
 		char *plaintext = xprompt(prompt, "text", &length); // xprompt() will never return null by design
@@ -103,7 +102,7 @@ int send_thread(void *ctx)
 			case CMD_EXIT:
 				goto cleanup;
 			case CMD_USERNAME:
-				xmemcpy_locked(&client_ctx->mutex_lock, client_ctx->username, client.username, USERNAME_MAX_LENGTH);
+				xmemcpy_locked(&client_ctx->mutex_lock, &client_ctx->username, &client.username, sizeof(username_t));
 				break;
 		}
 
@@ -160,7 +159,7 @@ wire_t *recv_new_wire(client_t *ctx, size_t *wire_size)
 
 /**
  * @brief Decrypts an encrypted wire
- * 
+ *
  * @param ctx Client context
  * @param wire Wire received
  * @param bytes_recv Number of bytes received
@@ -198,7 +197,7 @@ void *recv_thread(void *ctx)
 	client_t client;
 	client_t *client_ctx = ctx;
 	memcpy(&client, client_ctx, sizeof(client_t));
-	
+
 	int status = 0;
 
 	while (1) {
@@ -208,37 +207,29 @@ void *recv_thread(void *ctx)
 			status = client.kill_threads ? 0 : -1;
 			break;
 		}
-		
+
 		if (decrypt_received_message(&client, wire, bytes_recv) < 0) {
+			status = -1;
 			goto recv_error;
 		}
-		
-		// TODO: revisit
-		switch(proc_type(&client, wire)) {
-			case TYPE_TEXT:
-				break;
-			case TYPE_CTRL:
-				break;
-			case TYPE_FILE:
-				break;
-			default:
-				status = -1;
-				break;
+
+		if (proc_type(&client, wire) < 0) {
+			status = -1;
 		}
 
 	recv_error:
 		xfree(wire);
-		struct timespec ts = { .tv_nsec = 1000000 };
-		(void)nanosleep(&ts, NULL);
-		
 		if (client.kill_threads || status) {
 			break;
 		}
+
+		struct timespec ts = { .tv_nsec = 1000000 };
+		(void)nanosleep(&ts, NULL);
 	}
-	// end_thread:
-		xclose(client.socket);
-		xfree(client_ctx);
-		return NULL;
+
+	xclose(client.socket);
+	xfree(client_ctx);
+	return NULL;
 }
 
 int connect_server(client_t *client, const char *ip, const char *port)
@@ -288,29 +279,32 @@ int connect_server(client_t *client, const char *ip, const char *port)
 	return 0;
 }
 
-void prompt_args(char *address, char *username)
+void prompt_args(char *address, username_t *username)
 {
-	char *args[] = { &address[0], &username[0] };
+	char *args[] = { &username->data[0], &address[0] };
 
 	size_t lengths[] = {
+		USERNAME_MAX_LENGTH,
 		ADDRESS_MAX_LENGTH,
-		USERNAME_MAX_LENGTH
 	};
 
 	char *prompts[] = {
-		"> Enter server address: ",
-		"> Enter username: "
+		"\033[1m> Enter username: \033[0m",
+		"\033[1m> Enter server address: \033[0m",
 	};
 
 	char *arg_name[] = {
-		"address",
-		"username"
+		"username",
+		"address"
 	};
 
 	for (size_t i = 0; i < 2; i++) {
 		if (!*args[i]) {
 			size_t len = lengths[i];
 			char *str = xprompt(prompts[i], arg_name[i], &len);
+			if (!i) {
+				username->length = len;
+			}
 			memcpy(args[i], str, len);
 			xfree(str);
 		}
