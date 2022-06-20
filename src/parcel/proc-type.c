@@ -11,7 +11,7 @@
 
 #include "client.h"
 
-int proc_file(void *data)
+static int proc_file(void *data)
 {
 	struct wire_file_message *wire_file = (struct wire_file_message *)data;
 	printf("\n\033[1mReceived file \"%s\"\033[0m\n", wire_file->filename);
@@ -42,12 +42,12 @@ int proc_file(void *data)
 	return 0;
 }
 
-void proc_text(uint8_t *wire_data)
+static void proc_text(uint8_t *wire_data)
 {
 	printf("\033[2K\r%s\n", (char *)wire_data);
 }
 
-int proc_ctrl(client_t *ctx, void *data)
+static int proc_ctrl(client_t *ctx, void *data)
 {
 	struct wire_ctrl_message *wire_ctrl = (struct wire_ctrl_message *)data;
 	memcpy(ctx->keys.ctrl, wire_ctrl->renewed_key, KEY_LEN);
@@ -69,4 +69,40 @@ int proc_ctrl(client_t *ctx, void *data)
 			}
 	}
 	return -1;
+}
+
+/**
+ * @brief Process a received and (successfully) decrypted wire
+ * 
+ * @param ctx Client context
+ * @param wire Wire to process
+ * @return Returns a wire_type enum on success, otherwise...
+ */
+int proc_type(client_t *ctx, wire_t *wire)
+{
+	enum wire_type type = wire_get_type(wire);
+	switch (type) {
+		case TYPE_CTRL: // Forward wire along to proc_ctrl()
+			switch (proc_ctrl(ctx, wire->data)) {
+				case CTRL_EXIT:
+					xfree(wire);
+					exit(EXIT_FAILURE); // TODO: figure something out for this
+				case CTRL_DHKE:
+					xmemcpy_locked(&ctx->shctx->mutex_lock, &ctx->shctx->keys, &ctx->keys, sizeof(parcel_keys_t));
+					xmemcpy_locked(&ctx->shctx->mutex_lock, &ctx->shctx->conn_announced, &ctx->conn_announced, sizeof(bool));
+					break;
+			}
+			break;
+		case TYPE_FILE:
+			if (proc_file(wire->data)) {
+				xalert("proc_file()\n");
+				return -1;
+			}
+			break;
+		case TYPE_TEXT:
+			proc_text(wire->data);
+			disp_username(ctx->username);
+			break;
+	}
+	return type;
 }

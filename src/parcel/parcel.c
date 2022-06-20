@@ -10,8 +10,6 @@
  */
 
 // TODO: console - return a "back" code when backspacing on nothing
-// TODO: console - utf-8 decoder? (Windows)
-// TODO: test file sending both platforms
 
 #include "client.h"
 
@@ -50,6 +48,7 @@ int main(int argc, char **argv)
 	}
 
 	pthread_mutex_init(&client->mutex_lock, NULL);
+	client->shctx = client;
 
 	int option;
 	xgetopt_t x = { 0 };

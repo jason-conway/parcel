@@ -29,13 +29,13 @@ int main(int argc, char *argv[])
 	};
 
 	int option;
-	xgetopt_t x = { 0 };
+	xgetopt_t optctx = { 0 };
 
-	while ((option = xgetopt(&x, argc, argv, "hp:q:m:")) != -1) {
+	while ((option = xgetopt(&optctx, argc, argv, "hp:q:m:")) != -1) {
 		switch (option) {
 			case 'p':
-				if (xport_valid(x.arg)) {
-					memcpy(server.server_port, x.arg, strlen(x.arg));
+				if (xport_valid(optctx.arg)) {
+					memcpy(server.server_port, optctx.arg, strlen(optctx.arg));
 				}
 				break;
 			case 'h':

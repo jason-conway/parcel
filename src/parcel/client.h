@@ -42,14 +42,26 @@ enum SendType {
 	SEND_FILE
 };
 
+enum RecvStatus {
+	RECV_ERROR = -1,
+	RECV_OK = 0,
+};
+
+enum RecvType {
+	ERR_TEXT,
+	ERR_FILE,
+	ERR_CTRL,
+};
+
 typedef struct parcel_keys_t {
 	uint8_t session[KEY_LEN]; // Group-derived symmetric key
 	uint8_t ctrl[KEY_LEN];    // Ephemeral daemon control key
 } parcel_keys_t;
 
 typedef struct client_t {
+	struct client_t *shctx; // Pointer to the "real" context, shared between threads
 	sock_t socket;
-	char username[USERNAME_MAX_LENGTH];
+	char username[USERNAME_MAX_LENGTH]; // Client's username, 32 bytes max
 	parcel_keys_t keys;
 	bool conn_announced;
 	bool kill_threads;
@@ -64,9 +76,9 @@ int parse_input(client_t *ctx, enum command_id *cmd, char **message, size_t *mes
 
 void prompt_args(char *address, char *username);
 
-int proc_file(void *data);
-int proc_ctrl(client_t *ctx, void *data);
-void proc_text(uint8_t *wire_data);
+int proc_type(client_t *ctx, wire_t *wire);
+
+void disp_username(const char *username);
 
 int cmd_exit(client_t *ctx, char **message, size_t *message_length);
 

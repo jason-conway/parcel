@@ -16,8 +16,7 @@
 #include "xplatform.h"
 #include "xutils.h"
 
-typedef struct wire_t
-{
+typedef struct wire_t {
 	uint8_t mac[16];    // message authentication code for entire wire
 	uint8_t lac[16];    // message authentication code for wire length
 	uint8_t iv[16];     // initialization vector for AES context
@@ -26,16 +25,14 @@ typedef struct wire_t
 	uint8_t data[];     // wire data
 } wire_t;
 
-enum Wire
-{
+enum Wire {
 	KEY_LEN = 2 * AES_KEY_LEN,
 	BLOCK_LEN = AES_BLOCK_SIZE,
 	DATA_LEN_MAX = 1 << 20,
 	RECV_MAX_BYTES = sizeof(wire_t) + DATA_LEN_MAX,
 };
 
-enum TypeFile
-{
+enum TypeFile {
 	FILE_PATH_MAX_LENGTH = FILENAME_MAX,
 	FILE_NAME_START = 0,
 	FILE_NAME_LEN = 1 << 6,
@@ -45,27 +42,23 @@ enum TypeFile
 	FILE_DATA_MAX_SIZE = DATA_LEN_MAX - FILE_HEADER_SIZE,
 };
 
-enum TypeCtrl
-{
+enum TypeCtrl {
 	CTRL_KEY_OFFSET = 16,
 	CTRL_DATA_LEN = CTRL_KEY_OFFSET + KEY_LEN
 };
 
-enum SectionLengths
-{
+enum SectionLengths {
 	BASE_AUTH_LEN = sizeof(wire_t) - BLOCK_LEN,
 	BASE_ENC_LEN = sizeof(((wire_t *)0)->length) + sizeof(((wire_t *)0)->type),
 	BASE_DEC_LEN = sizeof(((wire_t *)0)->type)
 };
 
-enum KeyOffsets
-{
+enum KeyOffsets {
 	CIPHER_OFFSET = 0,
 	CMAC_OFFSET = 16,
 };
 
-enum SectionOffsets
-{
+enum SectionOffsets {
 	WIRE_OFFSET_MAC = offsetof(wire_t, mac),
 	WIRE_OFFSET_LAC = offsetof(wire_t, lac),
 	WIRE_OFFSET_IV = offsetof(wire_t, iv),
@@ -78,36 +71,31 @@ enum SectionOffsets
  * @brief WireType constants are the concatenated ascii values
  * of "text", "file", "ctrl" in hex.
  */
-enum wire_type
-{
+enum wire_type {
 	TYPE_TEXT = 0x74657874,
 	TYPE_FILE = 0x66696c65,
 	TYPE_CTRL = 0x6374726c,
 };
 
-enum ctrl_function
-{
+enum ctrl_function {
 	CTRL_EXIT = 0x65786974, // "exit"
 	CTRL_DHKE = 0x64686b65 // "dhke"
 };
 
-enum DecryptionStatus
-{
+enum DecryptionStatus {
 	WIRE_OK,
 	WIRE_CMAC_ERROR,
 	WIRE_INVALID_KEY,
 	WIRE_PARTIAL,
 };
 
-struct wire_ctrl_message
-{
+struct wire_ctrl_message {
 	uint8_t function[16];
 	uint8_t args[16];
 	uint8_t renewed_key[32];
 };
 
-struct wire_file_message
-{
+struct wire_file_message {
 	char filename[64];
 	uint8_t filesize[16];
 	uint8_t filedata[];

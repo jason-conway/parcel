@@ -18,7 +18,7 @@ static void create_prefix(const char *username, char *prompt)
 	memcpy(&prompt[username_length], ": ", 3);
 }
 
-static void disp_username(const char *username)
+void disp_username(const char *username)
 {
 	char msg_prefix[USERNAME_MAX_LENGTH + 3];
 	create_prefix(username, msg_prefix);
@@ -27,13 +27,6 @@ static void disp_username(const char *username)
 }
 
 /**
- * @brief 
- * 
- * @param socket 
- * @param type 
- * @param data 
- * @param length 
- * @param key 
  * @return returns number of bytes sent on success, otherwise a negative value is returned
  */
 static ssize_t send_encrypted_message(sock_t socket, uint64_t type, void *data, size_t length, const uint8_t *key)
@@ -146,19 +139,58 @@ static int recv_remaining(client_t *ctx, wire_t **wire, size_t bytes_recv, size_
 	return decrypt_wire(*wire, &wire_size, ctx->keys.session) ? -1 : 0;
 }
 
-wire_t *recv_new_wire(sock_t socket, size_t *wire_size)
+wire_t *recv_new_wire(client_t *ctx, size_t *wire_size)
 {
 	wire_t *wire = new_wire();
 	if (!wire) {
 		return NULL;
 	}
 
-	const ssize_t bytes_recv = xrecv(socket, wire, DATA_LEN_MAX, 0);
+	const ssize_t bytes_recv = xrecv(ctx->socket, wire, DATA_LEN_MAX, 0);
 	if (bytes_recv < 0) {
 		return xfree(wire);
 	}
+
+	// Refresh any changes to shared context that may have occured while blocking on recv
+	xmemcpy_locked(&ctx->shctx->mutex_lock, ctx, ctx->shctx, sizeof(client_t));
+
 	*wire_size = bytes_recv;
 	return wire;
+}
+
+/**
+ * @brief Decrypts an encrypted wire
+ * 
+ * @param ctx Client context
+ * @param wire Wire received
+ * @param bytes_recv Number of bytes received
+ * @return Returns length of the wire data section, negative on error
+ */
+static ssize_t decrypt_received_message(client_t *ctx, wire_t *wire, size_t bytes_recv)
+{
+	size_t length = bytes_recv;
+	switch (decrypt_wire(wire, &length, ctx->keys.session)) {
+		case WIRE_INVALID_KEY:
+			if (decrypt_wire(wire, &length, ctx->keys.ctrl)) {
+				xalert("> Recveived corrupted control key from server\n");
+				return -1;
+			}
+			break;
+		case WIRE_PARTIAL:
+			debug_print("> Received %zu bytes but header specifies %zu bytes total\n", bytes_recv, length + bytes_recv);
+			if (recv_remaining(ctx, &wire, bytes_recv, length)) {
+				xalert("recv_remaining()\n");
+				return -1;
+			}
+			debug_print("%s\n", "> received remainder of wire");
+			break;
+		case WIRE_CMAC_ERROR:
+			debug_print("%s\n", "> CMAC error");
+			return -1;
+		case WIRE_OK:
+			break;
+	}
+	return length; // All good
 }
 
 void *recv_thread(void *ctx)
@@ -171,62 +203,26 @@ void *recv_thread(void *ctx)
 
 	while (1) {
 		size_t bytes_recv = 0;
-		wire_t *wire = recv_new_wire(client.socket, &bytes_recv);
-
-		// Refresh context since recv is blocking
-		xmemcpy_locked(&client_ctx->mutex_lock, &client, client_ctx, sizeof(client_t));
-		
+		wire_t *wire = recv_new_wire(&client, &bytes_recv);
 		if (!wire) {
 			status = client.kill_threads ? 0 : -1;
 			break;
 		}
 		
-		size_t length = bytes_recv;
-		switch (decrypt_wire(wire, &length, client.keys.session)) {
-			case WIRE_INVALID_KEY:
-				if (decrypt_wire(wire, &length, client.keys.ctrl)) {
-					xalert("> Recveived corrupted control key from server\n");
-					status = -1;
-					goto recv_error;
-				}
-				break;
-			case WIRE_PARTIAL:
-				debug_print("> Received %zu bytes, header specifies %zu total\n", bytes_recv, length + bytes_recv);
-				if (recv_remaining(&client, &wire, bytes_recv, length)) {
-					xalert("recv_remaining()\n");
-					status = -1;
-					goto recv_error;
-				}
-				debug_print("%s\n", "> received remainder of wire");
-				break;
-			case WIRE_CMAC_ERROR:
-				debug_print("%s\n", "> CMAC error");
-				goto recv_error;
-			case WIRE_OK:
-				break;
+		if (decrypt_received_message(&client, wire, bytes_recv) < 0) {
+			goto recv_error;
 		}
-
-		switch (wire_get_type(wire)) {
+		
+		// TODO: revisit
+		switch(proc_type(&client, wire)) {
+			case TYPE_TEXT:
+				break;
 			case TYPE_CTRL:
-				switch (proc_ctrl(&client, wire->data)) {
-					case CTRL_EXIT:
-						xfree(wire);
-						goto end_thread;
-					case CTRL_DHKE:
-						xmemcpy_locked(&client_ctx->mutex_lock, &client_ctx->keys, &client.keys, sizeof(parcel_keys_t));
-						xmemcpy_locked(&client_ctx->mutex_lock, &client_ctx->conn_announced, &client.conn_announced, sizeof(bool));
-						break;
-				}
 				break;
 			case TYPE_FILE:
-				if (proc_file(wire->data)) {
-					xalert("proc_file()\n");
-					status = -1;
-				}
 				break;
-			case TYPE_TEXT:
-				proc_text(wire->data);
-				disp_username(client.username);
+			default:
+				status = -1;
 				break;
 		}
 
@@ -239,7 +235,7 @@ void *recv_thread(void *ctx)
 			break;
 		}
 	}
-	end_thread:
+	// end_thread:
 		xclose(client.socket);
 		xfree(client_ctx);
 		return NULL;
