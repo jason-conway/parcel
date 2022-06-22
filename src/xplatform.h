@@ -2,7 +2,7 @@
  * @file xplatform.h
  * @author Jason Conway (jpc@jasonconway.dev)
  * @brief xplatform (cross-platform) methods for Parcel
- * @version 0.9.1
+ * @version 0.9.2
  * @date 2022-01-26
  *
  * @copyright Copyright (c) 2022 Jason Conway. All rights reserved.

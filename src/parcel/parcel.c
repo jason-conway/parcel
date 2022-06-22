@@ -2,7 +2,7 @@
  * @file parcel.c
  * @author Jason Conway (jpc@jasonconway.dev)
  * @brief Entry point for parcel client
- * @version 0.9.1
+ * @version 0.9.2
  * @date 2022-01-15
  *
  * @copyright Copyright (c) 2022 Jason Conway. All rights reserved.

@@ -2,7 +2,7 @@
  * @file parceld.c
  * @author Jason Conway (jpc@jasonconway.dev)
  * @brief Entry point for parcel daemon
- * @version 0.9.1
+ * @version 0.9.2
  * @date 2022-01-28
  *
  * @copyright Copyright (c) 2022 Jason Conway. All rights reserved.

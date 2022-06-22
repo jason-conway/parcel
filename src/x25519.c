@@ -9,7 +9,7 @@
  * @ref https://martin.kleppmann.com/papers/curve25519.pdf
  * @ref https://cr.yp.to/ecdh.html
  * @ref https://cr.yp.to/ecdh/curve25519-20060209.pdf
- * @version 0.1
+ * @version 0.9.2
  * @date 2022-02-01
  *
  * @copyright Copyright (c) 2022 Jason Conway. All rights reserved.

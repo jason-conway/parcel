@@ -1,8 +1,8 @@
 /**
  * @file proc-type.c
  * @author Jason Conway (jpc@jasonconway.dev)
- * @brief
- * @version 0.9.1
+ * @brief Process decrypted wires (client-side)
+ * @version 0.9.2
  * @date 2022-03-28
  *
  * @copyright Copyright (c) 2022 Jason Conway. All rights reserved.

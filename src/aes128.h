@@ -2,7 +2,7 @@
  * @file aes128.h
  * @author Jason Conway (jpc@jasonconway.dev)
  * @brief Advanced Encryption Standard (AES) implementation with 128-bit key
- * @version 0.1
+ * @version 0.9.2
  * @date 2022-02-06
  *
  * @copyright Copyright (c) 2022 Jason Conway. All rights reserved.

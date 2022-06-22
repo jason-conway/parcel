@@ -2,7 +2,7 @@
  * @file sha256.h
  * @author Jason Conway (jpc@jasonconway.dev)
  * @brief Exciting new implementation of SHA-256
- * @version 0.1
+ * @version 0.9.2
  * @date 2021-12-15
  *
  * @copyright Copyright (c) 2021-2022 Jason Conway. All rights reserved.

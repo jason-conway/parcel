@@ -2,7 +2,7 @@
  * @file xutils.h
  * @author Jason Conway (jpc@jasonconway.dev)
  * @brief Shared utility functions
- * @version 0.9.1
+ * @version 0.9.2
  * @date 2022-04-06
  * 
  * @copyright Copyright (c) 2022 Jason Conway. All rights reserved.

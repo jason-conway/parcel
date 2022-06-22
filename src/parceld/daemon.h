@@ -2,7 +2,7 @@
  * @file daemon.h
  * @author Jason Conway (jpc@jasonconway.dev)
  * @brief The `parcel` Daemon 
- * @version 0.9.1
+ * @version 0.9.2
  * @date 2021-11-21
  *
  * @copyright Copyright (c) 2021-2022 Jason Conway. All rights reserved.
