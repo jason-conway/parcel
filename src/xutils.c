@@ -94,7 +94,7 @@ void xprintf(enum color color, enum style style, const char *format, ...)
 
 ssize_t xsendall(sock_t socket, const void *data, size_t len)
 {
-	debug_print("Sending %zu bytes total\n", len);
+	// debug_print("Sending %zu bytes total\n", len);
 	uint8_t *_data = (uint8_t *)data;
 	for (size_t i = 0; i < len;) {
 		ssize_t bytes_sent = xsend(socket, &_data[i], len - i, 0);
@@ -102,7 +102,7 @@ ssize_t xsendall(sock_t socket, const void *data, size_t len)
 			case -1:
 				return -1;
 			default:
-				debug_print("Sent %zu bytes\n", bytes_sent);
+				// debug_print("Sent %zu bytes\n", bytes_sent);
 				i += bytes_sent;
 		}
 	}
@@ -136,12 +136,14 @@ int xgetpeeraddr(sock_t socket, char *address, in_port_t *port)
 	return 0;
 }
 
-bool xport_valid(char *arg)
+bool xstrrange(char *arg, long *larg, long min, long max)
 {
-	long port = strtol(arg, NULL, 10);
-	if (port < 0 || port > 65535) {
-		xwarn("Port cannot be %s\n", port < 0 ? "negative" : "greater than 65535");
+	long _larg = strtol(arg, NULL, 10);
+	if (_larg < min || _larg > max) {
 		return false;
+	}
+	if (larg) {
+		*larg = _larg;
 	}
 	return true;
 }

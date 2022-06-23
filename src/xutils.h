@@ -98,7 +98,7 @@ ssize_t xsendall(sock_t socket, const void *data, size_t len);
  */
 ssize_t xrecvall(sock_t socket, void *data, size_t len);
 
-bool xport_valid(char *arg);
+bool xstrrange(char *arg, long *larg, long min, long max);
 
 int xgetopt(xgetopt_t *optctx, int argc, char **argv, const char *optstr);
 

@@ -62,7 +62,7 @@ int main(int argc, char **argv)
 				xwarn("Address argument too long\n");
 				break;
 			case 'p':
-				if (xport_valid(optctx.arg)) {
+				if (xstrrange(optctx.arg, NULL, 0, 65535)) {
 					memcpy(port, optctx.arg, strlen(optctx.arg));
 					break;
 				}

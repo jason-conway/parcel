@@ -77,8 +77,8 @@ int xstartup(void)
 #if __unix__ || __APPLE__
 	return 0; // As if
 #elif _WIN32
-	WSADATA wsaData;
-	if (WSAStartup(MAKEWORD(2, 2), &wsaData)) {
+	WSADATA wsa_data;
+	if (WSAStartup(MAKEWORD(2, 2), &wsa_data)) {
 		return -1;
 	}
 	return 0;
