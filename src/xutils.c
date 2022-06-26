@@ -84,7 +84,6 @@ void xprintf(enum color color, enum style style, const char *format, ...)
 {
 	va_list ap;
 	va_start(ap, format);
-	// No style- \033[1m
 	(void)fprintf(stdout, "\033[%c%c%c%cm", color ? '3' : '\0', color ? color : '\0', style ? ';' : '\0', style ? style : '\0');
 	(void)vfprintf(stdout, format, ap);
 	(void)fprintf(stdout, "\033[0m");
@@ -94,7 +93,6 @@ void xprintf(enum color color, enum style style, const char *format, ...)
 
 ssize_t xsendall(sock_t socket, const void *data, size_t len)
 {
-	// debug_print("Sending %zu bytes total\n", len);
 	uint8_t *_data = (uint8_t *)data;
 	for (size_t i = 0; i < len;) {
 		ssize_t bytes_sent = xsend(socket, &_data[i], len - i, 0);
@@ -102,7 +100,6 @@ ssize_t xsendall(sock_t socket, const void *data, size_t len)
 			case -1:
 				return -1;
 			default:
-				// debug_print("Sent %zu bytes\n", bytes_sent);
 				i += bytes_sent;
 		}
 	}
@@ -225,13 +222,6 @@ bool xisdir(const char *path)
 	return (stat(path, &info) == 0 && S_ISDIR(info.st_mode));
 }
 
-/**
- * @brief Make a directory if it doesn't exist
- *
- * @param depth depth of target directory
- * @param ... path of new directory, one arg for each depth
- * @return Zero on success
- */
 int xmkdirs(size_t depth, ...)
 {
 	va_list ap;
@@ -275,20 +265,21 @@ char *xget_dir(char *file)
 	return xstrcat(4, home, parcel_dir, files_dir, file);
 }
 
-/**
- * @brief Return filename from path
- *
- * @param path file path
- * @return returns null-terminated string containing the file name
- */
-void xbasename(const char *path, char *filename)
+size_t xbasename(const char *path, char *filename)
 {
-	char *base = xmemrchr(path, '/', strlen(path) + 1);
-	if (base) {
-		memcpy(filename, base + 1, strnlen(base + 1, FILENAME_MAX));
-		return;
+	const size_t path_length = strnlen(path, FILENAME_MAX);
+	size_t pos = path_length + 1;
+	char *base = NULL;
+	for (const char *start = path;; pos--) {
+		if (start[pos] == '/') {
+			base = (void *)&start[pos + 1];
+			const size_t filename_length = strnlen(base, FILENAME_MAX);
+			memcpy(filename, base, filename_length);
+			return filename_length;
+		}
 	}
-	memcpy(filename, path, strnlen(path, FILENAME_MAX));
+	memcpy(filename, path, path_length); // path is just the filename
+	return path_length;
 }
 
 static int http_request(slice_t *request)

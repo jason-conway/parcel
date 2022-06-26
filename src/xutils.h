@@ -74,7 +74,14 @@ char *xstrdup(const char *str);
  */
 char *xstrcat(size_t count, ...);
 
-void xbasename(const char *path, char *filename);
+/**
+ * @brief Extract filename from full path
+ * 
+ * @param path Full path to file
+ * @param filename Buffer for the filename to be placed in
+ * @return Returns the length of filename, not including null-terminator
+ */
+size_t xbasename(const char *path, char *filename);
 
 bool xfexists(const char *filename);
 
@@ -108,7 +115,15 @@ char *xgetpublicip(void);
 
 size_t xutoa(uint32_t value, char *str);
 
+/**
+ * @brief Make a directory if it doesn't exist
+ *
+ * @param depth depth of target directory
+ * @param ... path of new directory, one arg for each depth
+ * @return Zero on success
+ */
 int xmkdirs(size_t depth, ...);
+
 char *xsavepath(const char *file);
 
 void *xmemdup(void *mem, size_t len);
