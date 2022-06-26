@@ -30,7 +30,7 @@ static int cmd_username(client_t *ctx, char **message, size_t *message_length)
 
 	size_t new_username_length = USERNAME_MAX_LENGTH;
 	char *new_username = xprompt("> New username: ", "username", &new_username_length);
-	*message = xstrcat(5, "\033[1m", ctx->username, " has changed their username to ", new_username, "\033[0m");
+	*message = xstrcat(5, "\033[1m", ctx->username.data, " has changed their username to ", new_username, "\033[0m");
 	if (!message) {
 		*message_length = 0;
 		*message = NULL;
@@ -41,8 +41,8 @@ static int cmd_username(client_t *ctx, char **message, size_t *message_length)
 	*message_length = strlen(*message);
 	ctx->username.length = new_username_length;
 
-	memset(ctx->username.data, 0, USERNAME_MAX_LENGTH);
-	memcpy(ctx->username.data, new_username, ctx->username.length);
+	memset(&ctx->username.data, 0, USERNAME_MAX_LENGTH);
+	memcpy(&ctx->username.data, new_username, ctx->username.length);
 	xfree(new_username);
 	return 0;
 }
@@ -86,9 +86,8 @@ static int cmd_send_file(char **message, size_t *message_length)
 
 	char filename[FILE_NAME_LEN];
 	memset(filename, 0, sizeof(filename));
-	xbasename(file_path, filename);
 
-	const size_t filename_length = strnlen(filename, FILE_NAME_LEN - 1) + 1;
+	const size_t filename_length = xbasename(file_path, filename) + 1;
 	memcpy(file_contents->filename, filename, filename_length);
 	
 	// Now read in the file contents
@@ -135,7 +134,7 @@ int cmd_exit(client_t *ctx, char **message, size_t *message_length)
 {
 	xfree(*message);
 
-	*message = xstrcat(3, "\033[1m", ctx->username, " is offline\033[0m");
+	*message = xstrcat(3, "\033[1m", ctx->username.data, " is offline\033[0m");
 	if (!*message) {
 		*message = NULL;
 		return -1;

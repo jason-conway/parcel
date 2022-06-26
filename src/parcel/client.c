@@ -42,7 +42,7 @@ static ssize_t send_encrypted_message(sock_t socket, uint64_t type, void *data, 
 
 int announce_connection(client_t *ctx)
 {
-	char *msg = xstrcat(3, "\033[1m", ctx->username, " is online\033[0m");
+	char *msg = xstrcat(3, "\033[1m", ctx->username.data, " is online\033[0m");
 	if (!msg) {
 		return -1;
 	}
