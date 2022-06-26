@@ -281,32 +281,18 @@ int connect_server(client_t *client, const char *ip, const char *port)
 
 void prompt_args(char *address, username_t *username)
 {
-	char *args[] = { &username->data[0], &address[0] };
-
-	size_t lengths[] = {
-		USERNAME_MAX_LENGTH,
-		ADDRESS_MAX_LENGTH,
-	};
-
-	char *prompts[] = {
-		"\033[1m> Enter username: \033[0m",
-		"\033[1m> Enter server address: \033[0m",
-	};
-
-	char *arg_name[] = {
-		"username",
-		"address"
-	};
-
-	for (size_t i = 0; i < 2; i++) {
-		if (!*args[i]) {
-			size_t len = lengths[i];
-			char *str = xprompt(prompts[i], arg_name[i], &len);
-			if (!i) {
-				username->length = len;
-			}
-			memcpy(args[i], str, len);
-			xfree(str);
-		}
+	size_t address_length = ADDRESS_MAX_LENGTH;
+	if (!*address) {
+		char *str = xprompt("\033[1m> Enter server address: \033[0m", "address", &address_length);
+		memcpy(address, str, address_length);
+		xfree(str);
+	}
+	
+	size_t username_length = USERNAME_MAX_LENGTH;
+	if (!*username->data) {
+		char *str = xprompt("\033[1m> Enter username: \033[0m", "username", &username_length);
+		username->length = username_length;
+		memcpy(&username->data[0], str, username_length);
+		xfree(str);
 	}
 }
