@@ -15,18 +15,15 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
-#include <sys/types.h>
 
-enum AES128
-{
+enum AES128 {
 	AES_ROUNDS = 10,
 	AES_BLOCK_SIZE = 16,
 	AES_KEY_LEN = 16,
 	CMAC_KEY_LEN = 16,
 };
 
-typedef struct aes128_t
-{
+typedef struct aes128_t {
 	uint8_t round_key[AES_BLOCK_SIZE * (AES_ROUNDS + 1)];
 	uint8_t iv[AES_BLOCK_SIZE];
 } aes128_t;

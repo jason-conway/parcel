@@ -73,7 +73,7 @@ static inline void multiplicative_inverse(field_t *dest, const field_t *src)
 	field_t elements;
 	memcpy(&elements, src, 128); // Initialize with src allows starting at bit 253
 
-	for (ssize_t a = 0xfd; a >= 0; a--) {
+	for (int64_t a = 0xfd; a >= 0; a--) {
 		square(&elements, &elements);
 		if (a != 2 && a != 4) {
 			multiply(&elements, &elements, src);
@@ -170,7 +170,7 @@ void x25519(uint8_t *public, const uint8_t *secret, const uint8_t *basepoint)
 	static const field_t c1db41 = { .q = { 0xdb41, 1 } }; // 121665
 
 	// Infamous Montgomery ladder
-	for (ssize_t i = 0xfe; i >= 0; i--) {
+	for (int64_t i = 0xfe; i >= 0; i--) {
 		const uint8_t bit = (private_key[i >> 0x03] >> (i & 0x07)) & 0x01; // Clamp
 
 		// Swap the values in [0] with [1] and [2] with [3] when bit == 1

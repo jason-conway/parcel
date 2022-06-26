@@ -224,7 +224,7 @@ static void aes_xcrypt(state_t *state, const uint8_t *round_key, bool decrypt)
 	if (decrypt) {
 		aes_add_round_key(state, AES_ROUNDS, round_key);
 
-		for (ssize_t i = AES_ROUNDS - 1; ; i--) {
+		for (int64_t i = AES_ROUNDS - 1;; i--) {
 			aes_shift_rows(state, true);
 			aes_substitute_bytes(state, true);
 			aes_add_round_key(state, i, round_key);
@@ -237,7 +237,7 @@ static void aes_xcrypt(state_t *state, const uint8_t *round_key, bool decrypt)
 	else {
 		aes_add_round_key(state, 0, round_key);
 
-		for (ssize_t i = 1; ; i++) {
+		for (size_t i = 1;; i++) {
 			aes_substitute_bytes(state, false);
 			aes_shift_rows(state, false);
 			if (i == AES_ROUNDS) {
