@@ -14,8 +14,7 @@
 #include "wire.h"
 #include "xplatform.h"
 
-enum KeyExchangeStatus
-{
+enum KeyExchangeStatus {
 	DHKE_ERROR = -1,
 	DHKE_OK,
 };

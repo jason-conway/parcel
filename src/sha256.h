@@ -14,8 +14,7 @@
 #include <stdint.h>
 #include <string.h>
 
-typedef struct sha256_t
-{
+typedef struct sha256_t {
 	uint8_t data[64];
 	uint32_t data_length;
 	uint64_t bit_length;

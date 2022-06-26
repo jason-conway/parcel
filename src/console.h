@@ -12,16 +12,14 @@
 #include "xplatform.h"
 #include "xutils.h"
 
-typedef struct cursor_pos_t
-{
+typedef struct cursor_pos_t {
 	size_t row;
 	size_t offset; // Cursor index in bytes
 	size_t column; // Cursor index in characters
 	size_t rendered_column; // Active cursor column
 } cursor_pos_t;
 
-typedef struct line_t
-{
+typedef struct line_t {
 	const char *prompt;
 	size_t prompt_len; // Rendered length
 	size_t prompt_size; // Prompt size in bytes
@@ -32,14 +30,12 @@ typedef struct line_t
 	size_t console_width;
 } line_t;
 
-typedef struct unicode_data_table_t
-{
+typedef struct unicode_data_table_t {
 	uint32_t first;
 	uint32_t last;
 } unicode_data_table_t;
 
-enum KeyCodes
-{
+enum KeyCodes {
 	NUL = 0,
 	BEL = 7,
 	BS = 8,
@@ -49,8 +45,7 @@ enum KeyCodes
 	BACKSPACE = 127
 };
 
-enum cursor_direction
-{
+enum cursor_direction {
 	MOVE_UP,
 	MOVE_DOWN,
 	MOVE_RIGHT,
