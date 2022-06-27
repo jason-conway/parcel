@@ -292,7 +292,7 @@ void prompt_args(char *address, username_t *username)
 	if (!*username->data) {
 		char *str = xprompt("\033[1m> Enter username: \033[0m", "username", &username_length);
 		username->length = username_length;
-		memcpy(&username->data[0], str, username_length);
+		memcpy(&username->data, str, username_length);
 		xfree(str);
 	}
 }
