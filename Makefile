@@ -1,6 +1,8 @@
 .POSIX:
 CC     = cc
 CFLAGS = -Wall -Werror -Wextra -O0 -g3
+MKDIR  = mkdir -p
+FFLAGS =
 
 ifeq ($(OS), Windows_NT)
 	LDFLAGS = -s -static
@@ -40,10 +42,12 @@ resources:
 	$(WINDRES) $(res_dir)parceld.rc -O coff -o $(parceld_res)
 
 parcel$(EXE): $(parcel_all)
-	$(CC) $(CFLAGS) $(parcel_includes) $(parcel_source) $(parcel_res) -o $(build_dir)$@ $(LDLIBS) $(LDFLAGS)
+	$(MKDIR) $(build_dir)
+	$(CC) $(CFLAGS) $(parcel_includes) $(parcel_source) $(parcel_res) -o $(build_dir)$@ $(LDLIBS) $(LDFLAGS) $(FFLAGS)
 
 parceld$(EXE): $(parceld_all)
-	$(CC) $(CFLAGS) $(parceld_includes) $(parceld_source) $(parceld_res) -o $(build_dir)$@ $(LDLIBS) $(LDFLAGS)
+	$(MKDIR) $(build_dir)
+	$(CC) $(CFLAGS) $(parceld_includes) $(parceld_source) $(parceld_res) -o $(build_dir)$@ $(LDLIBS) $(LDFLAGS) $(FFLAGS)
 
 install: parcel parceld
 	mkdir -p $(PREFIX)/parcel/
