@@ -30,10 +30,10 @@ typedef struct line_t {
 	size_t console_width;
 } line_t;
 
-typedef struct unicode_data_table_t {
-	uint32_t first;
-	uint32_t last;
-} unicode_data_table_t;
+typedef struct codepoint_range_t {
+	uint32_t start;
+	uint32_t end;
+} codepoint_range_t;
 
 enum KeyCodes {
 	NUL = 0,

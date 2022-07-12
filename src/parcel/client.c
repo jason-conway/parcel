@@ -282,7 +282,7 @@ int connect_server(client_t *client, const char *ip, const char *port)
 void prompt_args(char *address, username_t *username)
 {
 	size_t address_length = ADDRESS_MAX_LENGTH;
-	if (!*address) {
+	if (!address[0]) {
 		char *str = xprompt("\033[1m> Enter server address: \033[0m", "address", &address_length);
 		memcpy(address, str, address_length);
 		xfree(str);
@@ -292,7 +292,7 @@ void prompt_args(char *address, username_t *username)
 	if (!*username->data) {
 		char *str = xprompt("\033[1m> Enter username: \033[0m", "username", &username_length);
 		username->length = username_length;
-		memcpy(&username->data, str, username_length);
+		memcpy(username->data, str, username_length);
 		xfree(str);
 	}
 }
