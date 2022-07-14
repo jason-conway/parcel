@@ -12,6 +12,12 @@
 #include "xplatform.h"
 #include "xutils.h"
 
+// TODO: user command to adjust this?
+enum Width {
+	AMBIGUOUS_WIDTH = 2,
+	UC9_WIDENED_WIDTH = 2,
+};
+
 typedef struct cursor_pos_t {
 	size_t row;
 	size_t offset; // Cursor index in bytes
