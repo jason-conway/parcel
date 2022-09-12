@@ -251,21 +251,20 @@ size_t xfd_init_count(sock_t fd)
  * @section unistd / win32 wrappers and portable implementations
  */
 
-void xgetrandom(void *dest, size_t len)
+ssize_t xgetrandom(void *dest, size_t len)
 {
 #if __unix__ || __APPLE__
 	FILE *random = fopen("/dev/urandom", "rb");
 	if (!random) {
-		exit(EXIT_FAILURE);
+		return -1;
 	}
 	if (!fread(dest, len, 1, random)) {
-		exit(EXIT_FAILURE);
+		return -1;
 	}
-	(void)fclose(random); // Error checking when stream is RO?
+	(void)fclose(random);
+	return len;
 #elif _WIN32
-	if (!RtlGenRandom(dest, len)) {
-		exit(EXIT_FAILURE);
-	}
+	return !RtlGenRandom(dest, len) ? -1 : len;
 #endif
 }
 

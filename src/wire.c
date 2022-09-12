@@ -93,7 +93,6 @@ wire_t *new_wire(void)
  */
 wire_t *init_wire(void *data, uint64_t type, size_t *len)
 {
-
 	const uint64_t data_length = BLOCK_LEN * ((*len + 15) / BLOCK_LEN);
 	const size_t wire_length = sizeof(wire_t) + data_length;
 	wire_t *wire = xcalloc(wire_length);
@@ -101,7 +100,9 @@ wire_t *init_wire(void *data, uint64_t type, size_t *len)
 		return NULL;
 	}
 
-	xgetrandom(wire->iv, BLOCK_LEN);
+	if (xgetrandom(wire->iv, BLOCK_LEN) < 0) {
+		return xfree(wire);
+	}
 	wire_unpack64(wire->length, data_length);
 	wire_unpack64(wire->type, type);
 	memcpy(wire->data, data, *len);

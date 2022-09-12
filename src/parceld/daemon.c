@@ -77,7 +77,9 @@ int init_daemon(server_t *ctx)
 	ctx->descriptors.nfds = xfd_init_count(ctx->sockets.sfds[0]);
 
 	// Collect entropy for initial server key
-	xgetrandom(ctx->server_key, 32);
+	if (xgetrandom(ctx->server_key, KEY_LEN) < 0) {
+		return -1;
+	}
 	return 0;
 }
 

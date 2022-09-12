@@ -14,7 +14,7 @@
 // ECDH private key ( {d ∈ ℕ | d < n} )
 static void point_d(uint8_t *dest)
 {
-	xgetrandom(dest, KEY_LEN);
+	(void)xgetrandom(dest, KEY_LEN);
 	dest[0] &= 248;
 	dest[31] &= 127;
 	dest[31] |= 64;
@@ -124,7 +124,9 @@ static int send_ctrl_key(sock_t *sockets, size_t count, uint8_t *ctrl_key)
 	wire_set_ctrl_args(&ctrl_message, count - 1);
 	
 	uint8_t renewed_key[32];
-	xgetrandom(renewed_key, KEY_LEN);
+	if (xgetrandom(renewed_key, KEY_LEN) < 0) {
+		return -1;
+	}
 	wire_set_ctrl_renewal(&ctrl_message, renewed_key);
 
 	wire_t *wire = init_wire(&ctrl_message, TYPE_CTRL, &len);
