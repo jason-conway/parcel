@@ -1,0 +1,27 @@
+name: CI
+
+on:
+    push:
+        branches: [ "main" ]
+    pull_request:
+        branches: [ "main" ]
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        cc: [clang, gcc]
+    steps:
+      - uses: actions/checkout@v3
+      - name: Make
+        run: make all
+        env:
+          CC: ${{matrix.cc}}
+  build-mac:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Make
+        run: make
+
+
