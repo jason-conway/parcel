@@ -1,6 +1,6 @@
 .POSIX:
 CC     = cc
-CFLAGS = -Wall -Werror -Wextra -O0 -g3
+CFLAGS = -Wall -Werror -Wextra -Os
 MKDIR  = mkdir -p
 FFLAGS =
 
@@ -10,7 +10,7 @@ ifeq ($(OS), Windows_NT)
 	PREFIX  = %HOMEPATH%/parcel
 	EXE     = .exe
 else
-	LDFLAGS = 
+	LDFLAGS =
 	LDLIBS  = -pthread
 	PREFIX  = /usr/local
 endif

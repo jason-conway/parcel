@@ -9,7 +9,7 @@
  * @ref https://martin.kleppmann.com/papers/curve25519.pdf
  * @ref https://cr.yp.to/ecdh.html
  * @ref https://cr.yp.to/ecdh/curve25519-20060209.pdf
- * @version 0.9.2
+ * @version 0.9.3
  * @date 2022-02-01
  *
  * @copyright Copyright (c) 2022 Jason Conway. All rights reserved.
@@ -19,8 +19,7 @@
 #include "x25519.h"
 
 // Galois field working type
-typedef union field_t
-{
+typedef union field_t {
 	int64_t q[16];
 } field_t;
 
@@ -28,17 +27,15 @@ typedef union field_t
 // u7/2^179, u8/2^204, u9/2^230 all in {−2^25, −2^25 + 1, ..., −1, 0, 1, ..., 2^25 − 1, 2^25}
 static inline void carry_reduce(field_t *dest)
 {
-	for (size_t i = 0; i < 16; i++) {
+	for (size_t i = 0;; i++) {
 		// Subtract the top 48 bits from each element to yield [0, 2^16 - 1]
 		int64_t carry = dest->q[i] >> 16;
-		dest->q[i] -= (uint64_t)carry << 16; // Shift without the cast to uint64_t is undefined
-
-		if (i < 15) {
-			dest->q[i + 1] += carry;
+		dest->q[i + 0] -= (uint64_t)carry << 16;  // Shift without the cast to uint64_t is undefined
+		if (i == 15) {
+			dest->q[0] += 38 * carry;  // Reduction modulo 2p
+			break;
 		}
-		else {
-			dest->q[0] += 38 * carry; // Reduction modulo 2p
-		}
+		dest->q[i + 1] += carry;
 	}
 }
 
@@ -68,14 +65,14 @@ static inline void square(field_t *dest, const field_t *src)
 // a^2i = a^i· a^i and a^2i+1 = a·a^i· ai
 // Compute a^i recursively, and then square a^i to obtain a^2i
 // If the exponent is odd, we additionally multiply the result with another copy of a to obtain a^2i+1
-static inline void multiplicative_inverse(field_t *dest, const field_t *src)
+static inline void inverse(field_t *dest, const field_t *src)
 {
 	field_t elements;
 	memcpy(&elements, src, 128); // Initialize with src allows starting at bit 253
 
-	for (int64_t a = 0xfd; a >= 0; a--) {
+	for (size_t i = 0; i < 0xfe; i++) {
 		square(&elements, &elements);
-		if (a != 2 && a != 4) {
+		if (i != 0xfb && i != 0xf9) {
 			multiply(&elements, &elements, src);
 		}
 	}
@@ -272,8 +269,8 @@ void x25519(uint8_t *public, const uint8_t *secret, const uint8_t *basepoint)
 	memcpy(&x[0x30], &inputs[1], 128);
 	memcpy(&x[0x40], &inputs[3], 128);
 
-	multiplicative_inverse((field_t *)&x[0x20],
-						   (field_t *)&x[0x20]);
+	inverse((field_t *)&x[0x20],
+			(field_t *)&x[0x20]);
 
 	multiply((field_t *)&x[0x10],
 			 (field_t *)&x[0x10],

@@ -2,7 +2,7 @@
  * @file x25519.h
  * @author Jason Conway (jpc@jasonconway.dev)
  * @brief Curve25519 Elliptic-Curve-Diffie-Hellman Implementation
- * @version 0.9.2
+ * @version 255.19
  * @date 2022-02-01
  *
  * @copyright Copyright (c) 2022 Jason Conway. All rights reserved.
