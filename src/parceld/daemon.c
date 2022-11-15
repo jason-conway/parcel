@@ -188,7 +188,7 @@ static int recv_client(server_t *srv, size_t sender_index)
 			if (xgetpeeraddr(srv->sockets.sfds[sender_index], address, &port) < 0) {
 				xwarn("Unable to determine IP and port of client %zu, despite proper disconnect\n", sender_index);
 			}
-			// debug_print("Connection from %s port %d ended\n", address, port);
+			debug_print("Connection from %s port %d ended\n", address, port);
 		}
 
 		if (disconnect_client(srv, sender_index)) {
@@ -211,7 +211,7 @@ static int recv_client(server_t *srv, size_t sender_index)
 			xfree(msg);
 			return -1;
 		}
-		// debug_print("Fanout of slot %zu's message complete\n", sender_index);
+		debug_print("Fanout of slot %zu's message complete\n", sender_index);
 	}
 	xfree(msg);
 	return 0;
@@ -259,7 +259,7 @@ int main_thread(void *ctx)
 			sock_t fd;
 			if ((fd = xfd_isset(&server->descriptors.fds, &read_fds, i))) {
 				if (fd == server->sockets.sfds[0]) {
-					// debug_print("%s\n", "Pending connection from unknown client");
+					debug_print("%s\n", "Pending connection from unknown client");
 					switch (add_client(server)) {
 						case -1:
 							xalert("n_party_server()\n");

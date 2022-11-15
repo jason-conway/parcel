@@ -347,6 +347,7 @@ static int http_extract_body(slice_t *request)
 
 		switch (pos_linefeed - pos_data) {
 			case 0:
+				// reached_body could be replaced with `case 0:` but it brakes vscode syntax highlighting
 				goto reached_body;
 			case 1:
 				if (*pos_data == '\r') { // \r\n
@@ -435,7 +436,7 @@ void *xmemdup(void *mem, size_t len)
 void xmemcpy_locked(pthread_mutex_t *lock, void *dest, void *src, size_t len)
 {
 	pthread_mutex_lock(lock);
-	memcpy(dest, src, len);
+		memcpy(dest, src, len);
 	pthread_mutex_unlock(lock);
 }
 

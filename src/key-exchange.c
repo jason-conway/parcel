@@ -172,19 +172,19 @@ int n_party_server(sock_t *sockets, size_t connection_count, uint8_t *ctrl_key)
 		return 0;
 	}
 
-	// debug_print("%s\n", "Sending CTRL to signal start of sequence");
+	debug_print("%s\n", "Sending CTRL to signal start of sequence");
 	if (send_ctrl_key(sockets, connection_count, ctrl_key)) {
 		printf("> Error sending starting control keys\n");
 		return -1;
 	}
-	// debug_print("%s\n", "CTRL signals sent");
+	debug_print("%s\n", "CTRL signals sent");
 
 	for (size_t i = 0; i < connection_count - 1; i++) {
-		// debug_print("Starting exchange round %zu of %zu\n", i + 1, connection_count - 1);
+		debug_print("Starting exchange round %zu of %zu\n", i + 1, connection_count - 1);
 		if (rotate_intermediates(sockets, connection_count)) {
 			return -1;
 		}
-		// debug_print("Finished round %zu\n", i + 1);
+		debug_print("Finished round %zu\n", i + 1);
 	}
 
 	return 0;
