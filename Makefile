@@ -50,9 +50,13 @@ parceld$(EXE): $(parceld_all)
 	$(CC) $(CFLAGS) $(parceld_includes) $(parceld_source) $(parceld_res) -o $(build_dir)$@ $(LDLIBS) $(LDFLAGS) $(FFLAGS)
 
 install: parcel parceld
-	mkdir -p $(PREFIX)/parcel/
+	$(MKDIR) $(PREFIX)/parcel/
 	install -m 755 $(build_dir)parcel$(EXE) $(PREFIX)/bin
 	install -m 755 $(build_dir)parceld$(EXE) $(PREFIX)/bin
+
+clean:
+	rm -f $(build_dir)parcel$(EXE)
+	rm -f $(build_dir)parceld$(EXE)
 
 uninstall:
 	rm -f $(PREFIX)/bin/parcel$(EXE)
