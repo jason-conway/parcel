@@ -176,89 +176,89 @@ void x25519(uint8_t *public, const uint8_t *secret, const uint8_t *basepoint)
 
 		// v1 = a + c
 		add(&intermediate[0],
-			&inputs[0],
-			&inputs[2]);
+		    &inputs[0],
+		    &inputs[2]);
 
 		// v2 = a - c
 		subtract(&inputs[0],
-				 &inputs[0],
-				 &inputs[2]);
+		         &inputs[0],
+		         &inputs[2]);
 
 		// v3 = b + d
 		add(&inputs[2],
-			&inputs[1],
-			&inputs[3]);
+		    &inputs[1],
+		    &inputs[3]);
 
 		// v4  = b - d
 		subtract(&inputs[1],
-				 &inputs[1],
-				 &inputs[3]);
+		         &inputs[1],
+		         &inputs[3]);
 
 		// v5 = v1**2 = (a + c)**2
 		square(&inputs[3],
-			   &intermediate[0]);
+		       &intermediate[0]);
 
 		// v6 = v2**2 = (a - c)**2
 		square(&intermediate[1],
-			   &inputs[0]);
+		       &inputs[0]);
 
 		// v7 = v3*v2 = ab - bc + ad - cd
 		multiply(&inputs[0],
-				 &inputs[2],
-				 &inputs[0]);
+		         &inputs[2],
+		         &inputs[0]);
 
 		// v8 = v4*v1 = ab + bc - ad - cd
 		multiply(&inputs[2],
-				 &inputs[1],
-				 &intermediate[0]);
+		         &inputs[1],
+		         &intermediate[0]);
 
 		// v9 = v7 + v8 = 2(ab - cd)
 		add(&intermediate[0],
-			&inputs[0],
-			&inputs[2]);
+		    &inputs[0],
+		    &inputs[2]);
 
 		// v10 = v7 - v8 = 2(ad - bc)
 		subtract(&inputs[0],
-				 &inputs[0],
-				 &inputs[2]);
+		         &inputs[0],
+		         &inputs[2]);
 
 		// v11 = v10**2 = 4(ad - bc)**2
 		square(&inputs[1],
-			   &inputs[0]);
+		       &inputs[0]);
 
 		// v12 = v5 - v6 = (a + c)**2 - (a - c)**2 = 4ac
 		subtract(&inputs[2],
-				 &inputs[3],
-				 &intermediate[1]);
+		         &inputs[3],
+		         &intermediate[1]);
 
 		// v13 = 121665*v12 = 486660ac  = (A - 2)ac
 		multiply(&inputs[0],
-				 &inputs[2],
-				 &c1db41);
+		         &inputs[2],
+		         &c1db41);
 
 		// v14 = v13 + v5 = a**2 + Aac + c**2
 		add(&inputs[0],
-			&inputs[0],
-			&inputs[3]);
+		    &inputs[0],
+		    &inputs[3]);
 
 		// v15 = v12*v14 = 4ac(a**2 + Aac + c**2)
 		multiply(&inputs[2],
-				 &inputs[2],
-				 &inputs[0]);
+		         &inputs[2],
+		         &inputs[0]);
 
 		// v16 = v5*v6 = a**4 - 2a**2c**2 + c**4 = (a**2 - c**2)**2
 		multiply(&inputs[0],
-				 &inputs[3],
-				 &intermediate[1]);
+		         &inputs[3],
+		         &intermediate[1]);
 
 		// v17 = v11*x = 4x(ad - bc)**2
 		multiply(&inputs[3],
-				 &inputs[1],
-				 (field_t *)x);
+		         &inputs[1],
+		         (field_t *)x);
 
 		// v18 = v9**2 = 4(ab - cd)**2
 		square(&inputs[1],
-			   &intermediate[0]);
+		       &intermediate[0]);
 
 		swap(&inputs[0], &inputs[1], bit);
 		swap(&inputs[2], &inputs[3], bit);
@@ -270,11 +270,11 @@ void x25519(uint8_t *public, const uint8_t *secret, const uint8_t *basepoint)
 	memcpy(&x[0x40], &inputs[3], 128);
 
 	inverse((field_t *)&x[0x20],
-			(field_t *)&x[0x20]);
+	        (field_t *)&x[0x20]);
 
 	multiply((field_t *)&x[0x10],
-			 (field_t *)&x[0x10],
-			 (field_t *)&x[0x20]);
+	         (field_t *)&x[0x10],
+	         (field_t *)&x[0x20]);
 
 	pack(public, (field_t *)&x[0x10]);
 }
