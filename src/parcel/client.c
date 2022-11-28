@@ -11,13 +11,13 @@
 
 #include "client.h"
 
-static void create_prefix(username_t *username, char *prompt)
+static void create_prefix(struct username *username, char *prompt)
 {
 	memcpy(prompt, username->data, username->length);
 	memcpy(&prompt[username->length], ": ", 3);
 }
 
-void disp_username(username_t *username)
+void disp_username(struct username *username)
 {
 	char msg_prefix[USERNAME_MAX_LENGTH + 3];
 	create_prefix(username, msg_prefix);
@@ -54,7 +54,7 @@ int announce_connection(client_t *ctx)
 
 	xfree(msg);
 
-	ctx->conn_announced = 1;
+	ctx->internal.conn_announced = 1;
 	return 0;
 }
 
@@ -65,7 +65,7 @@ int send_thread(void *ctx)
 	xmemcpy_locked(&client_ctx->mutex_lock, &client, client_ctx, sizeof(client_t));
 	int status = 0;
 
-	while (1) {
+	for(;;) {
 		char prompt[USERNAME_MAX_LENGTH + 3];
 		create_prefix(&client.username, prompt);
 
@@ -102,7 +102,7 @@ int send_thread(void *ctx)
 			case CMD_EXIT:
 				goto cleanup;
 			case CMD_USERNAME:
-				xmemcpy_locked(&client_ctx->mutex_lock, &client_ctx->username, &client.username, sizeof(username_t));
+				xmemcpy_locked(&client_ctx->mutex_lock, &client_ctx->username, &client.username, sizeof(struct username));
 				break;
 		}
 
@@ -111,7 +111,7 @@ int send_thread(void *ctx)
 	}
 
 	cleanup:
-		xmemcpy_locked(&client_ctx->mutex_lock, &client_ctx->kill_threads, &(bool[]){ 1 }, sizeof(bool));
+		client_ctx->internal.kill_threads = 1;
 		xclose(client.socket);
 		return status;
 }
@@ -204,7 +204,7 @@ void *recv_thread(void *ctx)
 		size_t bytes_recv = 0;
 		wire_t *wire = recv_new_wire(&client, &bytes_recv);
 		if (!wire) {
-			status = client.kill_threads ? 0 : -1;
+			status = client.internal.kill_threads ? 0 : -1;
 			break;
 		}
 
@@ -219,7 +219,7 @@ void *recv_thread(void *ctx)
 
 	recv_error:
 		xfree(wire);
-		if (client.kill_threads || status) {
+		if (client.internal.kill_threads || status) {
 			break;
 		}
 
@@ -279,7 +279,7 @@ int connect_server(client_t *client, const char *ip, const char *port)
 	return 0;
 }
 
-void prompt_args(char *address, username_t *username)
+void prompt_args(char *address, struct username *username)
 {
 	size_t address_length = ADDRESS_MAX_LENGTH;
 	if (!address[0]) {

@@ -34,6 +34,7 @@ enum command_id {
 	CMD_FILE,
 	CMD_CLEAR,
 	CMD_VERSION,
+	CMD_AMBIGUOUS_WIDTH,
 };
 
 enum SendType {
@@ -47,23 +48,21 @@ enum RecvStatus {
 	RECV_OK = 0,
 };
 
-typedef struct parcel_keys_t {
-	uint8_t session[KEY_LEN]; // Group-derived symmetric key
-	uint8_t ctrl[KEY_LEN];    // Ephemeral daemon control key
-} parcel_keys_t;
-
-typedef struct username_t {
-	char data[USERNAME_MAX_LENGTH];
-	size_t length;
-} username_t;
-
 typedef struct client_t {
 	struct client_t *shctx; // Pointer to the "real" context, shared between threads
 	sock_t socket;
-	username_t username;
-	parcel_keys_t keys;
-	bool conn_announced;
-	bool kill_threads;
+	struct username {
+		char data[USERNAME_MAX_LENGTH];
+		size_t length;
+	} username;
+	struct keys {
+		uint8_t session[KEY_LEN]; // Group-derived symmetric key
+		uint8_t ctrl[KEY_LEN];    // Ephemeral daemon control key
+	} keys;
+	struct internal {
+		bitfield conn_announced : 1;
+		bitfield kill_threads : 1;
+	} internal;
 	pthread_mutex_t mutex_lock;
 } client_t;
 
@@ -73,11 +72,11 @@ int announce_connection(client_t *ctx);
 
 int parse_input(client_t *ctx, enum command_id *cmd, char **message, size_t *message_length);
 
-void prompt_args(char *address, username_t *username);
+void prompt_args(char *address, struct username *username);
 
 int proc_type(client_t *ctx, wire_t *wire);
 
-void disp_username(username_t *username);
+void disp_username(struct username *username);
 int cmd_exit(client_t *ctx, char **message, size_t *message_length);
 void *recv_thread(void *ctx);
 int send_thread(void *ctx);

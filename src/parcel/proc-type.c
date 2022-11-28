@@ -58,7 +58,7 @@ static int proc_ctrl(client_t *ctx, void *data)
 		case CTRL_DHKE:
 			switch (n_party_client(ctx->socket, ctx->keys.session, wire_get_ctrl_args(wire_ctrl))) {
 				case DHKE_OK:
-					if (!ctx->conn_announced) {
+					if (!ctx->internal.conn_announced) {
 						if (announce_connection(ctx)) {
 							return -1;
 						}
@@ -88,8 +88,8 @@ int proc_type(client_t *ctx, wire_t *wire)
 					xfree(wire);
 					exit(EXIT_FAILURE); // TODO: figure something out for this
 				case CTRL_DHKE:
-					xmemcpy_locked(&ctx->shctx->mutex_lock, &ctx->shctx->keys, &ctx->keys, sizeof(parcel_keys_t));
-					xmemcpy_locked(&ctx->shctx->mutex_lock, &ctx->shctx->conn_announced, &ctx->conn_announced, sizeof(bool));
+					xmemcpy_locked(&ctx->shctx->mutex_lock, &ctx->shctx->keys, &ctx->keys, sizeof(struct keys));
+					xmemcpy_locked(&ctx->shctx->mutex_lock, &ctx->shctx->internal, &ctx->internal, sizeof(struct internal));
 					break;
 			}
 			break;
