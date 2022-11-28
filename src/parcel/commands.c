@@ -110,12 +110,12 @@ free_path:
 	return -1;
 }
 
-static void cmd_print_enc_info(parcel_keys_t *keys)
+static void cmd_print_enc_info(uint8_t *session, uint8_t *control)
 {
 	printf("Session Key: ");
-	xmemprint(keys->session, KEY_LEN);
+	xmemprint(session, KEY_LEN);
 	printf("\nControl Key: ");
-	xmemprint(keys->ctrl, KEY_LEN);
+	xmemprint(control, KEY_LEN);
 	printf("\n");
 }
 
@@ -144,6 +144,24 @@ int cmd_exit(client_t *ctx, char **message, size_t *message_length)
 	return 0;
 }
 
+int cmd_set_ambiguous_width(void)
+{
+	size_t len = 2; // single digit plus null
+	char *new_width = xprompt("> Ambiguous character width: ", "width", &len);
+	if (!new_width) {
+		return -1;
+	}
+	long width = 0;
+	if (!xstrrange(new_width, &width, 1, 2)) {
+		xwarn("Width of \'%s\' is not\n", new_width);
+		xfree(new_width);
+		return -1;
+	}
+	xfree(new_width);
+	set_ambiguous_width(width);
+	return 0;
+}
+
 static int cmd_list(void)
 {
 	static const char list[] =
@@ -154,7 +172,8 @@ static int cmd_list(void)
 		"  /encinfo      display current encryption parameters\n"
 		"  /file         send a file\n"
 		"  /clear        clear the screen\n"
-		"  /version      print build version\n";
+		"  /version      print build version\n"
+		"  /ambwidth     set ambiguous character width\n";
 	return !printf("%s", list);
 }
 
@@ -172,7 +191,7 @@ static int cmd_ambiguous(void)
 static enum command_id parse_command(char *command)
 {
 	static const char *command_strings[] = {
-		"/list", "/x", "/username", "/encinfo", "/file", "/clear", "/version"
+		"/list", "/x", "/username", "/encinfo", "/file", "/clear", "/version", "/ambwidth"
 	};
 
 	const size_t commands = sizeof(command_strings) / sizeof(*command_strings);
@@ -212,7 +231,7 @@ int parse_input(client_t *ctx, enum command_id *cmd, char **message, size_t *mes
 			case CMD_USERNAME:
 				return cmd_username(ctx, message, message_length) ? -1 : SEND_TEXT;
 			case CMD_ENC_INFO:
-				cmd_print_enc_info(&ctx->keys);
+				cmd_print_enc_info(ctx->keys.session, ctx->keys.ctrl);
 				return SEND_NONE;
 			case CMD_FILE:
 				return cmd_send_file(message, message_length) ? SEND_NONE : SEND_FILE;
@@ -222,6 +241,8 @@ int parse_input(client_t *ctx, enum command_id *cmd, char **message, size_t *mes
 			case CMD_VERSION:
 				cmd_version();
 				return SEND_NONE;
+			case CMD_AMBIGUOUS_WIDTH:
+				return cmd_set_ambiguous_width() ? -1 : SEND_NONE;
 			default:
 				return cmd_not_found(*message) ? -1 : SEND_NONE;
 		}
