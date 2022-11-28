@@ -56,14 +56,14 @@ static void sha256_hash(sha256_t *ctx, const uint8_t *data)
 							 (msg_schedule[i - 0x02] << 0x0f)) ^
 							((msg_schedule[i - 0x02] >> 0x13) |
 							 (msg_schedule[i - 0x02] << 0x0d)) ^
-							(msg_schedule[i - 0x02] >> 0x0a)) +
-						   msg_schedule[i - 0x07] +
+							 (msg_schedule[i - 0x02] >> 0x0a)) +
 						   (((msg_schedule[i - 0x0f] >> 0x07) |
 							 (msg_schedule[i - 0x0f] << 0x19)) ^
 							((msg_schedule[i - 0x0f] >> 0x12) |
 							 (msg_schedule[i - 0x0f] << 0x0e)) ^
-							(msg_schedule[i - 0x0f] >> 0x03)) +
-						   msg_schedule[i - 0x10]);
+							 (msg_schedule[i - 0x0f] >> 0x03)) +
+							  msg_schedule[i - 0x10] +
+							  msg_schedule[i - 0x07]);
 	}
 
 	uint32_t state[10] = {
@@ -85,15 +85,12 @@ static void sha256_hash(sha256_t *ctx, const uint8_t *data)
 					(((state[4] >> 0x06) | (state[4] << 0x1a)) ^
 					 ((state[4] >> 0x0b) | (state[4] << 0x15)) ^
 					 ((state[4] >> 0x19) | (state[4] << 0x07))) +
-					((state[4] & state[5]) ^
-					 (~state[4] & state[6])));
+					((state[4] & state[5]) ^ (~state[4] & state[6])));
 
 		state[9] = ((((state[0] >> 0x02) | (state[0] << 0x1e)) ^
 					 ((state[0] >> 0x0d) | (state[0] << 0x13)) ^
 					 ((state[0] >> 0x16) | (state[0] << 0x0a))) +
-					((state[0] & state[1]) ^
-					 (state[0] & state[2]) ^
-					 (state[1] & state[2])));
+					((state[0] & state[1]) ^ (state[0] & state[2]) ^ (state[1] & state[2])));
 
 		state[7] = state[6];
 		state[6] = state[5];
