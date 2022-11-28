@@ -37,7 +37,7 @@ int init_daemon(server_t *ctx)
 		.ai_flags = AI_PASSIVE
 	};
 
-	struct addrinfo *ai;
+	struct addrinfo *ai = NULL;
 	if (xgetaddrinfo(NULL, ctx->server_port, &hints, &ai)) {
 		xalert("xgetaddrinfo()");
 		return -1;
@@ -248,7 +248,7 @@ int main_thread(void *ctx)
 	fd_set read_fds;
 	FD_ZERO(&read_fds);
 
-	while (1) {
+	for (;;) {
 		read_fds = server->descriptors.fds;
 		if (select(server->descriptors.nfds + 1, &read_fds, NULL, NULL, NULL) < 0) {
 			xalert("n_party_server()\n");

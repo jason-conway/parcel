@@ -22,14 +22,14 @@ typedef struct xgetopt_t {
 
 enum color {
 	DEF = '\0', // No color
-	BLK = '0', // 30
-	RED = '1', // 31
-	GRN = '2', // 32
-	YEL = '3', // 33
-	BLU = '4', // 34
-	MAG = '5', // 35
-	CYA = '6', // 36
-	WHT = '7'  // 37
+	BLK = '0', // 0x30
+	RED = '1', // 0x31
+	GRN = '2', // 0x32
+	YEL = '3', // 0x33
+	BLU = '4', // 0x34
+	MAG = '5', // 0x35
+	CYA = '6', // 0x36
+	WHT = '7'  // 0x37
 };
 
 enum style {
@@ -105,6 +105,15 @@ ssize_t xsendall(sock_t socket, const void *data, size_t len);
  */
 ssize_t xrecvall(sock_t socket, void *data, size_t len);
 
+/**
+ * @brief Convert ascii to long, checking that the converted value is between the provided bounds
+ * 
+ * @param[in] arg input string
+ * @param[inout] larg optional pointer to store the converted integer at
+ * @param[in] min lower bound
+ * @param[in] max upper bound
+ * @return true if in bounds, otherwise false
+ */
 bool xstrrange(char *arg, long *larg, long min, long max);
 
 int xgetopt(xgetopt_t *optctx, int argc, char **argv, const char *optstr);
@@ -123,8 +132,6 @@ size_t xutoa(uint32_t value, char *str);
  * @return Zero on success
  */
 int xmkdirs(size_t depth, ...);
-
-char *xsavepath(const char *file);
 
 void *xmemdup(void *mem, size_t len);
 void *xmemchr(const void *src, int c, size_t len);

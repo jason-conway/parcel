@@ -18,6 +18,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
+#include <stdatomic.h>
 #include <pthread.h>
 #include <stdarg.h>
 #include <sys/types.h>
@@ -65,6 +66,8 @@
 	typedef SOCKET sock_t;
 	typedef DWORD console_t;
 #endif
+
+typedef unsigned int bitfield;
 
 #ifndef PARCEL_VERSION
 	#define PARCEL_VERSION 0.9.2
@@ -133,7 +136,6 @@ int xgetpeeraddr(sock_t socket, char *address, in_port_t *port);
 
 int xsetsockopt(sock_t socket, int level, int optname, const void *optval, socklen_t optlen);
 int xclose(sock_t socket);
-void xexit(int status);
 
 int xgetifaddrs(const char *prefix, const char *suffix);
 int xstartup(void);
@@ -150,8 +152,7 @@ ssize_t xwrite(int fd, const void *data, size_t len);
 char xgetch(void);
 size_t xgetcp(unsigned char *c);
 
-enum xconsole_mode
-{
+enum xconsole_mode {
 	CONSOLE_MODE_RAW,
 	CONSOLE_MODE_ORIG,
 };
