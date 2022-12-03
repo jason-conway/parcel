@@ -11,6 +11,14 @@
 
 #include "key-exchange.h"
 
+void sha256_key_digest(const uint8_t *key, uint8_t *hash)
+{
+	sha256_t ctx;
+	sha256_init(&ctx);
+	sha256_append(&ctx, key, 32);
+	sha256_finish(&ctx, hash);
+}
+
 // ECDH private key ( {d ∈ ℕ | d < n} )
 static void point_d(uint8_t *dest)
 {
@@ -27,7 +35,7 @@ static void point_q(const uint8_t *secret_key, uint8_t *public_key, uint8_t *fin
 	x25519(public_key, secret_key, basepoint);
 	if (fingerprint != NULL) {
 		uint8_t hash[KEY_LEN];
-		sha256_digest(public_key, hash);
+		sha256_key_digest(public_key, hash);
 		memcpy(fingerprint, hash, 16);
 	}
 }
@@ -151,13 +159,13 @@ static int rotate_intermediates(sock_t *sockets, size_t count)
 {
 	for (size_t i = 1; i <= count; i++) {
 		uint8_t intermediate_key[KEY_LEN];
-		// debug_print("Receiving intermediate key from socket %zu\n", i);
+		debug_print("Receiving intermediate key from socket %zu\n", i);
 		if (xrecv(sockets[i], intermediate_key, KEY_LEN, 0) != KEY_LEN) {
 			return -1;
 		}
 
 		const size_t next = (i == count) ? 1 : i + 1; // Rotate right, skip server's socket
-		// debug_print("Sending intermediate key to socket %zu\n", next);
+		debug_print("Sending intermediate key to socket %zu\n", next);
 		if (xsend(sockets[next], intermediate_key, KEY_LEN, 0) < 0) {
 			printf("\n> Error sending to slot %zu\n", next);
 			return -1;
@@ -214,7 +222,7 @@ int n_party_client(sock_t socket, uint8_t *session_key, size_t rounds)
 		point_kx(shared_secret, secret_key, intermediate_public);
 
 		if (i == rounds - 1) {
-			sha256_digest(shared_secret, session_key);
+			sha256_key_digest(shared_secret, session_key);
 			return 0;
 		}
 

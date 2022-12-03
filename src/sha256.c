@@ -190,18 +190,3 @@ void sha256_finish(sha256_t *ctx, void *dst)
 		}
 	}
 }
-
-void sha256_digest(const uint8_t *key, uint8_t *hash)
-{
-	sha256_t ctx;
-	sha256_init(&ctx);
-	sha256_append(&ctx, key, 32);
-	sha256_finish(&ctx, hash);
-}
-
-void sha256_self_digest(uint8_t *digest)
-{
-	uint8_t hash[32];
-	memcpy(hash, digest, 32);
-	sha256_digest(hash, digest);
-}
