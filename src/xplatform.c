@@ -264,7 +264,7 @@ ssize_t xgetrandom(void *dest, size_t len)
 	(void)fclose(random);
 	return len;
 #elif _WIN32
-	return !RtlGenRandom(dest, len) ? -1 : len;
+	return !RtlGenRandom(dest, len) ? -1 : (ssize_t)len;
 #endif
 }
 
