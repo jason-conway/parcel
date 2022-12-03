@@ -26,9 +26,9 @@ static uint8_t galois_multiply(uint8_t x, uint8_t y)
 {
 	static const uint8_t polynomial_mask[8] = { 0x00, 0x1b, 0x36, 0x2d, 0x6c, 0x77, 0x5a, 0x41 };
 	uint16_t r = ((x * (y & 0x01)) ^
-				  (x * (y & 0x02)) ^
-				  (x * (y & 0x04)) ^
-				  (x * (y & 0x08)));
+	              (x * (y & 0x02)) ^
+	              (x * (y & 0x04)) ^
+	              (x * (y & 0x08)));
 	return (uint8_t)(r ^ polynomial_mask[r >> 8]);
 }
 
@@ -193,32 +193,32 @@ static void aes_mix_columns(state_t *ctx, bool invert)
 			};
 
 			ctx->s[i][0] = (galois_multiply(s[0], 0x0e) ^
-							galois_multiply(s[1], 0x0b) ^
-							galois_multiply(s[2], 0x0d) ^
-							galois_multiply(s[3], 0x09));
+			                galois_multiply(s[1], 0x0b) ^
+			                galois_multiply(s[2], 0x0d) ^
+			                galois_multiply(s[3], 0x09));
 
 			ctx->s[i][1] = (galois_multiply(s[0], 0x09) ^
-							galois_multiply(s[1], 0x0e) ^
-							galois_multiply(s[2], 0x0b) ^
-							galois_multiply(s[3], 0x0d));
+			                galois_multiply(s[1], 0x0e) ^
+			                galois_multiply(s[2], 0x0b) ^
+			                galois_multiply(s[3], 0x0d));
 
 			ctx->s[i][2] = (galois_multiply(s[0], 0x0d) ^
-							galois_multiply(s[1], 0x09) ^
-							galois_multiply(s[2], 0x0e) ^
-							galois_multiply(s[3], 0x0b));
+			                galois_multiply(s[1], 0x09) ^
+			                galois_multiply(s[2], 0x0e) ^
+			                galois_multiply(s[3], 0x0b));
 
 			ctx->s[i][3] = (galois_multiply(s[0], 0x0b) ^
-							galois_multiply(s[1], 0x0d) ^
-							galois_multiply(s[2], 0x09) ^
-							galois_multiply(s[3], 0x0e));
+			                galois_multiply(s[1], 0x0d) ^
+			                galois_multiply(s[2], 0x09) ^
+			                galois_multiply(s[3], 0x0e));
 		}
 	}
 	else {
 		for (size_t i = 0; i < 4; i++) {
 			uint8_t s = (ctx->s[i][0] ^
-						 ctx->s[i][1] ^
-						 ctx->s[i][2] ^
-						 ctx->s[i][3]);
+			             ctx->s[i][1] ^
+			             ctx->s[i][2] ^
+			             ctx->s[i][3]);
 			uint8_t c0 = ctx->s[i][0];
 
 			for (size_t j = 0; j < 4; j++) {
