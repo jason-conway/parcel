@@ -141,7 +141,7 @@ int xgetifaddrs(const char *prefix, const char *suffix);
 int xstartup(void);
 
 int xgetlogin(char *username, size_t len);
-ssize_t xgetrandom(void *dest, size_t len);
+ssize_t xgetrandom(void *dst, size_t len);
 size_t xfilesize(const char *filename);
 char *xget_dir(char *file);
 int xmkdir(const char *path, mode_t mode);

@@ -25,21 +25,21 @@ typedef union field_t {
 
 // u0 + u1x + u2x^2 + ... + u9x^9 with u0/2^0, u1/2^26, u2/2^51, u3/2^77, u4/2^102, u5/2^128, u6/2^153,
 // u7/2^179, u8/2^204, u9/2^230 all in {−2^25, −2^25 + 1, ..., −1, 0, 1, ..., 2^25 − 1, 2^25}
-static inline void carry_reduce(field_t *dest)
+static inline void carry_reduce(field_t *dst)
 {
 	for (size_t i = 0;; i++) {
 		// Subtract the top 48 bits from each element to yield [0, 2^16 - 1]
-		int64_t carry = dest->q[i] >> 16;
-		dest->q[i + 0] -= (uint64_t)carry << 16;  // Shift without the cast to uint64_t is undefined
+		int64_t carry = dst->q[i] >> 16;
+		dst->q[i + 0] -= (uint64_t)carry << 16;  // Shift without the cast to uint64_t is undefined
 		if (i == 15) {
-			dest->q[0] += 38 * carry;  // Reduction modulo 2p
+			dst->q[0] += 38 * carry;  // Reduction modulo 2p
 			break;
 		}
-		dest->q[i + 1] += carry;
+		dst->q[i + 1] += carry;
 	}
 }
 
-static inline void multiply(field_t *dest, const field_t *a, const field_t *b)
+static inline void multiply(field_t *dst, const field_t *a, const field_t *b)
 {
 	int64_t product[31] = { 0 };
 	for (size_t i = 0; i < 16; i++) {
@@ -52,20 +52,20 @@ static inline void multiply(field_t *dest, const field_t *a, const field_t *b)
 	for (size_t i = 0; i < 15; i++) {
 		product[i] += 38 * product[i + 16];
 	}
-	memcpy(dest, product, 128);
-	carry_reduce(dest);
-	carry_reduce(dest);
+	memcpy(dst, product, 128);
+	carry_reduce(dst);
+	carry_reduce(dst);
 }
 
-static inline void square(field_t *dest, const field_t *src)
+static inline void square(field_t *dst, const field_t *src)
 {
-	multiply(dest, src, src);
+	multiply(dst, src, src);
 }
 
 // a^2i = a^i· a^i and a^2i+1 = a·a^i· ai
 // Compute a^i recursively, and then square a^i to obtain a^2i
 // If the exponent is odd, we additionally multiply the result with another copy of a to obtain a^2i+1
-static inline void inverse(field_t *dest, const field_t *src)
+static inline void inverse(field_t *dst, const field_t *src)
 {
 	field_t elements;
 	memcpy(&elements, src, 128); // Initialize with src allows starting at bit 253
@@ -76,20 +76,20 @@ static inline void inverse(field_t *dest, const field_t *src)
 			multiply(&elements, &elements, src);
 		}
 	}
-	memcpy(dest, &elements, 128);
+	memcpy(dst, &elements, 128);
 }
 
-static inline void add(field_t *dest, const field_t *a, const field_t *b)
+static inline void add(field_t *dst, const field_t *a, const field_t *b)
 {
 	for (size_t i = 0; i < 16; i++) {
-		dest->q[i] = a->q[i] + b->q[i];
+		dst->q[i] = a->q[i] + b->q[i];
 	}
 }
 
-static inline void subtract(field_t *dest, const field_t *a, const field_t *b)
+static inline void subtract(field_t *dst, const field_t *a, const field_t *b)
 {
 	for (size_t i = 0; i < 16; i++) {
-		dest->q[i] = a->q[i] - b->q[i];
+		dst->q[i] = a->q[i] - b->q[i];
 	}
 }
 
@@ -104,7 +104,7 @@ static inline void swap(field_t *a, field_t *b, uint8_t bit)
 }
 
 // Convert to byte array
-static inline void pack(uint8_t *dest, const field_t *src)
+static inline void pack(uint8_t *dst, const field_t *src)
 {
 	field_t elements;
 	memcpy(&elements, src, 128);
@@ -133,17 +133,17 @@ static inline void pack(uint8_t *dest, const field_t *src)
 
 	// Spit into two bytes and place in adjacent elements
 	for (size_t i = 0; i < 16; i++) {
-		dest[2 * i + 0] = (uint8_t)elements.q[i] & 0xff;
-		dest[2 * i + 1] = (uint8_t)(elements.q[i] >> 8);
+		dst[2 * i + 0] = (uint8_t)elements.q[i] & 0xff;
+		dst[2 * i + 1] = (uint8_t)(elements.q[i] >> 8);
 	}
 }
 
-static inline void unpack(field_t *dest, const uint8_t *src)
+static inline void unpack(field_t *dst, const uint8_t *src)
 {
 	for (size_t i = 0; i < 16; i++) {
-		dest->q[i] = src[2 * i] + ((int64_t)src[2 * i + 1] << 8);
+		dst->q[i] = src[2 * i] + ((int64_t)src[2 * i + 1] << 8);
 	}
-	dest->q[15] &= 0x7fff;
+	dst->q[15] &= 0x7fff;
 }
 
 void x25519(uint8_t *public, const uint8_t *secret, const uint8_t *basepoint)

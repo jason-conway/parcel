@@ -20,12 +20,12 @@ void sha256_key_digest(const uint8_t *key, uint8_t *hash)
 }
 
 // ECDH private key ( {d ∈ ℕ | d < n} )
-static void point_d(uint8_t *dest)
+static void point_d(uint8_t *dst)
 {
-	(void)xgetrandom(dest, KEY_LEN);
-	dest[0] &= 248;
-	dest[31] &= 127;
-	dest[31] |= 64;
+	(void)xgetrandom(dst, KEY_LEN);
+	dst[0x00] &= 0xf8;
+	dst[0x1f] &= 0x7f;
+	dst[0x1f] |= 0x40;
 }
 
 // ECDH public key (Q = d * G)

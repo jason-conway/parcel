@@ -14,27 +14,27 @@
 // Pack byte array into 64-bit word
 uint64_t wire_pack64(const uint8_t *src)
 {
-	return (((uint64_t)src[0] << 0x00) |
-			((uint64_t)src[1] << 0x08) |
-			((uint64_t)src[2] << 0x10) |
-			((uint64_t)src[3] << 0x18) |
-			((uint64_t)src[4] << 0x20) |
-			((uint64_t)src[5] << 0x28) |
-			((uint64_t)src[6] << 0x30) |
-			((uint64_t)src[7] << 0x38));
+	return ((uint64_t)src[0] << 0x00) |
+	       ((uint64_t)src[1] << 0x08) |
+	       ((uint64_t)src[2] << 0x10) |
+	       ((uint64_t)src[3] << 0x18) |
+	       ((uint64_t)src[4] << 0x20) |
+	       ((uint64_t)src[5] << 0x28) |
+	       ((uint64_t)src[6] << 0x30) |
+	       ((uint64_t)src[7] << 0x38);
 }
 
 // Unpack a 64-bit word into a little-endian array of bytes
-void wire_unpack64(uint8_t *dest, uint64_t src)
+void wire_unpack64(uint8_t *dst, uint64_t src)
 {
-	dest[0] = (uint8_t)(src >> 0x00);
-	dest[1] = (uint8_t)(src >> 0x08);
-	dest[2] = (uint8_t)(src >> 0x10);
-	dest[3] = (uint8_t)(src >> 0x18);
-	dest[4] = (uint8_t)(src >> 0x20);
-	dest[5] = (uint8_t)(src >> 0x28);
-	dest[6] = (uint8_t)(src >> 0x30);
-	dest[7] = (uint8_t)(src >> 0x38);
+	dst[0] = (uint8_t)(src >> 0x00);
+	dst[1] = (uint8_t)(src >> 0x08);
+	dst[2] = (uint8_t)(src >> 0x10);
+	dst[3] = (uint8_t)(src >> 0x18);
+	dst[4] = (uint8_t)(src >> 0x20);
+	dst[5] = (uint8_t)(src >> 0x28);
+	dst[6] = (uint8_t)(src >> 0x30);
+	dst[7] = (uint8_t)(src >> 0x38);
 }
 
 enum wire_type wire_get_type(wire_t *ctx)
@@ -72,15 +72,14 @@ uint64_t wire_get_raw(uint8_t *src)
 	return wire_pack64(src);
 }
 
-void wire_set_raw(uint8_t *dest, uint64_t src)
+void wire_set_raw(uint8_t *dst, uint64_t src)
 {
-	wire_unpack64(dest, src);
+	wire_unpack64(dst, src);
 }
 
 wire_t *new_wire(void)
 {
-	wire_t *wire = xcalloc(RECV_MAX_BYTES);
-	return wire ? wire : NULL;
+	return xcalloc(RECV_MAX_BYTES);
 }
 
 /**

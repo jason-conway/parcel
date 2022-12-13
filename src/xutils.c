@@ -433,10 +433,10 @@ void *xmemdup(void *mem, size_t len)
 	return mem ? memcpy(_mem, mem, len) : NULL;
 }
 
-void xmemcpy_locked(pthread_mutex_t *lock, void *dest, void *src, size_t len)
+void xmemcpy_locked(pthread_mutex_t *lock, void *dst, void *src, size_t len)
 {
 	pthread_mutex_lock(lock);
-		memcpy(dest, src, len);
+		memcpy(dst, src, len);
 	pthread_mutex_unlock(lock);
 }
 

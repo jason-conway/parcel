@@ -124,9 +124,9 @@ static int recv_remaining(client_t *ctx, wire_t **wire, size_t bytes_recv, size_
 		return -1;
 	}
 
-	wire_t *dest = *wire;
+	wire_t *dst = *wire;
 	for (size_t i = 0; i < bytes_remaining;) {
-		ssize_t received = xrecv(ctx->socket, &dest->data[bytes_recv - sizeof(wire_t)] + i, bytes_remaining - i, 0);
+		ssize_t received = xrecv(ctx->socket, &dst->data[bytes_recv - sizeof(wire_t)] + i, bytes_remaining - i, 0);
 		switch (received) {
 			case -1:
 				return -1;
