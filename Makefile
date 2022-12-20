@@ -9,8 +9,8 @@ ifeq ($(OS), Windows_NT)
 	LDLIBS  = -lpthread -lws2_32 -liphlpapi -ladvapi32 -lkernel32 -lshell32
 	PREFIX  = %HOMEPATH%/parcel
 	EXE     = .exe
-	RESCMD_PARCEL  = windres.exe $(res_dir)parcel.rc -O coff -o $(build_dir)parcel.res
-	RESCMD_PARCELD = windres.exe $(res_dir)parceld.rc -O coff -o $(build_dir)parceld.res
+	parcel_res  = windres.exe $(res_dir)parcel.rc -O coff -o $(build_dir)parcel.res
+	parceld_res = windres.exe $(res_dir)parceld.rc -O coff -o $(build_dir)parceld.res
 else
 	LDFLAGS =
 	LDLIBS  = -pthread
