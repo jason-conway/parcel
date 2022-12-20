@@ -98,7 +98,7 @@ static void aes_key_expansion(uint8_t *round_key, const uint8_t *key)
 		}
 
 		// Rotate and substitute
-		if ((!i % 4)) {
+		if (!(i % 4)) {
 			const uint8_t _word = word[0];
 			word[0] = word[1];
 			word[1] = word[2];
