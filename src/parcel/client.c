@@ -73,6 +73,11 @@ int send_thread(void *ctx)
 		char *plaintext = xprompt(prompt, "text", &length); // xprompt() will never return null by design
 
 		xmemcpy_locked(&client_ctx->mutex_lock, &client, client_ctx, sizeof(client_t));
+		if (client.internal.kill_threads) {
+			xfree(plaintext);
+			return 1;
+		}
+
 		enum command_id id = CMD_NONE;
 
 		switch (parse_input(&client, &id, &plaintext, &length)) {
@@ -111,9 +116,9 @@ int send_thread(void *ctx)
 	}
 
 	cleanup:
-		client_ctx->internal.kill_threads = 1;
-		xclose(client.socket);
-		return status;
+		client.internal.kill_threads = 1;
+		xmemcpy_locked(&client_ctx->mutex_lock, &client_ctx->internal, &client.internal, sizeof(struct internal));
+		return shutdown(client.socket, SHUT_RDWR) || status;
 }
 
 static int recv_remaining(client_t *ctx, wire_t **wire, size_t bytes_recv, size_t bytes_remaining)
@@ -146,12 +151,13 @@ wire_t *recv_new_wire(client_t *ctx, size_t *wire_size)
 	}
 
 	const ssize_t bytes_recv = xrecv(ctx->socket, wire, DATA_LEN_MAX, 0);
-	if (bytes_recv < 0) {
-		return xfree(wire);
-	}
 
 	// Refresh any changes to shared context that may have occured while blocking on recv
 	xmemcpy_locked(&ctx->shctx->mutex_lock, ctx, ctx->shctx, sizeof(client_t));
+
+	if (bytes_recv <= 0) {
+		return xfree(wire);
+	}
 
 	*wire_size = bytes_recv;
 	return wire;
@@ -198,28 +204,29 @@ void *recv_thread(void *ctx)
 	client_t *client_ctx = ctx;
 	memcpy(&client, client_ctx, sizeof(client_t));
 
-	int status = 0;
-
-	while (1) {
+	for (;;) {
 		size_t bytes_recv = 0;
 		wire_t *wire = recv_new_wire(&client, &bytes_recv);
 		if (!wire) {
-			status = client.internal.kill_threads ? 0 : -1;
+			// TODO: cleanly exit without user interaction
+			if (!client.internal.kill_threads) {
+				client.internal.kill_threads = 1;
+				xmemcpy_locked(&client_ctx->mutex_lock, &client_ctx->internal, &client.internal, sizeof(struct internal));
+				
+				xwarn("\n%s\n", "Daemon unexpectedly closed connection");
+				xwarn("%s\n", "Use '/x' to exit");
+				disp_username(&client.username);
+			}
 			break;
 		}
 
 		if (decrypt_received_message(&client, wire, bytes_recv) < 0) {
-			status = -1;
-			goto recv_error;
+			xfree(wire);
+			break;
 		}
 
 		if (proc_type(&client, wire) < 0) {
-			status = -1;
-		}
-
-	recv_error:
-		xfree(wire);
-		if (client.internal.kill_threads || status) {
+			xfree(wire);
 			break;
 		}
 
@@ -228,8 +235,7 @@ void *recv_thread(void *ctx)
 	}
 
 	xclose(client.socket);
-	xfree(client_ctx);
-	return NULL;
+	return xfree(client_ctx);
 }
 
 int connect_server(client_t *client, const char *ip, const char *port)
@@ -287,7 +293,7 @@ void prompt_args(char *address, struct username *username)
 		memcpy(address, str, address_length);
 		xfree(str);
 	}
-	
+
 	size_t username_length = USERNAME_MAX_LENGTH;
 	if (!*username->data) {
 		char *str = xprompt("\033[1m> Enter username: \033[0m", "username", &username_length);

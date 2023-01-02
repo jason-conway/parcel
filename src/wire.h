@@ -79,7 +79,7 @@ enum wire_type {
 
 enum ctrl_function {
 	CTRL_EXIT = 0x65786974, // "exit"
-	CTRL_DHKE = 0x64686b65 // "dhke"
+	CTRL_DHKE = 0x64686b65, // "dhke"
 };
 
 enum DecryptionStatus {

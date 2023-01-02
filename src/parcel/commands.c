@@ -179,7 +179,7 @@ static int cmd_list(void)
 
 static void cmd_version(void)
 {
-	puts("\033[1m" "parcel " STR(PARCEL_VERSION) "\033[0m");
+	xprintf(DEF, BOLD, "%s\n", "parcel " STR(PARCEL_VERSION));
 }
 
 static int cmd_ambiguous(void)

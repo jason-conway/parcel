@@ -1,7 +1,7 @@
 /**
  * @file daemon.c
  * @author Jason Conway (jpc@jasonconway.dev)
- * @brief The `parcel` Daemon 
+ * @brief The `parcel` Daemon
  * @version 0.9.2
  * @date 2021-11-21
  *
@@ -133,9 +133,9 @@ static int add_client(server_t *srv)
 	}
 
 	if (two_party_server(new_client, srv->server_key)) {
-		debug_print("%s\n", "Successful Diffie-Hellman");
 		return -1;
 	}
+
 	return 0;
 }
 
@@ -145,7 +145,7 @@ static int transfer_message(server_t *srv, size_t sender_index, msg_t *msg)
 		if (i == sender_index) {
 			continue;
 		}
-		// debug_print("Sending to socket %zu\n", i);
+		debug_print("Sending to socket %zu\n", i);
 		if (xsendall(srv->sockets.sfds[i], msg->data, msg->length) < 0) {
 			return -1;
 		}
@@ -177,7 +177,7 @@ static int recv_client(server_t *srv, size_t sender_index)
 		xalert("xcalloc()\n");
 		return -1;
 	}
-	
+
 	if ((msg->length = xrecv(srv->sockets.sfds[sender_index], msg->data, sizeof(msg->data), 0)) <= 0) {
 		if (msg->length) {
 			xwarn("Client %zu disconnected improperly\n", sender_index);
@@ -198,7 +198,7 @@ static int recv_client(server_t *srv, size_t sender_index)
 		}
 
 		debug_print("Active connections: %zu\n", srv->sockets.nsfds);
-		
+
 		if (n_party_server(srv->sockets.sfds, srv->sockets.nsfds, srv->server_key)) {
 			xalert("Catastrophic key exchange failure\n");
 			xfree(msg);
@@ -231,7 +231,7 @@ int display_daemon_info(server_t *ctx)
 	char *public_ip = xgetpublicip();
 	printf(header, ctx->sockets.max_nsfds, public_ip ? public_ip : "error", ctx->server_port);
 	xfree(public_ip);
-	
+
 	if (xgetifaddrs("=> ", ctx->server_port)) {
 		xalert("Failed to obtain local interfaces\n");
 		return -1;
