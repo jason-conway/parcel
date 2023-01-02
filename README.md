@@ -29,7 +29,7 @@ $ make PREFIX=~/.parcel install
 
 #### iOS
 
-The parcel client works without modification on iOS devices using [ish](https://github.com/ish-app/ish). `parceld` will not work due to limitations of `ish`, but it might work with [a-shell](https://github.com/holzschu/a-shell).
+Both the parcel client and daemon run without modification on iOS devices using [ish](https://github.com/ish-app/ish).
 
 ### Windows
 
