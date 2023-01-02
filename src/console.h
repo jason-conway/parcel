@@ -12,13 +12,6 @@
 #include "xplatform.h"
 #include "xutils.h"
 
-typedef struct cursor_pos_t {
-	size_t row;
-	size_t offset; // Cursor index in bytes
-	size_t column; // Cursor index in characters
-	size_t rendered_column; // Active cursor column
-} cursor_pos_t;
-
 typedef struct line_t {
 	const char *prompt;
 	size_t prompt_len; // Rendered length
@@ -26,7 +19,12 @@ typedef struct line_t {
 	char *line;
 	size_t line_len; // Rendered length
 	size_t line_size; // Line size in bytes
-	cursor_pos_t cursor;
+	struct cursor {
+		size_t row;
+		size_t offset; // Cursor index in bytes
+		size_t column; // Cursor index in characters
+		size_t rendered_column; // Active cursor column
+	} cursor;
 	size_t console_width;
 } line_t;
 

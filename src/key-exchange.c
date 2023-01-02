@@ -33,7 +33,7 @@ static void point_q(const uint8_t *secret_key, uint8_t *public_key, uint8_t *fin
 {
 	const uint8_t basepoint[KEY_LEN] = { 9 };
 	x25519(public_key, secret_key, basepoint);
-	if (fingerprint != NULL) {
+	if (fingerprint) {
 		uint8_t hash[KEY_LEN];
 		sha256_key_digest(public_key, hash);
 		memcpy(fingerprint, hash, 16);
@@ -144,7 +144,7 @@ static int send_ctrl_key(sock_t *sockets, size_t count, uint8_t *ctrl_key)
 	memcpy(ctrl_key, renewed_key, KEY_LEN);
 
 	for (size_t i = 1; i <= count; i++) {
-		// debug_print("Sending CTRL key to socket %zu\n", i);
+		debug_print("Sending CTRL key to socket %zu\n", i);
 		if (xsend(sockets[i], wire, len, 0) < 0) {
 			xfree(wire);
 			return -1;

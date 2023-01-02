@@ -261,7 +261,7 @@ static ssize_t xgetline(char **line, const char *prompt)
 		return -1;
 	}
 
-	while (1) {
+	for (;;) {
 		// Dynamically resize line buffer as needed
 		if (ctx.line_size == line_allocation - 2) {
 			if (line_allocation * 2 < line_allocation) {
@@ -273,6 +273,7 @@ static ssize_t xgetline(char **line, const char *prompt)
 			}
 		}
 
+		// TODO: handle larger graphemes
 		unsigned char c[4] = { 0 };
 		size_t len = xgetcp(c);
 

@@ -30,24 +30,19 @@ enum SocketIndices {
 	DAEMON_SOCKET = 0,
 };
 
-typedef struct fd_set_t {
-	fd_set fds;
-	size_t nfds;
-} fd_set_t;
-
-// Slice-ish type for socket file descriptors
-typedef struct sfd_set_t {
-	sock_t *sfds; // Socket file descriptors
-	size_t nsfds; // Number of socket file descriptors
-	size_t max_nsfds; // Maximum number of socket file descriptors
-} sfd_set_t;
-
 typedef struct server_t {
 	char server_port[PORT_MAX_LENGTH];
 	size_t max_queue;
 	uint8_t server_key[KEY_LEN];
-	fd_set_t descriptors;
-	sfd_set_t sockets;
+	struct fd_set_t {
+		fd_set fds;
+		size_t nfds;
+	} descriptors;
+	struct sfd_set_t {
+		sock_t *sfds; // Socket file descriptors
+		size_t nsfds; // Number of socket file descriptors
+		size_t max_nsfds; // Maximum number of socket file descriptors
+	} sockets;
 } server_t;
 
 typedef struct msg_t {
