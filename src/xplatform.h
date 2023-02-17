@@ -61,7 +61,9 @@
 		#pragma comment(lib, "advapi32")
 		#pragma comment(lib, "IPHLPAPI.lib")
 	#endif
-
+	#ifndef SHUT_RDWR
+		#define SHUT_RDWR SD_BOTH
+	#endif
 	typedef USHORT in_port_t;
 	typedef SOCKET sock_t;
 	typedef DWORD console_t;
