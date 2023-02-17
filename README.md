@@ -38,7 +38,6 @@ The simplest way to build parcel on Windows is using [w64devkit](https://github.
 Once cloned, simply
 
 ```console
-$ make resources
 $ make install
 ```
 
