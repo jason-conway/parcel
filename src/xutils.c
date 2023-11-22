@@ -523,10 +523,14 @@ void xmemprint(const void *src, size_t len)
 {
 	const uint8_t *data = src;
 	for (size_t i = 0; i < len; i += 4) {
-		uint64_t chunk = (((uint64_t)data[i + 3] << 0x00) |
-						  ((uint64_t)data[i + 2] << 0x08) |
-						  ((uint64_t)data[i + 1] << 0x10) |
-						  ((uint64_t)data[i + 0] << 0x18));
-		printf("%s%" PRIx64, i ? "-" : "", chunk);
+		char hex[] = "---------";
+		for (size_t j = 0; j < 4; j++) {
+			hex[2 * j + 0] = "0123456789abcdef"[data[j + i] >> 4];
+			hex[2 * j + 1] = "0123456789abcdef"[data[j + i] & 15];
+		}
+		if (i + 4 >= len) {
+			hex[8] = '\n';
+		}
+		xwrite(STDOUT_FILENO, hex, sizeof(hex));
 	}
 }
