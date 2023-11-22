@@ -89,13 +89,13 @@ static void aes_key_expansion(uint8_t *round_key, const uint8_t *key)
 	memcpy(round_key, key, AES_KEY_LEN);
 
 	uint8_t word[4];
-	for (size_t i = 4; i < 44; i++) {
+	for (size_t i = AES_WORD_COUNT; i < (4 * (AES_ROUNDS + 1)); i++) {
 		for (size_t j = 0; j < 4; j++) {
 			word[j] = round_key[4 * (i - 1) + j];
 		}
 
 		// Rotate and substitute
-		if (!(i % 4)) {
+		if (!(i % AES_WORD_COUNT)) {
 			const uint8_t _word = word[0];
 			word[0] = word[1];
 			word[1] = word[2];
@@ -110,7 +110,7 @@ static void aes_key_expansion(uint8_t *round_key, const uint8_t *key)
 		}
 
 		for (size_t j = 0; j < 4; j++) {
-			round_key[(4 * i) + j] = round_key[(4 * (i - 4)) + j] ^ word[j];
+			round_key[(4 * i) + j] = round_key[(4 * (i - AES_WORD_COUNT)) + j] ^ word[j];
 		}
 	}
 }

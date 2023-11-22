@@ -17,6 +17,7 @@
 #include <stdbool.h>
 
 enum AES128 {
+	AES_WORD_COUNT = 4,
 	AES_ROUNDS = 10,
 	AES_BLOCK_SIZE = 16,
 	AES_KEY_LEN = 16,
