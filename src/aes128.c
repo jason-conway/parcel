@@ -22,14 +22,11 @@ typedef union state_t {
 } state_t;
 
 // Precalculated lookup table instead of recursive polynomial multiplication
-static uint8_t galois_multiply(uint8_t x, uint8_t y)
+static uint8_t gfmul(uint8_t x, uint8_t y)
 {
-	static const uint8_t polynomial_mask[8] = { 0x00, 0x1b, 0x36, 0x2d, 0x6c, 0x77, 0x5a, 0x41 };
-	uint16_t r = ((x * (y & 0x01)) ^
-	              (x * (y & 0x02)) ^
-	              (x * (y & 0x04)) ^
-	              (x * (y & 0x08)));
-	return (uint8_t)(r ^ polynomial_mask[r >> 8]);
+	static const uint8_t mask[8] = { 0x00, 0x1b, 0x36, 0x2d, 0x6c, 0x77, 0x5a, 0x41 };
+	uint16_t r = (x * (y & 0x1)) ^ (x * (y & 0x2)) ^ (x * (y & 0x4)) ^ (x * (y & 0x8));
+	return (uint8_t)(r ^ mask[r >> 8]);
 }
 
 static void xor128(uint8_t *a, const uint8_t *b)
@@ -155,12 +152,15 @@ static void aes_substitute_bytes(state_t *ctx, bool invert)
 // Cyclically shift the last three rows of the State with different offsets
 static void aes_shift_rows(state_t *ctx, bool invert)
 {
+	uint8_t *r1map = invert ? (uint8_t []) { 3, 2, 1, 0 } : (uint8_t []) { 0, 1, 2, 3 };
+	uint8_t *r3map = invert ? (uint8_t []) { 0, 3, 2, 1 } : (uint8_t []) { 0, 1, 2, 3 };
+
 	// Cycle the first row 1 column to the left or right
-	uint8_t s = ctx->s[invert ? 3 : 0][1];
-	ctx->s[invert ? 3 : 0][1] = ctx->s[invert ? 2 : 1][1];
-	ctx->s[invert ? 2 : 1][1] = ctx->s[invert ? 1 : 2][1];
-	ctx->s[invert ? 1 : 2][1] = ctx->s[invert ? 0 : 3][1];
-	ctx->s[invert ? 0 : 3][1] = s;
+	uint8_t s = ctx->s[r1map[0]][1];
+	ctx->s[r1map[0]][1] = ctx->s[r1map[1]][1];
+	ctx->s[r1map[1]][1] = ctx->s[r1map[2]][1];
+	ctx->s[r1map[2]][1] = ctx->s[r1map[3]][1];
+	ctx->s[r1map[3]][1] = s;
 
 	// Cycle the second row 2 columns
 	s = ctx->s[0][2];
@@ -173,10 +173,10 @@ static void aes_shift_rows(state_t *ctx, bool invert)
 
 	// Cycle the third row 3 columns to the left or right
 	s = ctx->s[0][3];
-	ctx->s[invert ? 0 : 0][3] = ctx->s[invert ? 1 : 3][3];
-	ctx->s[invert ? 1 : 3][3] = ctx->s[invert ? 2 : 2][3];
-	ctx->s[invert ? 2 : 2][3] = ctx->s[invert ? 3 : 1][3];
-	ctx->s[invert ? 3 : 1][3] = s;
+	ctx->s[r3map[0]][3] = ctx->s[r3map[3]][3];
+	ctx->s[r3map[3]][3] = ctx->s[r3map[2]][3];
+	ctx->s[r3map[2]][3] = ctx->s[r3map[1]][3];
+	ctx->s[r3map[1]][3] = s;
 }
 
 // Mix the contents of the state's columns to produce new columns
@@ -185,46 +185,23 @@ static void aes_mix_columns(state_t *ctx, bool invert)
 {
 	if (invert) {
 		for (size_t i = 0; i < 4; i++) {
-			uint8_t s[4] = {
-				ctx->s[i][0],
-				ctx->s[i][1],
-				ctx->s[i][2],
-				ctx->s[i][3]
-			};
+			uint8_t s[4] = { ctx->s[i][0], ctx->s[i][1], ctx->s[i][2], ctx->s[i][3] };
 
-			ctx->s[i][0] = (galois_multiply(s[0], 0x0e) ^
-			                galois_multiply(s[1], 0x0b) ^
-			                galois_multiply(s[2], 0x0d) ^
-			                galois_multiply(s[3], 0x09));
-
-			ctx->s[i][1] = (galois_multiply(s[0], 0x09) ^
-			                galois_multiply(s[1], 0x0e) ^
-			                galois_multiply(s[2], 0x0b) ^
-			                galois_multiply(s[3], 0x0d));
-
-			ctx->s[i][2] = (galois_multiply(s[0], 0x0d) ^
-			                galois_multiply(s[1], 0x09) ^
-			                galois_multiply(s[2], 0x0e) ^
-			                galois_multiply(s[3], 0x0b));
-
-			ctx->s[i][3] = (galois_multiply(s[0], 0x0b) ^
-			                galois_multiply(s[1], 0x0d) ^
-			                galois_multiply(s[2], 0x09) ^
-			                galois_multiply(s[3], 0x0e));
+			ctx->s[i][0] = gfmul(s[0], 0xe) ^ gfmul(s[1], 0xb) ^ gfmul(s[2], 0xd) ^ gfmul(s[3], 0x9);
+			ctx->s[i][1] = gfmul(s[0], 0x9) ^ gfmul(s[1], 0xe) ^ gfmul(s[2], 0xb) ^ gfmul(s[3], 0xd);
+			ctx->s[i][2] = gfmul(s[0], 0xd) ^ gfmul(s[1], 0x9) ^ gfmul(s[2], 0xe) ^ gfmul(s[3], 0xb);
+			ctx->s[i][3] = gfmul(s[0], 0xb) ^ gfmul(s[1], 0xd) ^ gfmul(s[2], 0x9) ^ gfmul(s[3], 0xe);
 		}
 	}
 	else {
 		for (size_t i = 0; i < 4; i++) {
-			uint8_t s = (ctx->s[i][0] ^
-			             ctx->s[i][1] ^
-			             ctx->s[i][2] ^
-			             ctx->s[i][3]);
+			uint8_t s = ctx->s[i][0] ^ ctx->s[i][1] ^ ctx->s[i][2] ^ ctx->s[i][3];
 			uint8_t c0 = ctx->s[i][0];
 
 			for (size_t j = 0; j < 4; j++) {
 				// XOR s[i][3] with the previous s[i][0]
 				uint8_t c = ctx->s[i][j] ^ ((j == 3) ? c0 : ctx->s[i][j + 1]);
-				c = ((uint8_t)(c << 1U) ^ (((c >> 7) & 1) * 0x1b));
+				c = (uint8_t)(c << 1U) ^ (((c >> 7) & 1) * 0x1b);
 				ctx->s[i][j] ^= c ^ s;
 			}
 		}
@@ -273,7 +250,7 @@ void aes128_cmac(const aes128_t *ctx, const uint8_t *msg, size_t length, uint8_t
 	for (; length; length -= AES_BLOCK_SIZE) {
 		if (length < AES_BLOCK_SIZE) {
 			aes_generate_subkey(L);
-			L[length] ^= 128;
+			L[length] ^= AES_KEY_BITS;
 		}
 		if (length <= AES_BLOCK_SIZE) {
 			for (size_t i = 0; i < length; i++) {
