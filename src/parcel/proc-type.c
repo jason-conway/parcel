@@ -89,7 +89,7 @@ int proc_type(client_t *ctx, wire_t *wire)
 					exit(EXIT_FAILURE); // TODO: figure something out for this
 				case CTRL_DHKE:
 					xmemcpy_locked(&ctx->shctx->mutex_lock, &ctx->shctx->keys, &ctx->keys, sizeof(struct keys));
-					xmemcpy_locked(&ctx->shctx->mutex_lock, &ctx->shctx->internal, &ctx->internal, sizeof(struct internal));
+					xmemcpy_locked(&ctx->shctx->mutex_lock, &ctx->shctx->internal, &ctx->internal, sizeof(struct client_internal));
 					break;
 			}
 			break;

@@ -48,23 +48,30 @@ enum RecvStatus {
 	RECV_OK = 0,
 };
 
-typedef struct client_t {
-	struct client_t *shctx; // Pointer to the "real" context, shared between threads
+struct username {
+	char data[USERNAME_MAX_LENGTH];
+	size_t length;
+};
+
+struct keys {
+	uint8_t session[KEY_LEN]; // Group-derived symmetric key
+	uint8_t ctrl[KEY_LEN];    // Ephemeral daemon control key
+};
+
+struct client_internal {
+	bitfield conn_announced : 1;
+	bitfield kill_threads : 1;
+} ;
+
+typedef struct client_t client_t;
+struct client_t {
+	client_t *shctx; // Pointer to the "real" context, shared between threads
 	sock_t socket;
-	struct username {
-		char data[USERNAME_MAX_LENGTH];
-		size_t length;
-	} username;
-	struct keys {
-		uint8_t session[KEY_LEN]; // Group-derived symmetric key
-		uint8_t ctrl[KEY_LEN];    // Ephemeral daemon control key
-	} keys;
-	struct internal {
-		bitfield conn_announced : 1;
-		bitfield kill_threads : 1;
-	} internal;
+	struct username username;
+	struct keys keys;
+	struct client_internal internal;
 	pthread_mutex_t mutex_lock;
-} client_t;
+};
 
 int connect_server(client_t *client, const char *ip, const char *port);
 

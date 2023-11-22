@@ -117,7 +117,7 @@ int send_thread(void *ctx)
 
 	cleanup:
 		client.internal.kill_threads = 1;
-		xmemcpy_locked(&client_ctx->mutex_lock, &client_ctx->internal, &client.internal, sizeof(struct internal));
+		xmemcpy_locked(&client_ctx->mutex_lock, &client_ctx->internal, &client.internal, sizeof(struct client_internal));
 		return shutdown(client.socket, SHUT_RDWR) || status;
 }
 
@@ -211,7 +211,7 @@ void *recv_thread(void *ctx)
 			// TODO: cleanly exit without user interaction
 			if (!client.internal.kill_threads) {
 				client.internal.kill_threads = 1;
-				xmemcpy_locked(&client_ctx->mutex_lock, &client_ctx->internal, &client.internal, sizeof(struct internal));
+				xmemcpy_locked(&client_ctx->mutex_lock, &client_ctx->internal, &client.internal, sizeof(struct client_internal));
 				
 				xwarn("\n%s\n", "Daemon unexpectedly closed connection");
 				xwarn("%s\n", "Use '/x' to exit");

@@ -113,10 +113,11 @@ free_path:
 static void cmd_print_enc_info(uint8_t *session, uint8_t *control)
 {
 	printf("Session Key: ");
+	fflush(stdout);
 	xmemprint(session, KEY_LEN);
-	printf("\nControl Key: ");
+	printf("Control Key: ");
+	fflush(stdout);
 	xmemprint(control, KEY_LEN);
-	printf("\n");
 }
 
 static void cmd_clear(void)
