@@ -6,7 +6,7 @@
  * @version 2022.11
  * @date 2021-12-15
  *
- * @copyright Copyright (c) 2021 - 2023 Jason Conway. All rights reserved.
+ * @copyright Copyright (c) 2021 - 2024 Jason Conway. All rights reserved.
  *
  */
 

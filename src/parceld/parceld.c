@@ -5,7 +5,7 @@
  * @version 0.9.2
  * @date 2022-01-28
  *
- * @copyright Copyright (c) 2022 - 2023 Jason Conway. All rights reserved.
+ * @copyright Copyright (c) 2022 - 2024 Jason Conway. All rights reserved.
  *
  */
 
