@@ -2,7 +2,7 @@
  * @file aes128.h
  * @author Jason Conway (jpc@jasonconway.dev)
  * @brief A fresh implementation of AES and AES-CMAC following FIPS 197 and RFC4493
- * @version 0.9.3
+ * @version 0.9.4
  * @date 2022-02-06
  *
  * @copyright Copyright (c) 2022 - 2024 Jason Conway.
@@ -11,23 +11,23 @@
 
 #pragma once
 
+#include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
-#include <stdbool.h>
 
 enum AES128 {
-	AES_WORD_COUNT = 4,
-	AES_ROUNDS = 10,
-	AES_BLOCK_SIZE = 16,
-	AES_KEY_LEN = 16,
-	CMAC_KEY_LEN = 16,
-	AES_KEY_BITS = 8 * AES_KEY_LEN,
+    AES_WORD_COUNT = 4,
+    AES_ROUNDS = 10,
+    AES_BLOCK_SIZE = 16,
+    AES_KEY_LEN = 16,
+    CMAC_KEY_LEN = 16,
+    AES_KEY_BITS = 8 * AES_KEY_LEN,
 };
 
 typedef struct aes128_t {
-	uint8_t round_key[AES_BLOCK_SIZE * (AES_ROUNDS + 1)];
-	uint8_t iv[AES_BLOCK_SIZE];
+    uint8_t round_key[AES_BLOCK_SIZE * (AES_ROUNDS + 1)];
+    uint8_t iv[AES_BLOCK_SIZE];
 } aes128_t;
 
 /**
@@ -67,7 +67,7 @@ void aes128_decrypt(aes128_t *ctx, uint8_t *chunk, size_t length);
 
 /**
  * @brief Cipher-based Message Authentication Code (OMAC1)
- * 
+ *
  * @param[inout] ctx CMAC-specific aes128 instance
  * @param[in] msg pointer to ciphertext/plaintext message
  * @param[in] length number of bytes to process
