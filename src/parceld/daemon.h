@@ -50,6 +50,8 @@ typedef struct msg_t {
 	ssize_t length;
 } msg_t;
 
-int init_daemon(server_t *ctx);
-int display_daemon_info(server_t *ctx);
+bool init_daemon(server_t *ctx);
+
+bool display_daemon_info(server_t *ctx);
+
 int main_thread(void *ctx);

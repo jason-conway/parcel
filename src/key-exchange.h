@@ -10,17 +10,17 @@
  */
 
 #include "sha256.h"
-#include "x25519.h"
 #include "wire.h"
+#include "x25519.h"
 #include "xplatform.h"
 
 enum KeyExchangeStatus {
-	DHKE_ERROR = -1,
-	DHKE_OK,
+    DHKE_ERROR = -1,
+    DHKE_OK,
 };
 
-int two_party_client(sock_t socket, uint8_t *ctrl_key);
-int two_party_server(sock_t socket, uint8_t *session_key);
+bool two_party_client(sock_t socket, uint8_t *ctrl_key);
+bool two_party_server(sock_t socket, uint8_t *session_key);
 
-int n_party_client(sock_t socket, uint8_t *session_key, size_t rounds);
-int n_party_server(sock_t *sockets, size_t connections, uint8_t *ctrl_key);
+bool n_party_client(sock_t socket, uint8_t *session_key, size_t rounds);
+bool n_party_server(sock_t *sockets, size_t connections, uint8_t *ctrl_key);

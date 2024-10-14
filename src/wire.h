@@ -17,54 +17,54 @@
 #include "xutils.h"
 
 typedef struct wire_t {
-	uint8_t mac[16];    // message authentication code for entire wire
-	uint8_t lac[16];    // message authentication code for wire length
-	uint8_t iv[16];     // initialization vector for AES context
-	uint8_t length[16]; // length of entire wire
-	uint8_t type[16];   // type of wire, see enum wire_type
-	uint8_t data[];     // wire data
+    uint8_t mac[16];    // message authentication code for entire wire
+    uint8_t lac[16];    // message authentication code for wire length
+    uint8_t iv[16];     // initialization vector for AES context
+    uint8_t length[16]; // length of entire wire
+    uint8_t type[16];   // type of wire, see enum wire_type
+    uint8_t data[];     // wire data
 } wire_t;
 
 enum Wire {
-	KEY_LEN = 2 * AES_KEY_LEN,
-	BLOCK_LEN = AES_BLOCK_SIZE,
-	DATA_LEN_MAX = 1 << 20,
-	RECV_MAX_BYTES = sizeof(wire_t) + DATA_LEN_MAX,
+    KEY_LEN = 2 * AES_KEY_LEN,
+    BLOCK_LEN = AES_BLOCK_SIZE,
+    DATA_LEN_MAX = 1ull << 20,
+    RECV_MAX_BYTES = sizeof(wire_t) + DATA_LEN_MAX,
 };
 
 enum TypeFile {
-	FILE_PATH_MAX_LENGTH = FILENAME_MAX,
-	FILE_NAME_START = 0,
-	FILE_NAME_LEN = (1 << 8) - 1, // Win32 API limit
-	FILE_SIZE_START = FILE_NAME_LEN,
-	FILE_DATA_START = FILE_NAME_LEN + BLOCK_LEN,
-	FILE_HEADER_SIZE = FILE_DATA_START,
-	FILE_DATA_MAX_SIZE = DATA_LEN_MAX - FILE_HEADER_SIZE,
+    FILE_PATH_MAX_LENGTH = FILENAME_MAX,
+    FILE_NAME_START = 0,
+    FILE_NAME_LEN = (1 << 8) - 1, // Win32 API limit
+    FILE_SIZE_START = FILE_NAME_LEN,
+    FILE_DATA_START = FILE_NAME_LEN + BLOCK_LEN,
+    FILE_HEADER_SIZE = FILE_DATA_START,
+    FILE_DATA_MAX_SIZE = RECV_MAX_BYTES - FILE_HEADER_SIZE,
 };
 
 enum TypeCtrl {
-	CTRL_KEY_OFFSET = 16,
-	CTRL_DATA_LEN = CTRL_KEY_OFFSET + KEY_LEN
+    CTRL_KEY_OFFSET = 16,
+    CTRL_DATA_LEN = CTRL_KEY_OFFSET + KEY_LEN
 };
 
 enum SectionLengths {
-	BASE_AUTH_LEN = sizeof(wire_t) - BLOCK_LEN,
-	BASE_ENC_LEN = sizeof(((wire_t *)0)->length) + sizeof(((wire_t *)0)->type),
-	BASE_DEC_LEN = sizeof(((wire_t *)0)->type)
+    BASE_AUTH_LEN = sizeof(wire_t) - BLOCK_LEN,
+    BASE_ENC_LEN = sizeof(((wire_t *)0)->length) + sizeof(((wire_t *)0)->type),
+    BASE_DEC_LEN = sizeof(((wire_t *)0)->type)
 };
 
 enum KeyOffsets {
-	CIPHER_OFFSET = 0,
-	CMAC_OFFSET = 16,
+    CIPHER_OFFSET = 0,
+    CMAC_OFFSET = 16,
 };
 
 enum SectionOffsets {
-	WIRE_OFFSET_MAC = offsetof(wire_t, mac),
-	WIRE_OFFSET_LAC = offsetof(wire_t, lac),
-	WIRE_OFFSET_IV = offsetof(wire_t, iv),
-	WIRE_OFFSET_LENGTH = offsetof(wire_t, length),
-	WIRE_OFFSET_TYPE = offsetof(wire_t, type),
-	WIRE_OFFSET_DATA = offsetof(wire_t, data),
+    WIRE_OFFSET_MAC = offsetof(wire_t, mac),
+    WIRE_OFFSET_LAC = offsetof(wire_t, lac),
+    WIRE_OFFSET_IV = offsetof(wire_t, iv),
+    WIRE_OFFSET_LENGTH = offsetof(wire_t, length),
+    WIRE_OFFSET_TYPE = offsetof(wire_t, type),
+    WIRE_OFFSET_DATA = offsetof(wire_t, data),
 };
 
 /**
@@ -72,33 +72,35 @@ enum SectionOffsets {
  * of "text", "file", "ctrl" in hex.
  */
 enum wire_type {
-	TYPE_TEXT = 0x74657874,
-	TYPE_FILE = 0x66696c65,
-	TYPE_CTRL = 0x6374726c,
+    TYPE_ERROR = -1,
+    TYPE_TEXT  = 0x74657874,
+    TYPE_FILE  = 0x66696c65,
+    TYPE_CTRL  = 0x6374726c,
 };
 
 enum ctrl_function {
-	CTRL_EXIT = 0x65786974, // "exit"
-	CTRL_DHKE = 0x64686b65, // "dhke"
+    CTRL_ERROR = -1,
+    CTRL_EXIT  = 0x65786974, // "exit"
+    CTRL_DHKE  = 0x64686b65, // "dhke"
 };
 
 enum DecryptionStatus {
-	WIRE_OK,
-	WIRE_CMAC_ERROR,
-	WIRE_INVALID_KEY,
-	WIRE_PARTIAL,
+    WIRE_OK,
+    WIRE_CMAC_ERROR,
+    WIRE_INVALID_KEY,
+    WIRE_PARTIAL,
 };
 
 struct wire_ctrl_message {
-	uint8_t function[16];
-	uint8_t args[16];
-	uint8_t renewed_key[32];
+    uint8_t function[16];
+    uint8_t args[16];
+    uint8_t renewed_key[32];
 };
 
 struct wire_file_message {
-	char filename[64];
-	uint8_t filesize[16];
-	uint8_t filedata[];
+    char filename[64];
+    uint8_t filesize[16];
+    uint8_t filedata[];
 };
 
 wire_t *new_wire(void);

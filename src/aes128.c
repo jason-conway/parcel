@@ -96,11 +96,11 @@ static void aes_key_expansion(uint8_t *round_key, const uint8_t *key)
 
         // Rotate and substitute
         if (!(i % AES_WORD_COUNT)) {
-            const uint8_t _word = word[0];
+            const uint8_t w = word[0];
             word[0] = word[1];
             word[1] = word[2];
             word[2] = word[3];
-            word[3] = _word;
+            word[3] = w;
 
             for (size_t j = 0; j < 4; j++) {
                 word[j] = sbox_lookup(word[j], false);
@@ -152,15 +152,15 @@ static void aes_substitute_bytes(state_t *ctx, bool invert)
 // Cyclically shift the last three rows of the State with different offsets
 static void aes_shift_rows(state_t *ctx, bool invert)
 {
-    uint8_t *r1map = invert ? (uint8_t[]) { 3, 2, 1, 0 } : (uint8_t[]) { 0, 1, 2, 3 };
-    uint8_t *r3map = invert ? (uint8_t[]) { 0, 3, 2, 1 } : (uint8_t[]) { 0, 1, 2, 3 };
+    uint8_t *r1x = invert ? (uint8_t[]) { 3, 2, 1, 0 } : (uint8_t[]) { 0, 1, 2, 3 };
+    uint8_t *r3x = invert ? (uint8_t[]) { 0, 3, 2, 1 } : (uint8_t[]) { 0, 1, 2, 3 };
 
     // Cycle the first row 1 column to the left or right
-    uint8_t s = ctx->s[r1map[0]][1];
-    ctx->s[r1map[0]][1] = ctx->s[r1map[1]][1];
-    ctx->s[r1map[1]][1] = ctx->s[r1map[2]][1];
-    ctx->s[r1map[2]][1] = ctx->s[r1map[3]][1];
-    ctx->s[r1map[3]][1] = s;
+    uint8_t s = ctx->s[r1x[0]][1];
+    ctx->s[r1x[0]][1] = ctx->s[r1x[1]][1];
+    ctx->s[r1x[1]][1] = ctx->s[r1x[2]][1];
+    ctx->s[r1x[2]][1] = ctx->s[r1x[3]][1];
+    ctx->s[r1x[3]][1] = s;
 
     // Cycle the second row 2 columns
     s = ctx->s[0][2];
@@ -173,10 +173,10 @@ static void aes_shift_rows(state_t *ctx, bool invert)
 
     // Cycle the third row 3 columns to the left or right
     s = ctx->s[0][3];
-    ctx->s[r3map[0]][3] = ctx->s[r3map[3]][3];
-    ctx->s[r3map[3]][3] = ctx->s[r3map[2]][3];
-    ctx->s[r3map[2]][3] = ctx->s[r3map[1]][3];
-    ctx->s[r3map[1]][3] = s;
+    ctx->s[r3x[0]][3] = ctx->s[r3x[3]][3];
+    ctx->s[r3x[3]][3] = ctx->s[r3x[2]][3];
+    ctx->s[r3x[2]][3] = ctx->s[r3x[1]][3];
+    ctx->s[r3x[1]][3] = s;
 }
 
 // Mix the contents of the state's columns to produce new columns

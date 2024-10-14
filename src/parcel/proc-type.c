@@ -11,98 +11,106 @@
 
 #include "client.h"
 
-static int proc_file(void *data)
+static bool proc_file(void *data)
 {
-	struct wire_file_message *wire_file = (struct wire_file_message *)data;
-	printf("\n\033[1mReceived file \"%s\"\033[0m\n", wire_file->filename);
-	char *save_path = xget_dir(wire_file->filename);
-	if (!save_path) {
-		return -1;
-	}
-	FILE *file = fopen(save_path, "wb");
-	if (!file) {
-		xwarn("> Could not open file \"%s\" for writing\n", wire_file->filename);
-		return -1;
-	}
-	xfree(save_path);
+    struct wire_file_message *wire_file = (struct wire_file_message *)data;
+    printf("\n\033[1mReceived file \"%s\"\033[0m\n", wire_file->filename);
+    char *save_path = xget_dir(wire_file->filename);
+    if (!save_path) {
+        return false;
+    }
+    FILE *file = fopen(save_path, "wb");
+    if (!file) {
+        xwarn("> Could not open file \"%s\" for writing\n", wire_file->filename);
+        return false;
+    }
+    xfree(save_path);
 
-	const size_t file_data_size = wire_pack64(wire_file->filesize);
-	if (fwrite(wire_file->filedata, 1, file_data_size, file) != file_data_size) {
-		xwarn("> Error writing to file \"%s\"\n", wire_file->filename);
-		(void)fclose(file);
-		xfree(wire_file->filename);
-		return -1;
-	}
+    const size_t file_data_size = wire_pack64(wire_file->filesize);
+    if (fwrite(wire_file->filedata, 1, file_data_size, file) != file_data_size) {
+        xwarn("> Error writing to file \"%s\"\n", wire_file->filename);
+        (void)fclose(file);
+        xfree(wire_file->filename);
+        return false;
+    }
 
-	if (fflush(file) || fclose(file)) {
-		xwarn("> Error closing file \"%s\"\n", wire_file->filename);
-		return -1;
-	}
+    if (fflush(file) || fclose(file)) {
+        xwarn("> Error closing file \"%s\"\n", wire_file->filename);
+        return false;
+    }
 
-	return 0;
+    return true;
 }
 
-static void proc_text(uint8_t *wire_data)
+static void proc_text(void *data)
 {
-	printf("\033[2K\r%s\n", (char *)wire_data);
+    const char *text = data;
+    WRITE_CONST_STR(STDOUT_FILENO, "\033[2K\r");
+    WRITE_STR(STDOUT_FILENO, text);
+    WRITE_CONST_STR(STDOUT_FILENO, "\n");
 }
 
 static int proc_ctrl(client_t *ctx, void *data)
 {
-	struct wire_ctrl_message *wire_ctrl = (struct wire_ctrl_message *)data;
-	memcpy(ctx->keys.ctrl, wire_ctrl->renewed_key, KEY_LEN);
+    struct wire_ctrl_message *wire_ctrl = (struct wire_ctrl_message *)data;
+    memcpy(ctx->keys.ctrl, wire_ctrl->renewed_key, KEY_LEN);
 
-	switch (wire_get_ctrl_function(wire_ctrl)) {
-		case CTRL_EXIT:
-			return CTRL_EXIT;
-		case CTRL_DHKE:
-			switch (n_party_client(ctx->socket, ctx->keys.session, wire_get_ctrl_args(wire_ctrl))) {
-				case DHKE_OK:
-					if (!ctx->internal.conn_announced) {
-						if (announce_connection(ctx)) {
-							return -1;
-						}
-					}
-					return CTRL_DHKE;
-				case DHKE_ERROR:
-					return DHKE_ERROR;
-			}
-	}
-	return -1;
+    switch (wire_get_ctrl_function(wire_ctrl)) {
+        case CTRL_ERROR:
+            return CTRL_ERROR;
+        case CTRL_EXIT:
+            return CTRL_EXIT;
+        case CTRL_DHKE:
+            if (n_party_client(ctx->socket, ctx->keys.session, wire_get_ctrl_args(wire_ctrl))) {
+                if (!ctx->internal.conn_announced) {
+                    if (!announce_connection(ctx)) {
+                        return CTRL_ERROR;
+                    }
+                }
+                return CTRL_DHKE;
+            }
+            return DHKE_ERROR;
+    }
+    return -1;
 }
 
 /**
  * @brief Process a received and (successfully) decrypted wire
- * 
+ *
  * @param ctx Client context
  * @param wire Wire to process
  * @return Returns a wire_type enum on success, otherwise -1
  */
-int proc_type(client_t *ctx, wire_t *wire)
+enum wire_type proc_type(client_t *ctx, wire_t *wire)
 {
-	enum wire_type type = wire_get_type(wire);
-	switch (type) {
-		case TYPE_CTRL: // Forward wire along to proc_ctrl()
-			switch (proc_ctrl(ctx, wire->data)) {
-				case CTRL_EXIT:
-					xfree(wire);
-					exit(EXIT_FAILURE); // TODO: figure something out for this
-				case CTRL_DHKE:
-					xmemcpy_locked(&ctx->shctx->mutex_lock, &ctx->shctx->keys, &ctx->keys, sizeof(struct keys));
-					xmemcpy_locked(&ctx->shctx->mutex_lock, &ctx->shctx->internal, &ctx->internal, sizeof(struct client_internal));
-					break;
-			}
-			break;
-		case TYPE_FILE:
-			if (proc_file(wire->data)) {
-				xalert("proc_file()\n");
-				return -1;
-			}
-			break;
-		case TYPE_TEXT:
-			proc_text(wire->data);
-			disp_username(&ctx->username);
-			break;
-	}
-	return type;
+    enum wire_type type = wire_get_type(wire);
+    switch (type) {
+        case TYPE_CTRL: // Forward wire along to proc_ctrl()
+            switch (proc_ctrl(ctx, wire->data)) {
+                case CTRL_EXIT:
+                    xfree(wire);
+                    exit(EXIT_FAILURE); // TODO: figure something out for this
+                case CTRL_DHKE:
+                    xmemcpy_locked(&ctx->shctx->mutex_lock, &ctx->shctx->keys, &ctx->keys, sizeof(struct keys));
+                    xmemcpy_locked(&ctx->shctx->mutex_lock, &ctx->shctx->internal, &ctx->internal, sizeof(struct client_internal));
+                    break;
+                case CTRL_ERROR:
+                    xalert("proc_ctrl()\n");
+                    return TYPE_ERROR;
+            }
+            break;
+        case TYPE_FILE:
+            if (!proc_file(wire->data)) {
+                xalert("proc_file()\n");
+                return TYPE_ERROR;
+            }
+            break;
+        case TYPE_TEXT:
+            proc_text(wire->data);
+            disp_username(&ctx->username);
+            break;
+        default:
+            return TYPE_ERROR;
+    }
+    return type;
 }
