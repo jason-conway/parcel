@@ -56,6 +56,7 @@ static void flush_console(line_t *ctx)
         move_cursor_pos(&esc_seq, MOVE_DOWN, cursor_rows);
     }
 
+    // TODO: handle ctx->cursor.row == 0
     for (size_t i = 0; i < ctx->cursor.row - 1; i++) {
         SLICE_APPEND_CONST_STR(&esc_seq, "\r\033[0K\033[1A");
     }

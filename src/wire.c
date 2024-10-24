@@ -37,32 +37,82 @@ void wire_unpack64(uint8_t *dst, uint64_t src)
     dst[7] = (uint8_t)(src >> 0x38);
 }
 
-enum wire_type wire_get_type(wire_t *ctx)
+size_t get_aligned_len(size_t len)
 {
-    return (enum wire_type)wire_pack64(ctx->type);
+    return BLOCK_LEN * ((len + 15) / BLOCK_LEN);
 }
 
-enum ctrl_function wire_get_ctrl_function(struct wire_ctrl_message *ctrl)
+void wire_set_length(wire_t *wire, size_t len)
 {
-    return (enum ctrl_function)wire_pack64(ctrl->function);
+    wire_unpack64(wire->header.len, len);
 }
 
-uint64_t wire_get_ctrl_args(struct wire_ctrl_message *ctrl)
+size_t wire_get_length(wire_t *wire)
+{
+    return wire_pack64(wire->header.len);
+}
+
+void header_set_len(header_t *h, size_t len)
+{
+    wire_unpack64(h->len, len);
+}
+
+size_t header_get_len(header_t *h)
+{
+    return wire_pack64(h->len);
+}
+
+void wire_set_header(wire_t *wire, header_t *h)
+{
+    memcpy(&wire->header, h, sizeof(header_t));
+}
+
+void file_msg_set_filesize(file_msg_t *f, size_t size)
+{
+    wire_unpack64(f->filesize, size);
+}
+size_t file_msg_get_filesize(file_msg_t *f)
+{
+    return wire_pack64(f->filesize);
+}
+
+// MARK: msg_type
+void wire_set_msg_type(wire_t *wire, msg_type_t msg_type)
+{
+    wire_unpack64(wire->header.type, msg_type);
+}
+
+msg_type_t wire_get_msg_type(wire_t *wire)
+{
+    return wire_pack64(wire->header.type);
+}
+
+
+// MARK: ctrl_msg_type
+
+void wire_set_ctrl_msg_type(ctrl_msg_t *ctrl, ctrl_msg_type_t msg_type)
+{
+    wire_unpack64(ctrl->type, msg_type);
+}
+
+ctrl_msg_type_t wire_get_ctrl_type(ctrl_msg_t *ctrl)
+{
+    return wire_pack64(ctrl->type);
+}
+
+// MARK: ctrl_msg_args
+
+uint64_t wire_get_ctrl_args(ctrl_msg_t *ctrl)
 {
     return wire_pack64(ctrl->args);
 }
 
-void wire_set_ctrl_args(struct wire_ctrl_message *ctrl, uint64_t args)
+void wire_set_ctrl_args(ctrl_msg_t *ctrl, uint64_t args)
 {
-    wire_unpack64(ctrl->args, (uint64_t)args);
+    wire_unpack64(ctrl->args, args);
 }
 
-void wire_set_ctrl_function(struct wire_ctrl_message *ctrl, enum ctrl_function function)
-{
-    wire_unpack64(ctrl->function, (uint64_t)function);
-}
-
-void wire_set_ctrl_renewal(struct wire_ctrl_message *ctrl, const uint8_t *renewed_key)
+void wire_set_ctrl_renewal(ctrl_msg_t *ctrl, const uint8_t *renewed_key)
 {
     memcpy(ctrl->renewed_key, renewed_key, KEY_LEN);
 }
@@ -77,17 +127,17 @@ void wire_set_raw(uint8_t *dst, uint64_t src)
     wire_unpack64(dst, src);
 }
 
-uint64_t wire_decrypt_length(aes128_t *aes128, wire_t *wire)
+header_t wire_decrypt_header(aes128_t *aes128, wire_t *wire)
 {
-    uint8_t length[BLOCK_LEN] = { 0 };
-    memcpy(length, wire->length, BLOCK_LEN);
-    aes128_decrypt(aes128, length, BLOCK_LEN);
-    return wire_pack64(length);
+    header_t h = { 0 };
+    memcpy(h.len, (uint8_t *)&wire->header, BLOCK_LEN);
+    aes128_decrypt(aes128, h.len, BLOCK_LEN);
+    return h;
 }
 
 void wire_decrypt_data(aes128_t *aes128, wire_t *wire, size_t data_length)
 {
-    aes128_decrypt(aes128, wire->type, data_length + BASE_DEC_LEN);
+    aes128_decrypt(aes128, wire->data, data_length);
 }
 
 bool wire_verify_mac(aes128_t *aes128, wire_t *wire, size_t data_length)
@@ -97,10 +147,10 @@ bool wire_verify_mac(aes128_t *aes128, wire_t *wire, size_t data_length)
     return !memcmp(&wire->mac[0], cmac, BLOCK_LEN);
 }
 
-bool wire_verify_lac(aes128_t *aes128, wire_t *wire)
+bool wire_verify_header(aes128_t *aes128, wire_t *wire)
 {
     uint8_t cmac[BLOCK_LEN] = { 0 };
-    aes128_cmac(aes128, wire->length, BLOCK_LEN, cmac);
+    aes128_cmac(aes128, (uint8_t *)&wire->header, BLOCK_LEN, cmac);
     return !memcmp(&wire->lac[0], cmac, BLOCK_LEN);
 }
 
@@ -119,18 +169,16 @@ wire_t *new_wire(void)
  */
 wire_t *init_wire(void *data, uint64_t type, size_t *len)
 {
-    const uint64_t data_length = BLOCK_LEN * ((*len + 15) / BLOCK_LEN);
+    const uint64_t data_length = get_aligned_len(*len);
     const size_t wire_length = sizeof(wire_t) + data_length;
     wire_t *wire = xcalloc(wire_length);
-    if (!wire) {
-        return NULL;
-    }
 
     if (xgetrandom(wire->iv, BLOCK_LEN) < 0) {
         return xfree(wire);
     }
-    wire_unpack64(wire->length, data_length);
-    wire_unpack64(wire->type, type);
+    wire_set_length(wire, *len);
+    wire_set_msg_type(wire, type);
+
     memcpy(wire->data, data, *len);
     *len = wire_length;
     return wire;
@@ -138,52 +186,64 @@ wire_t *init_wire(void *data, uint64_t type, size_t *len)
 
 size_t encrypt_wire(wire_t *wire, const uint8_t *key)
 {
-    aes128_t ctxs[2]; // ctxs[0] for encryption, ctxs[1] for CMAC
-    aes128_init(&ctxs[0], wire->iv, &key[CIPHER_OFFSET]);
-    aes128_init_cmac(&ctxs[1], &key[CMAC_OFFSET]);
+    aes128_t cipher = { 0 };
+    aes128_t cmac = { 0 };
+    
+    aes128_init(&cipher, wire->iv, &key[CIPHER_OFFSET]);
+    aes128_init_cmac(&cmac, &key[CMAC_OFFSET]);
 
     // Grab length from wire
-    const size_t data_length = wire_pack64(wire->length);
+    const size_t data_len = wire_get_length(wire);
+    size_t aligned_len = get_aligned_len(data_len);
 
     // Encrypt chunks
-    aes128_encrypt(&ctxs[0], wire->length, data_length + BASE_ENC_LEN);
+    aes128_encrypt(&cipher, (uint8_t *)&wire->header, BLOCK_LEN);
+    aes128_encrypt(&cipher, wire->data, aligned_len);
 
-    // MAC for length only (LAC)
-    aes128_cmac(&ctxs[1], wire->length, BLOCK_LEN, wire->lac);
+    // Header MAC
+    aes128_cmac(&cmac, (uint8_t *)&wire->header, BLOCK_LEN, wire->lac);
 
     // MAC for LAC, IV, length, type, and chunks into the wire
-    aes128_cmac(&ctxs[1], wire->lac, data_length + BASE_AUTH_LEN, wire->mac);
-    return data_length;
+    aes128_cmac(&cmac, wire->lac, aligned_len + BASE_AUTH_LEN, wire->mac);
+    return aligned_len;
 }
 
 int decrypt_wire(wire_t *wire, size_t *len, const uint8_t *key)
 {
-    aes128_t ctxs[2];
-    aes128_init(&ctxs[0], wire->iv, &key[CIPHER_OFFSET]);
-    aes128_init_cmac(&ctxs[1], &key[CMAC_OFFSET]);
+    aes128_t cipher = { 0 };
+    aes128_t cmac = { 0 };
+
+    aes128_init(&cipher, wire->iv, &key[CIPHER_OFFSET]);
+    aes128_init_cmac(&cmac, &key[CMAC_OFFSET]);
 
     // Decrypt only the length
-    if (!wire_verify_lac(&ctxs[1], wire)) {
+    if (!wire_verify_header(&cmac, wire)) {
+        debug_print("%s", "error: header verification failed\n");
         return WIRE_INVALID_KEY;
     }
 
-    const size_t data_length = wire_decrypt_length(&ctxs[0], wire);
+    header_t h = wire_decrypt_header(&cipher, wire);
+    size_t data_len = header_get_len(&h);
+    size_t aligned_len = get_aligned_len(data_len);
 
-    size_t wire_length = data_length + sizeof(wire_t);
+    size_t wire_length = aligned_len + sizeof(wire_t);
     if (*len && *len != wire_length) {
         const size_t received = *len;
         *len = wire_length - received; // Update with bytes remaining
         return WIRE_PARTIAL;
     }
 
-    *len = data_length;
+    *len = data_len;
 
     // Verify MAC prior to decrypting in full
-    if (!wire_verify_mac(&ctxs[1], wire, data_length)) {
-        fprintf(stderr, "> internal: CMAC does not match\n");
+    if (!wire_verify_mac(&cmac, wire, aligned_len)) {
+        debug_print("%s", "error: mac verification failed\n");
         return WIRE_CMAC_ERROR;
     }
 
-    wire_decrypt_data(&ctxs[0], wire, data_length);
+    wire_decrypt_data(&cipher, wire, aligned_len);
+    wire_set_header(wire, &h);
+
+    debug_print("%s", "decrypt okay\n");
     return WIRE_OK;
 }

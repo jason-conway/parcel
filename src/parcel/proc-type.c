@@ -13,7 +13,7 @@
 
 static bool proc_file(void *data)
 {
-    struct wire_file_message *wire_file = (struct wire_file_message *)data;
+    file_msg_t *wire_file = data;
     printf("\n\033[1mReceived file \"%s\"\033[0m\n", wire_file->filename);
     char *save_path = xget_dir(wire_file->filename);
     if (!save_path) {
@@ -26,7 +26,8 @@ static bool proc_file(void *data)
     }
     xfree(save_path);
 
-    const size_t file_data_size = wire_pack64(wire_file->filesize);
+    const size_t file_data_size = file_msg_get_filesize(wire_file);
+
     if (fwrite(wire_file->filedata, 1, file_data_size, file) != file_data_size) {
         xwarn("> Error writing to file \"%s\"\n", wire_file->filename);
         (void)fclose(file);
@@ -52,15 +53,16 @@ static void proc_text(void *data)
 
 static int proc_ctrl(client_t *ctx, void *data)
 {
-    struct wire_ctrl_message *wire_ctrl = (struct wire_ctrl_message *)data;
+    ctrl_msg_t *wire_ctrl = data;
     memcpy(ctx->keys.ctrl, wire_ctrl->renewed_key, KEY_LEN);
 
-    switch (wire_get_ctrl_function(wire_ctrl)) {
+    switch (wire_get_ctrl_type(wire_ctrl)) {
         case CTRL_ERROR:
             return CTRL_ERROR;
         case CTRL_EXIT:
             return CTRL_EXIT;
         case CTRL_DHKE:
+            debug_print("%s", "> Received DHKE ctrl msg\n");
             if (n_party_client(ctx->socket, ctx->keys.session, wire_get_ctrl_args(wire_ctrl))) {
                 if (!ctx->internal.conn_announced) {
                     if (!announce_connection(ctx)) {
@@ -81,9 +83,10 @@ static int proc_ctrl(client_t *ctx, void *data)
  * @param wire Wire to process
  * @return Returns a wire_type enum on success, otherwise -1
  */
-enum wire_type proc_type(client_t *ctx, wire_t *wire)
+msg_type_t proc_type(client_t *ctx, wire_t *wire)
 {
-    enum wire_type type = wire_get_type(wire);
+    msg_type_t type = wire_get_msg_type(wire);
+    debug_print("msg_type: %d\n", (int)type);
     switch (type) {
         case TYPE_CTRL: // Forward wire along to proc_ctrl()
             switch (proc_ctrl(ctx, wire->data)) {

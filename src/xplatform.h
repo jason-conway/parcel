@@ -78,14 +78,14 @@ typedef unsigned int bitfield;
 #define STR(a)  XSTR(a)
 #define XSTR(a) #a
 
-#ifdef DEBUG
+// #ifdef DEBUG
     #define debug_print(fmt, ...) \
         do { \
             fprintf(stderr, "%s:%d:%s(): " fmt, __FILE__, __LINE__, __func__, __VA_ARGS__); \
         } while (0)
-#else
-    #define debug_print(fmt, ...)
-#endif
+// #else
+//     #define debug_print(fmt, ...)
+// #endif
 
 /**
  * @brief Platform-specific malloc(3)

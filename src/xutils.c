@@ -19,10 +19,7 @@ char *xstrdup(const char *str)
     }
     size_t length = strlen(str) + 1;
     char *s = xmalloc(length);
-    if (s) {
-        memcpy(s, str, length);
-    }
-    return s;
+    return memcpy(s, str, length);
 }
 
 char *_xstrcat(const char **strs, size_t count)
@@ -34,9 +31,6 @@ char *_xstrcat(const char **strs, size_t count)
     }
 
     char *s = xmalloc(length);
-    if (!s) {
-        return NULL;
-    }
 
     // Append each arg to the end of the last
     size_t offset = 0;
@@ -85,9 +79,9 @@ void xprintf(enum color color, enum style style, const char *format, ...)
 
 ssize_t xsendall(sock_t socket, const void *data, size_t len)
 {
-    uint8_t *_data = (uint8_t *)data;
+    const uint8_t *s = data;
     for (size_t i = 0; i < len;) {
-        ssize_t bytes_sent = xsend(socket, &_data[i], len - i, 0);
+        ssize_t bytes_sent = xsend(socket, &s[i], len - i, 0);
         switch (bytes_sent) {
             case -1:
                 return -1;
@@ -100,9 +94,9 @@ ssize_t xsendall(sock_t socket, const void *data, size_t len)
 
 ssize_t xrecvall(sock_t socket, void *data, size_t len)
 {
-    uint8_t *_data = (uint8_t *)data;
+    uint8_t *s = data;
     for (size_t i = 0; i < len;) {
-        ssize_t bytes_recv = xrecv(socket, &_data[i], len - i, 0);
+        ssize_t bytes_recv = xrecv(socket, &s[i], len - i, 0);
         switch (bytes_recv) {
             case -1:
                 return -1;

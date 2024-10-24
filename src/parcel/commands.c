@@ -70,13 +70,13 @@ static bool cmd_send_file(char **message, size_t *message_length)
         goto free_path;
     }
 
-    *message_length = file_size + sizeof(struct wire_file_message); // To hold file name and data
-    struct wire_file_message *file_contents = xcalloc(*message_length);
+    *message_length = file_size + sizeof(file_msg_t); // To hold file name and data
+    file_msg_t *file_contents = xcalloc(*message_length);
     if (!file_contents) {
         goto free_all;
     }
 
-    wire_set_raw(file_contents->filesize, file_size);
+    file_msg_set_filesize(file_contents, file_size);
 
     FILE *file = fopen(file_path, "rb");
     if (!file) {

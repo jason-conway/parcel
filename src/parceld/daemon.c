@@ -48,14 +48,13 @@ bool init_daemon(server_t *ctx)
         if (xsocket(&ctx->sockets.sfds[0], node->ai_family, node->ai_socktype, node->ai_protocol) < 0) {
             continue;
         }
-        int opt[] = { 1 };
-        if (xsetsockopt(ctx->sockets.sfds[0], SOL_SOCKET, SO_REUSEADDR, opt, sizeof(*opt)) < 0) {
-            xalert("setsockopt()");
+        if (xsetsockopt(ctx->sockets.sfds[0], SOL_SOCKET, SO_REUSEADDR, (int32_t []){ 1 }, sizeof(int32_t)) < 0) {
+            xalert("setsockopt()\n");
             return false;
         }
         if (bind(ctx->sockets.sfds[0], node->ai_addr, node->ai_addrlen) < 0) {
             if (xclose(ctx->sockets.sfds[0])) {
-                xalert("xclose()");
+                xalert("xclose()\n");
                 return false;
             }
             continue;
@@ -64,13 +63,13 @@ bool init_daemon(server_t *ctx)
     }
 
     if (!node) {
-        xalert("Unable to bind to socket");
+        xalert("Unable to bind to socket\n");
         return false;
     }
     freeaddrinfo(ai);
 
     if (listen(ctx->sockets.sfds[0], MAX_QUEUE) < 0) {
-        xalert("listen()");
+        xalert("listen()\n");
         xclose(ctx->sockets.sfds[0]);
         return false;
     }

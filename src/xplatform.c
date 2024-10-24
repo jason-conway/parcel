@@ -303,7 +303,13 @@ size_t xfilesize(const char *filename)
 void *xmalloc(size_t len)
 {
 #if __unix__ || __APPLE__
-    return malloc(len);
+    void *mem = malloc(len);
+    if (!mem) {
+        perror("[error] out of memory");
+        exit(EXIT_FAILURE);
+    }
+    return mem;
+
 #elif _WIN32
     return HeapAlloc(GetProcessHeap(), 0, len);
 #endif
@@ -312,10 +318,7 @@ void *xmalloc(size_t len)
 void *xcalloc(size_t len)
 {
 #if __unix__ || __APPLE__
-    void *mem = malloc(len);
-    if (!mem) {
-        return NULL;
-    }
+    void *mem = xmalloc(len);
     return memset(mem, 0, len);
 #elif _WIN32
     return HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, len);
@@ -328,7 +331,8 @@ void *xrealloc(void *mem, size_t len)
     void *_mem = realloc(mem, len);
     if (!_mem) {
         free(mem);
-        return NULL;
+        perror("[error] out of memory");
+        exit(EXIT_FAILURE);
     }
     return _mem;
 #elif _WIN32

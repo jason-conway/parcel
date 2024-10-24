@@ -249,9 +249,6 @@ size_t utf8_rendered_length(const char *str)
 {
     // Rendered length will be <= the number of bytes in `str`
     char *stripped = xcalloc(strlen(str));
-    if (!stripped) {
-        return 0;
-    }
 
     // Create a copy of the original, but with escape sequences stripped away
     size_t len = 0;

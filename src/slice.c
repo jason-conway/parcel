@@ -30,9 +30,6 @@ static bool slice_append_dynamic(slice_t *s, void *data, size_t len)
         }
         s->cap = cap;
         s->data = xrealloc(s->data, cap);
-        if (!s->data) {
-            return false;
-        }
     }
     memcpy(&s->data[s->len], data, len);
     s->len += len;

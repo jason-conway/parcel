@@ -24,11 +24,8 @@ void disp_username(struct username *username)
     uint8_t msg_prefix[USERNAME_MAX_LENGTH + 3];
     slice_t s = STATIC_SLICE(msg_prefix);
     slice_append(&s, username->data, username->length);
-    // append(&ctx, username->data, username->length);
     SLICE_APPEND_CONST_STR(&s, ": ");
     full_write(STDOUT_FILENO, s.data, s.len);
-    // create_prefix(username, msg_prefix);
-    // (void)xwrite(STDOUT_FILENO, ctx.data, strlen(msg_prefix));
     fflush(stdout);
 }
 
@@ -108,7 +105,8 @@ int send_thread(void *ctx)
             default:
                 if (!status) {
                     break;
-                } // fallthrough
+                }
+                // fallthrough
             case CMD_EXIT:
                 goto cleanup;
             case CMD_USERNAME:
@@ -116,8 +114,7 @@ int send_thread(void *ctx)
                 break;
         }
 
-        struct timespec ts = { .tv_nsec = 1000000 };
-        (void)nanosleep(&ts, NULL);
+        nanosleep((struct timespec []) { [0] = { 0, 1000000} }, NULL);
     }
 
 cleanup:
@@ -130,9 +127,6 @@ static int recv_remaining(client_t *ctx, wire_t **wire, size_t bytes_recv, size_
 {
     size_t wire_size = bytes_recv + bytes_remaining;
     *wire = xrealloc(*wire, wire_size);
-    if (!*wire) {
-        return -1;
-    }
 
     wire_t *dst = *wire;
     for (size_t i = 0; i < bytes_remaining;) {
@@ -151,10 +145,6 @@ static int recv_remaining(client_t *ctx, wire_t **wire, size_t bytes_recv, size_
 wire_t *recv_new_wire(client_t *ctx, size_t *wire_size)
 {
     wire_t *wire = new_wire();
-    if (!wire) {
-        return NULL;
-    }
-
     const ssize_t bytes_recv = xrecv(ctx->socket, wire, RECV_MAX_BYTES, 0);
 
     // Refresh any changes to shared context that may have occured while blocking on recv
@@ -234,7 +224,7 @@ void *recv_thread(void *ctx)
             xfree(wire);
             break;
         }
-
+        xfree(wire);
         struct timespec ts = { .tv_nsec = 1000000 };
         (void)nanosleep(&ts, NULL);
     }
