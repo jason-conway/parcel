@@ -168,6 +168,26 @@ static void cmd_ambiguous(void)
     cmd_list();
 }
 
+/*
+static mnemonic_t tomnemonic(s8_t s)
+{
+    static const s8_t names[] = {
+        E("inc"), E("dec"), E("ret"), E("end"),
+        E("mov"), E("add"), E("sub"), E("mul"),
+        E("div"), E("cmp"), E("jmp"), E("jne"),
+        E("je"),  E("jge"), E("jg"), E("jle"),
+        E("jl"),  E("call"), E("msg"),
+    };
+    for (size_t i = 0; i < countof(names); i++) {
+        if (s8equal(names[i], s)) {
+            return i + 1;
+        }
+    }
+    return m_null;
+}
+
+
+*/
 static enum command_id parse_command(char *command)
 {
     static const char *command_strings[] = {
