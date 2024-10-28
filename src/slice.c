@@ -11,7 +11,7 @@
 
 #include "slice.h"
 
-static bool slice_append_static(slice_t *s, void *data, size_t len)
+static bool slice_append_static(slice_t *s, const void *data, size_t len)
 {
     if (s->cap < s->len + len) {
         return false;
@@ -21,7 +21,7 @@ static bool slice_append_static(slice_t *s, void *data, size_t len)
     return true;
 }
 
-static bool slice_append_dynamic(slice_t *s, void *data, size_t len)
+static bool slice_append_dynamic(slice_t *s, const void *data, size_t len)
 {
     if (s->cap < s->len + len) {
         size_t cap = s->cap ? 2 * s->cap : 16;
@@ -36,7 +36,7 @@ static bool slice_append_dynamic(slice_t *s, void *data, size_t len)
     return true;
 }
 
-bool slice_append(slice_t *s, void *data, size_t len)
+bool slice_append(slice_t *s, const void *data, size_t len)
 {
     if (s->dynamic) {
         return slice_append_dynamic(s, data, len);

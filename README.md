@@ -122,19 +122,28 @@ The wire consists of six sections: mac, lac, iv, length, type, and data
 
 `lac` contains the 16-byte MAC of `length` only.
 
-`iv` contains the 16-byte Initialization Vector. required for ciper block chaining. Since `data` is encrypted in CBC mode, the IV only needs to be random- not secret, so it is sent as plaintext.
+`iv` contains the 16-byte Initialization Vector. Required for ciper block chaining.
+`iv` is sent as plaintext, as it needs only to be random- not secret.
 
-`length` containts the number the bytes in the `data` section.
-
-`type` indicates the type of data contained in the `data` section. 
+`header` contains two 8-byte fields: `len` and `type`. `len` is the number of unpadded bytes in `data`, while `type` indicates how the data in `data` should be handled.
 
 `data` contains one or more 16-byte chunks of encrypted data
 
 ### Wire Types
 
-The possible message types are `TYPE_TEXT`, `TYPE_FILE`, and `TYPE_CTRL`.
+The possible message types are `TYPE_TEXT`, `TYPE_FILE`, `TYPE_STAT` and `TYPE_CTRL`.
 
-The parcel client can send messages of type `TYPE_TEXT` and `TYPE_FILE`. Only the parcel daemon can send `TYPE_CTRL`, which are used to trigger a GDHKD sequence to update the key.
+#### `TYPE_STAT`
+
+Automatically sent by client
+
+#### `TYPE_TEXT`
+
+
+
+The parcel client can send messages of type `TYPE_TEXT` and `TYPE_FILE`. 
+
+Only the parcel daemon can send `TYPE_CTRL`, which are used to trigger a GDHKD sequence to update the key.
 
 ### Type-Specific Section Layout
 

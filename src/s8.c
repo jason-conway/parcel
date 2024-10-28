@@ -68,7 +68,7 @@ uint64_t s8_hash(s8_t s)
 
 // Convert s8 ascii string to int32_t
 // Return false on failure
-static bool s8_i32(int32_t *d, s8_t s)
+bool s8_i32(int32_t *d, s8_t s)
 {
     size_t i = 0;
     bool neg = false;

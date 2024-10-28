@@ -101,9 +101,9 @@ bool xfexists(const char *filename);
  * @param sockfd File descriptor of the sending socket
  * @param data Data to be sent
  * @param len Length of 'data'
- * @return Number of bytes sent
+ * @return false on failure
  */
-ssize_t xsendall(sock_t socket, const void *data, size_t len);
+bool xsendall(sock_t socket, const void *data, size_t len);
 
 /**
  * @brief Receive len-bytes into data, blocking until full

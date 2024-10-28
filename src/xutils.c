@@ -77,19 +77,19 @@ void xprintf(enum color color, enum style style, const char *format, ...)
     va_end(ap);
 }
 
-ssize_t xsendall(sock_t socket, const void *data, size_t len)
+bool xsendall(sock_t socket, const void *data, size_t len)
 {
     const uint8_t *s = data;
     for (size_t i = 0; i < len;) {
         ssize_t bytes_sent = xsend(socket, &s[i], len - i, 0);
         switch (bytes_sent) {
             case -1:
-                return -1;
+                return false;
             default:
                 i += bytes_sent;
         }
     }
-    return 0;
+    return true;
 }
 
 ssize_t xrecvall(sock_t socket, void *data, size_t len)

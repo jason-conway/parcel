@@ -22,6 +22,7 @@ typedef enum msg_type_t {
     TYPE_TEXT,
     TYPE_FILE,
     TYPE_CTRL,
+    TYPE_STAT,
 } msg_type_t;
 
 typedef struct header_t {
@@ -90,16 +91,36 @@ enum DecryptionStatus {
     WIRE_PARTIAL,
 };
 
+typedef enum stat_msg_type_t {
+    STAT_USER_CONNECT,
+    STAT_USER_DISCONNECT,
+    STAT_USER_RENAME,
+} stat_msg_type_t;
+
+
+
 typedef struct ctrl_msg_t {
     uint8_t type[16];
     uint8_t args[16];
     uint8_t renewed_key[32];
 } ctrl_msg_t;
 
+typedef struct stat_msg_t {
+    uint8_t user[32];
+    uint8_t type[16];
+    uint8_t data[32];
+} stat_msg_t;
+
+
+typedef struct text_msg_t {
+    uint8_t user[32];
+    uint8_t data[];
+} text_msg_t;
+
 typedef struct file_msg_t {
-    char filename[64];
-    uint8_t filesize[16];
-    uint8_t filedata[];
+    uint8_t filename[64];
+    uint8_t size[16];
+    uint8_t data[];
 } file_msg_t;
 
 wire_t *new_wire(void);
@@ -108,22 +129,30 @@ wire_t *init_wire(void *data, uint64_t type, size_t *len);
 size_t encrypt_wire(wire_t *wire, const uint8_t *key);
 int decrypt_wire(wire_t *wire, size_t *len, const uint8_t *key);
 
-// uint64_t wire_pack64(const uint8_t *src);
-// uint64_t wire_get_raw(uint8_t *src);
-// void wire_set_raw(uint8_t *dst, uint64_t src);
-
 msg_type_t wire_get_msg_type(wire_t *ctx);
 
-ctrl_msg_type_t wire_get_ctrl_type(ctrl_msg_t *ctrl);
+ctrl_msg_type_t wire_get_ctrl_msg_type(ctrl_msg_t *ctrl);
 void wire_set_ctrl_msg_type(ctrl_msg_t *ctrl, ctrl_msg_type_t type);
 
-uint64_t wire_get_ctrl_args(ctrl_msg_t *ctrl);
-void wire_set_ctrl_args(ctrl_msg_t *ctrl, uint64_t args);
+uint64_t wire_get_ctrl_msg_args(ctrl_msg_t *ctrl);
+void wire_set_ctrl_msg_args(ctrl_msg_t *ctrl, uint64_t args);
 
-void wire_set_ctrl_renewal(ctrl_msg_t *ctrl, const uint8_t *renewed_key);
+void wire_set_ctrl_msg_key(ctrl_msg_t *ctrl, const uint8_t *renewed_key);
 
 size_t wire_get_length(wire_t *wire);
 void wire_set_length(wire_t *wire, size_t len);
 
-void file_msg_set_filesize(file_msg_t *f, size_t size);
-size_t file_msg_get_filesize(file_msg_t *f);
+void wire_set_file_msg_size(file_msg_t *f, size_t size);
+size_t wire_get_file_msg_size(file_msg_t *f);
+void wire_set_file_msg_data(file_msg_t *f, const void *data, size_t len);
+void wire_set_file_msg_filename(file_msg_t *f, const char *filename, size_t len);
+
+
+void wire_set_stat_msg_data(stat_msg_t *stat, const void *data);
+void wire_set_stat_msg_type(stat_msg_t *stat, stat_msg_type_t type);
+void wire_set_stat_msg_user(stat_msg_t *stat, const char *user);
+stat_msg_type_t wire_get_stat_msg_type(stat_msg_t *stat);
+
+void wire_set_text_msg_user(text_msg_t *text, const char *user);
+void wire_set_text_msg_data(text_msg_t *text, const void *data, size_t len);
+size_t get_aligned_len(size_t len);

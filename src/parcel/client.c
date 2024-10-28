@@ -11,126 +11,152 @@
 
 #include "client.h"
 
-static void create_prefix(struct username *username, char *prompt)
+void client_get_keys(keys_t *dst, client_t *ctx)
 {
-    // append(ioctx, username->data, username->length);
-    // APPEND_STR(ioctx, ": ");
-    memcpy(prompt, username->data, username->length);
-    memcpy(&prompt[username->length], ": ", 3);
+    pthread_mutex_lock(&ctx->lock);
+    memcpy(dst, &ctx->keys, sizeof(*dst));
+    pthread_mutex_unlock(&ctx->lock);
 }
 
-void disp_username(struct username *username)
+void client_get_user(char *dst, client_t *ctx)
 {
-    uint8_t msg_prefix[USERNAME_MAX_LENGTH + 3];
+    pthread_mutex_lock(&ctx->lock);
+    memcpy(dst, ctx->username, sizeof(ctx->username));
+    pthread_mutex_unlock(&ctx->lock);
+}
+
+sock_t client_get_socket(client_t *ctx)
+{
+    sock_t s = 0;
+    pthread_mutex_lock(&ctx->lock);
+    s = ctx->socket;
+    pthread_mutex_unlock(&ctx->lock);
+    return s;
+}
+
+void disp_username(const char *username)
+{
+    char msg_prefix[USERNAME_MAX_LENGTH + 3];
     slice_t s = STATIC_SLICE(msg_prefix);
-    slice_append(&s, username->data, username->length);
+    SLICE_APPEND_STR(&s, username);
     SLICE_APPEND_CONST_STR(&s, ": ");
     full_write(STDOUT_FILENO, s.data, s.len);
     fflush(stdout);
 }
 
-/**
- * @return returns number of bytes sent on success, otherwise a negative value is returned
- */
-static ssize_t send_encrypted_message(sock_t socket, uint64_t type, void *data, size_t length, const uint8_t *key)
+static void get_prompt(slice_t *s, client_t *ctx)
 {
-    wire_t *wire = init_wire(data, type, &length);
-    encrypt_wire(wire, key);
-    if (xsendall(socket, wire, length) < 0) {
-        xfree(wire);
-        return -1;
-    }
-    xfree(wire);
-    return length;
+    pthread_mutex_lock(&ctx->lock);
+    SLICE_APPEND_STR(s, ctx->username);
+    pthread_mutex_unlock(&ctx->lock);
+    SLICE_APPEND_CONST_STR(s, ": \0");
 }
 
 bool announce_connection(client_t *ctx)
 {
-    uint8_t msg[USERNAME_MAX_LENGTH + 20] = { 0 };
-    slice_t s = STATIC_SLICE(msg);
-    SLICE_APPEND_CONST_STR(&s, "\033[1m");
-    slice_append(&s, ctx->username.data, ctx->username.length);
-    SLICE_APPEND_CONST_STR(&s, " is online\033[0m\0");
+    // debug_print("announcing connection for username: %s\n", ctx->username);
+    char user[USERNAME_MAX_LENGTH] = { 0 };
+    client_get_user(user, ctx);
 
-    if (send_encrypted_message(ctx->socket, TYPE_TEXT, s.data, s.len, ctx->keys.session) < 0) {
+    keys_t keys = { 0 };
+    client_get_keys(&keys, ctx);
+    sock_t socket = client_get_socket(ctx);
+
+    stat_msg_t stat = { 0 };
+    wire_set_stat_msg_type(&stat, STAT_USER_CONNECT);
+    wire_set_stat_msg_user(&stat, user);
+
+    size_t len = sizeof(stat_msg_t);
+    wire_t *wire = init_wire(&stat, TYPE_STAT, &len);
+    
+    encrypt_wire(wire, keys.session);
+
+    if (!xsendall(socket, wire, len)) {
+        xfree(wire);
         return false;
     }
+    xfree(wire);
 
-    ctx->internal.conn_announced = 1;
+    atomic_store(&ctx->conn_announced, true);
     return true;
+}
+
+bool send_text_msg(client_t *ctx, void *data, size_t length)
+{
+    char user[USERNAME_MAX_LENGTH] = { 0 };
+    client_get_user(user, ctx);
+
+    keys_t keys = { 0 };
+    client_get_keys(&keys, ctx);
+
+    sock_t socket = client_get_socket(ctx);
+
+    size_t len = sizeof(text_msg_t) + length;
+    text_msg_t *text = xcalloc(len);
+    wire_set_text_msg_user(text, user);
+    wire_set_text_msg_data(text, data, length);
+
+    wire_t *wire = init_wire(text, TYPE_TEXT, &len);
+
+    encrypt_wire(wire, keys.session);
+
+    if (!xsendall(socket, wire, len)) {
+        xfree(text);
+        xfree(wire);
+        return false;
+    }
+    xfree(text);
+    xfree(wire);
+    return true;
+}
+
+static bool is_cmd(const char *msg)
+{
+    return msg[0] == '/';
 }
 
 int send_thread(void *ctx)
 {
-    client_t client;
-    client_t *client_ctx = ctx;
-    xmemcpy_locked(&client_ctx->mutex_lock, &client, client_ctx, sizeof(client_t));
-    int status = 0;
-
+    client_t *client = ctx;
     for (;;) {
         char prompt[USERNAME_MAX_LENGTH + 3];
-        create_prefix(&client.username, prompt);
+        slice_t s = STATIC_SLICE(prompt);
+        get_prompt(&s, client);
 
         size_t length = 0;
-        char *plaintext = xprompt(prompt, "text", &length); // xprompt() will never return null by design
+        char *msg = xprompt((const char *)s.data, "text", &length); // xprompt() will never return null by design
 
-        xmemcpy_locked(&client_ctx->mutex_lock, &client, client_ctx, sizeof(client_t));
-        if (client.internal.kill_threads) {
-            xfree(plaintext);
+        bool run = atomic_load(&client->keep_alive);
+        if (!run) {
+            xfree(msg);
             return 1;
         }
 
-        enum command_id id = CMD_NONE;
-
-        switch (parse_input(&client, &id, &plaintext, &length)) {
-            case SEND_NONE:
-                break;
-            case SEND_TEXT:
-                if (send_encrypted_message(client.socket, TYPE_TEXT, plaintext, length, client.keys.session) < 0) {
-                    xalert("Error sending encrypted text\n");
-                    status = -1;
-                }
-                break;
-            case SEND_FILE:
-                if (send_encrypted_message(client.socket, TYPE_FILE, plaintext, length, client.keys.session) < 0) {
-                    xalert("Error sending encrypted file\n");
-                    status = -1;
-                }
-                break;
+        if (is_cmd(msg)) {
+            if (!exec_cmd(client, msg)) {
+                // TODO: error case
+            }
+        }
+        else {
+            if (!send_text_msg(client, msg, length)) {
+                // TODO: error case
+            }
         }
 
-        xfree(plaintext);
-
-        switch (id) {
-            default:
-                if (!status) {
-                    break;
-                }
-                // fallthrough
-            case CMD_EXIT:
-                goto cleanup;
-            case CMD_USERNAME:
-                xmemcpy_locked(&client_ctx->mutex_lock, &client_ctx->username, &client.username, sizeof(struct username));
-                break;
-        }
-
+        xfree(msg);
         nanosleep((struct timespec []) { [0] = { 0, 1000000} }, NULL);
     }
 
-cleanup:
-        client.internal.kill_threads = 1;
-        xmemcpy_locked(&client_ctx->mutex_lock, &client_ctx->internal, &client.internal, sizeof(struct client_internal));
-        return shutdown(client.socket, SHUT_RDWR) || status;
 }
 
-static int recv_remaining(client_t *ctx, wire_t **wire, size_t bytes_recv, size_t bytes_remaining)
+static int recv_remaining(client_t *ctx, wire_t **wire, size_t bytes_recv, size_t remaining)
 {
-    size_t wire_size = bytes_recv + bytes_remaining;
+    size_t wire_size = bytes_recv + remaining;
     *wire = xrealloc(*wire, wire_size);
 
     wire_t *dst = *wire;
-    for (size_t i = 0; i < bytes_remaining;) {
-        ssize_t received = xrecv(ctx->socket, &dst->data[bytes_recv - sizeof(wire_t) + i], bytes_remaining - i, 0);
+    for (size_t i = 0; i < remaining;) {
+        ssize_t received = xrecv(ctx->socket, &dst->data[bytes_recv - sizeof(wire_t) + i], remaining - i, 0);
         switch (received) {
             case -1:
                 return -1;
@@ -146,9 +172,6 @@ wire_t *recv_new_wire(client_t *ctx, size_t *wire_size)
 {
     wire_t *wire = new_wire();
     const ssize_t bytes_recv = xrecv(ctx->socket, wire, RECV_MAX_BYTES, 0);
-
-    // Refresh any changes to shared context that may have occured while blocking on recv
-    xmemcpy_locked(&ctx->shctx->mutex_lock, ctx, ctx->shctx, sizeof(client_t));
 
     if (bytes_recv <= 0) {
         return xfree(wire);
@@ -185,7 +208,7 @@ static ssize_t decrypt_received_message(client_t *ctx, wire_t *wire, size_t byte
             debug_print("%s\n", "> received remainder of wire");
             break;
         case WIRE_CMAC_ERROR:
-            xalert("%s\n", "> CMAC error");
+            xalert("> CMAC error\n");
             return -1;
         case WIRE_OK:
             break;
@@ -195,42 +218,42 @@ static ssize_t decrypt_received_message(client_t *ctx, wire_t *wire, size_t byte
 
 void *recv_thread(void *ctx)
 {
-    client_t client;
-    client_t *client_ctx = ctx;
-    memcpy(&client, client_ctx, sizeof(client_t));
+    client_t *client = ctx;
 
     for (;;) {
         size_t bytes_recv = 0;
-        wire_t *wire = recv_new_wire(&client, &bytes_recv);
+        wire_t *wire = recv_new_wire(client, &bytes_recv);
         if (!wire) {
             // TODO: cleanly exit without user interaction
-            if (!client.internal.kill_threads) {
-                client.internal.kill_threads = 1;
-                xmemcpy_locked(&client_ctx->mutex_lock, &client_ctx->internal, &client.internal, sizeof(struct client_internal));
-
+            bool run = atomic_load(&client->keep_alive);
+            if (run) {
+                atomic_store(&client->keep_alive, false);
                 xwarn("\n%s\n", "Daemon unexpectedly closed connection");
                 xwarn("%s\n", "Use '/q' to exit");
-                disp_username(&client.username);
+                disp_username(client->username);
             }
-            break;
+            else {
+                xclose(client->socket);
+                return (void *)0;
+            }
         }
 
-        if (decrypt_received_message(&client, wire, bytes_recv) < 0) {
+        if (decrypt_received_message(client, wire, bytes_recv) < 0) {
             xfree(wire);
             break;
         }
 
-        if (proc_type(&client, wire) < 0) {
+        if (proc_type(client, wire) < 0) {
             xfree(wire);
             break;
         }
         xfree(wire);
-        struct timespec ts = { .tv_nsec = 1000000 };
-        (void)nanosleep(&ts, NULL);
+
+        nanosleep((struct timespec []) { [0] = { 0, 1000000} }, NULL);
     }
 
-    xclose(client.socket);
-    return xfree(client_ctx);
+    xclose(client->socket);
+    return (void *)0;
 }
 
 bool connect_server(client_t *client, const char *ip, const char *port)
@@ -285,7 +308,7 @@ bool connect_server(client_t *client, const char *ip, const char *port)
     return true;
 }
 
-void prompt_args(char *address, struct username *username)
+void prompt_args(char *address, char *username)
 {
     size_t address_length = ADDRESS_MAX_LENGTH;
     if (!address[0]) {
@@ -295,10 +318,9 @@ void prompt_args(char *address, struct username *username)
     }
 
     size_t username_length = USERNAME_MAX_LENGTH;
-    if (!*username->data) {
+    if (!*username) {
         char *str = xprompt("\033[1m> Enter username: \033[0m", "username", &username_length);
-        username->length = username_length;
-        memcpy(username->data, str, username_length);
+        memcpy(username, str, username_length);
         xfree(str);
     }
 }

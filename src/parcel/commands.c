@@ -11,113 +11,131 @@
 
 #include "client.h"
 
-// Prepend client username to message string
-static void prepend_username(char *username, char **plaintext, size_t *plaintext_length)
+static bool cmd_username(client_t *ctx)
 {
-    bool error = true;
-    char *named_message = xstrcat(username, ": ", *plaintext);
-    if (named_message) {
-        *plaintext_length = strlen(named_message);
-        error = false;
-    }
-    xfree(*plaintext);
-    *plaintext = error ? NULL : named_message;
-}
-
-static bool cmd_username(client_t *ctx, char **message, size_t *message_length)
-{
-    xfree(*message);
-
     size_t new_username_length = USERNAME_MAX_LENGTH;
     char *new_username = xprompt("> New username: ", "username", &new_username_length);
-    *message = xstrcat("\033[1m", ctx->username.data, " has changed their username to ", new_username, "\033[0m");
-    if (!message) {
-        *message_length = 0;
-        *message = NULL;
+    
+    stat_msg_t stat = { 0 };
+    wire_set_stat_msg_type(&stat, STAT_USER_RENAME);
+    wire_set_stat_msg_data(&stat, new_username);
+
+    pthread_mutex_lock(&ctx->lock);
+    wire_set_stat_msg_user(&stat, ctx->username);
+    pthread_mutex_unlock(&ctx->lock);
+
+    size_t len = sizeof(stat_msg_t);
+    wire_t *wire = init_wire(&stat, TYPE_STAT, &len);
+    
+    keys_t keys = { 0 };
+    client_get_keys(&keys, ctx);
+    sock_t socket = client_get_socket(ctx);
+
+    encrypt_wire(wire, keys.session);
+
+    if (!xsendall(socket, wire, len)) {
+        xfree(wire);
         xfree(new_username);
         return false;
     }
 
-    *message_length = strlen(*message);
-    ctx->username.length = new_username_length;
-
-    memset(&ctx->username.data, 0, USERNAME_MAX_LENGTH);
-    memcpy(&ctx->username.data, new_username, ctx->username.length);
+    xfree(wire);
+    pthread_mutex_lock(&ctx->lock);
+    memset(&ctx->username, 0, USERNAME_MAX_LENGTH);
+    memcpy(&ctx->username, new_username, new_username_length);
+    pthread_mutex_unlock(&ctx->lock);
     xfree(new_username);
     return true;
 }
 
-// TODO: This should not be fatal
-static bool cmd_send_file(char **message, size_t *message_length)
+size_t file_msg_from_file(file_msg_t **f)
 {
-    size_t path_length = FILE_PATH_MAX_LENGTH;
-    char *file_path = xprompt("> File path: ", "path", &path_length);
+    char *path = xprompt("> File path: ", "path", (size_t[]) { FILE_PATH_MAX_LENGTH });
 
-    if (!xfexists(file_path)) {
-        xwarn("> File \"%s\" not found\n", file_path);
-        goto free_path;
+    if (!xfexists(path)) {
+        xwarn("> File \"%s\" not found\n", path);
+        xfree(path);
+        return 0;
     }
 
-    size_t file_size = xfilesize(file_path);
-    if (!file_size) {
-        xwarn("> Unable to determine size of file \"%s\"\n", file_path);
-        goto free_path;
+    size_t size = xfilesize(path);
+    if (!size) {
+        xwarn("> Unable to determine size of file \"%s\"\n", path);
+        xfree(path);
+        return 0;
     }
 
-    if (file_size > FILE_DATA_MAX_SIZE) {
-        const size_t overage = file_size - FILE_DATA_MAX_SIZE;
-        xwarn("> File \"%s\" is %zu bytes over the maximum size of %d bytes\n", file_path, overage, FILE_DATA_MAX_SIZE);
-        goto free_path;
+    if (size > FILE_DATA_MAX_SIZE) {
+        const size_t overage = size - FILE_DATA_MAX_SIZE;
+        xwarn("> File \"%s\" is %zu bytes over the maximum size of %d bytes\n", path, overage, FILE_DATA_MAX_SIZE);
+        xfree(path);
+        return 0;
     }
 
-    *message_length = file_size + sizeof(file_msg_t); // To hold file name and data
-    file_msg_t *file_contents = xcalloc(*message_length);
-    if (!file_contents) {
-        goto free_all;
-    }
-
-    file_msg_set_filesize(file_contents, file_size);
-
-    FILE *file = fopen(file_path, "rb");
+    FILE *file = fopen(path, "rb");
     if (!file) {
-        xwarn("> Could not open file \"%s\" for reading\n", file_path);
-        goto free_all;
+        xwarn("> Could not open file \"%s\" for reading\n", path);
+        xfree(path);
+        return 0;
     }
 
-    char filename[FILE_NAME_LEN];
-    memset(filename, 0, sizeof(filename));
+    size_t len = size + sizeof(file_msg_t);
+    *f = xcalloc(len);
 
-    const size_t filename_length = xbasename(file_path, filename) + 1;
-    memcpy(file_contents->filename, filename, filename_length);
+    wire_set_file_msg_size(*f, size);
+    xbasename(path, (char *)((*f)->filename));
+    xfree(path);
 
-    // Now read in the file contents
-    if (fread(file_contents->filedata, 1, file_size, file) != file_size) {
+    if (fread((*f)->data, 1, size, file) != size) {
         xwarn("> Error reading contents of file\n");
-        (void)fclose(file);
-        goto free_all;
+        fclose(file);
+        xfree(*f);
+        *f = NULL;
+        return 0;
     }
-
-    (void)fclose(file);
-
-    xfree(*message);
-    *message = (char *)file_contents;
-    return true;
-
-free_all:
-    xfree(file_contents);
-free_path:
-    xfree(file_path);
-    return false;
+    fclose(file);
+    return len;
 }
 
-static void cmd_print_enc_info(uint8_t *session, uint8_t *control)
+// TODO: This should not be fatal
+static bool cmd_send_file(client_t *ctx)
 {
+    file_msg_t *f = NULL;
+    size_t len = file_msg_from_file(&f);
+    if (!len) {
+        return false;
+    }
+
+    wire_t *wire = init_wire(f, TYPE_FILE, &len);
+
+    keys_t keys = { 0 };
+    client_get_keys(&keys, ctx);
+    sock_t socket = client_get_socket(ctx);
+
+    encrypt_wire(wire, keys.session);
+    if (!xsendall(socket, wire, len)) {
+        xfree(f);
+        xfree(wire);
+        return false;
+    }
+
+    xfree(f);
+    xfree(wire);
+
+    return true;
+}
+
+static void cmd_print_enc_info(client_t *ctx)
+{
+    keys_t keys = { 0 };
+    client_get_keys(&keys, ctx);
+    
     printf("Session Key: ");
     fflush(stdout);
-    xmemprint(session, KEY_LEN);
+    xmemprint(keys.session, KEY_LEN);
     printf("Control Key: ");
     fflush(stdout);
-    xmemprint(control, KEY_LEN);
+    xmemprint(keys.ctrl, KEY_LEN);
 }
 
 static void cmd_clear(void)
@@ -130,16 +148,31 @@ static void cmd_not_found(char *message)
     xwarn("Unrecognized command, \"%s\"\n", message);
 }
 
-bool cmd_exit(client_t *ctx, char **message, size_t *message_length)
+bool cmd_exit(client_t *ctx)
 {
-    xfree(*message);
-    *message = xstrcat("\033[1m", ctx->username.data, " is offline\033[0m");
-    if (!*message) {
-        *message = NULL;
+    stat_msg_t stat = { 0 };
+    wire_set_stat_msg_type(&stat, STAT_USER_DISCONNECT);
+    
+    pthread_mutex_lock(&ctx->lock);
+    wire_set_stat_msg_user(&stat, ctx->username);
+    pthread_mutex_unlock(&ctx->lock);
+
+    size_t len = sizeof(stat_msg_t);
+    wire_t *wire = init_wire(&stat, TYPE_STAT, &len);
+    
+    keys_t keys = { 0 };
+    client_get_keys(&keys, ctx);
+    sock_t socket = client_get_socket(ctx);
+
+    encrypt_wire(wire, keys.session);
+
+    if (!xsendall(socket, wire, len)) {
+        xfree(wire);
         return false;
     }
-
-    *message_length = strlen(*message);
+    xfree(wire);
+    shutdown(socket, SHUT_RDWR);
+    atomic_store(&ctx->keep_alive, false);
     return true;
 }
 
@@ -168,27 +201,7 @@ static void cmd_ambiguous(void)
     cmd_list();
 }
 
-/*
-static mnemonic_t tomnemonic(s8_t s)
-{
-    static const s8_t names[] = {
-        E("inc"), E("dec"), E("ret"), E("end"),
-        E("mov"), E("add"), E("sub"), E("mul"),
-        E("div"), E("cmp"), E("jmp"), E("jne"),
-        E("je"),  E("jge"), E("jg"), E("jle"),
-        E("jl"),  E("call"), E("msg"),
-    };
-    for (size_t i = 0; i < countof(names); i++) {
-        if (s8equal(names[i], s)) {
-            return i + 1;
-        }
-    }
-    return m_null;
-}
-
-
-*/
-static enum command_id parse_command(char *command)
+static cmd_type_t parse_command(char *command)
 {
     static const char *command_strings[] = {
         "/list", "/q", "/username", "/encinfo", "/file", "/clear", "/version"
@@ -196,7 +209,7 @@ static enum command_id parse_command(char *command)
 
     const size_t commands = sizeof(command_strings) / sizeof(*command_strings);
 
-    enum command_id cmd = CMD_NONE;
+    cmd_type_t cmd = CMD_NONE;
 
     const size_t len = strlen(command);
     for (size_t i = 1; i <= commands; i++) {
@@ -204,48 +217,42 @@ static enum command_id parse_command(char *command)
             if (cmd) {
                 return CMD_AMBIGUOUS;
             }
-            cmd = i;
+            cmd = (cmd_type_t)i;
         }
     }
     return cmd;
 }
 
-int parse_input(client_t *ctx, enum command_id *cmd, char **message, size_t *message_length)
+bool exec_cmd(client_t *ctx, char *message)
 {
-    if (*message[0] != '/') { // Fast return
-        prepend_username(ctx->username.data, message, message_length);
-        if (!*message) {
-            return -1;
-        }
-        return SEND_TEXT;
-    }
-    else {
-        *cmd = parse_command(*message);
-        switch (*cmd) {
-            case CMD_AMBIGUOUS:
-                cmd_ambiguous();
-                return SEND_NONE;
-            case CMD_LIST:
-                cmd_list();
-                return SEND_NONE;
-            case CMD_EXIT:
-                return cmd_exit(ctx, message, message_length) ? SEND_TEXT : -1;
-            case CMD_USERNAME:
-                return cmd_username(ctx, message, message_length) ? SEND_TEXT : -1;
-            case CMD_ENC_INFO:
-                cmd_print_enc_info(ctx->keys.session, ctx->keys.ctrl);
-                return SEND_NONE;
-            case CMD_FILE:
-                return cmd_send_file(message, message_length) ? SEND_FILE : SEND_NONE;
-            case CMD_CLEAR:
-                cmd_clear();
-                return SEND_NONE;
-            case CMD_VERSION:
-                cmd_version();
-                return SEND_NONE;
-            default:
-                cmd_not_found(*message);
-                return SEND_NONE;
-        }
+    cmd_type_t cmd = parse_command(message);
+    switch (cmd) {
+        default:
+            cmd_not_found(message);
+            return true;
+        case CMD_AMBIGUOUS:
+            cmd_ambiguous();
+            return true;
+        case CMD_LIST:
+            cmd_list();
+            return true;
+        case CMD_CLEAR:
+            cmd_clear();
+            return true;
+        case CMD_VERSION:
+            cmd_version();
+            return true;
+
+        case CMD_ENC_INFO:
+            cmd_print_enc_info(ctx);
+            return true;
+        case CMD_EXIT:
+            return cmd_exit(ctx);
+        case CMD_USERNAME:
+            return cmd_username(ctx);
+        case CMD_FILE:
+            return cmd_send_file(ctx);
+        case CMD_NONE:
+            return true;
     }
 }

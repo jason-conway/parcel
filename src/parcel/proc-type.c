@@ -15,7 +15,7 @@ static bool proc_file(void *data)
 {
     file_msg_t *wire_file = data;
     printf("\n\033[1mReceived file \"%s\"\033[0m\n", wire_file->filename);
-    char *save_path = xget_dir(wire_file->filename);
+    char *save_path = xget_dir((char *)wire_file->filename);
     if (!save_path) {
         return false;
     }
@@ -26,9 +26,9 @@ static bool proc_file(void *data)
     }
     xfree(save_path);
 
-    const size_t file_data_size = file_msg_get_filesize(wire_file);
+    const size_t file_data_size = wire_get_file_msg_size(wire_file);
 
-    if (fwrite(wire_file->filedata, 1, file_data_size, file) != file_data_size) {
+    if (fwrite(wire_file->data, 1, file_data_size, file) != file_data_size) {
         xwarn("> Error writing to file \"%s\"\n", wire_file->filename);
         (void)fclose(file);
         xfree(wire_file->filename);
@@ -42,38 +42,76 @@ static bool proc_file(void *data)
 
     return true;
 }
+static void proc_stat(void *data)
+{   
+    uint8_t msg_slice[128];
+    slice_t s = STATIC_SLICE(msg_slice);
+
+    stat_msg_t *stat = data;
+    stat_msg_type_t type = wire_get_stat_msg_type(stat);
+    switch (type) {
+        case STAT_USER_CONNECT:
+            SLICE_APPEND_CONST_STR(&s, "\033[1m");
+            SLICE_APPEND_STR(&s, (char *)stat->user);
+            SLICE_APPEND_CONST_STR(&s, " is online\033[0m\n\0");
+            break;
+        case STAT_USER_DISCONNECT:
+            SLICE_APPEND_CONST_STR(&s, "\033[1m");
+            SLICE_APPEND_STR(&s, (char *)stat->user);
+            SLICE_APPEND_CONST_STR(&s, " is offline\033[0m\n\0");
+            break;
+        case STAT_USER_RENAME:
+            SLICE_APPEND_CONST_STR(&s, "\033[2K\r");
+            SLICE_APPEND_STR(&s, (char *)stat->user);
+            SLICE_APPEND_CONST_STR(&s, " has changed their username to ");
+            SLICE_APPEND_STR(&s, (char *)stat->data);
+            SLICE_APPEND_CONST_STR(&s, "\033[0m\n\0");
+            break;
+    }
+    full_write(STDOUT_FILENO, s.data, s.len);
+}
 
 static void proc_text(void *data)
 {
-    const char *text = data;
+    text_msg_t *text = data;
+
     WRITE_CONST_STR(STDOUT_FILENO, "\033[2K\r");
-    WRITE_STR(STDOUT_FILENO, text);
+    WRITE_STR(STDOUT_FILENO, (const char *)text->user);
+    WRITE_CONST_STR(STDOUT_FILENO, ": ");
+    WRITE_STR(STDOUT_FILENO, (const char *)text->data);
     WRITE_CONST_STR(STDOUT_FILENO, "\n");
 }
 
 static int proc_ctrl(client_t *ctx, void *data)
 {
-    ctrl_msg_t *wire_ctrl = data;
-    memcpy(ctx->keys.ctrl, wire_ctrl->renewed_key, KEY_LEN);
+    ctrl_msg_t *ctrl = data;
+    uint8_t session[32] = { 0 };
 
-    switch (wire_get_ctrl_type(wire_ctrl)) {
+    switch (wire_get_ctrl_msg_type(ctrl)) {
         case CTRL_ERROR:
             return CTRL_ERROR;
         case CTRL_EXIT:
-            return CTRL_EXIT;
+            break;
         case CTRL_DHKE:
             debug_print("%s", "> Received DHKE ctrl msg\n");
-            if (n_party_client(ctx->socket, ctx->keys.session, wire_get_ctrl_args(wire_ctrl))) {
-                if (!ctx->internal.conn_announced) {
-                    if (!announce_connection(ctx)) {
-                        return CTRL_ERROR;
-                    }
-                }
-                return CTRL_DHKE;
+            if (!n_party_client(ctx->socket, session, wire_get_ctrl_msg_args(ctrl))) {
+                return DHKE_ERROR;
             }
-            return DHKE_ERROR;
+            break;
     }
-    return -1;
+
+    pthread_mutex_lock(&ctx->lock);
+        memcpy(ctx->keys.ctrl, ctrl->renewed_key, KEY_LEN);
+        memcpy(ctx->keys.session, session, KEY_LEN);
+    pthread_mutex_unlock(&ctx->lock);
+
+    bool announced = atomic_load(&ctx->conn_announced);
+    if (!announced) {
+        if (!announce_connection(ctx)) {
+            return CTRL_ERROR;
+        }
+    }
+    return CTRL_DHKE;
 }
 
 /**
@@ -91,11 +129,8 @@ msg_type_t proc_type(client_t *ctx, wire_t *wire)
         case TYPE_CTRL: // Forward wire along to proc_ctrl()
             switch (proc_ctrl(ctx, wire->data)) {
                 case CTRL_EXIT:
-                    xfree(wire);
-                    exit(EXIT_FAILURE); // TODO: figure something out for this
+                    break;
                 case CTRL_DHKE:
-                    xmemcpy_locked(&ctx->shctx->mutex_lock, &ctx->shctx->keys, &ctx->keys, sizeof(struct keys));
-                    xmemcpy_locked(&ctx->shctx->mutex_lock, &ctx->shctx->internal, &ctx->internal, sizeof(struct client_internal));
                     break;
                 case CTRL_ERROR:
                     xalert("proc_ctrl()\n");
@@ -110,7 +145,11 @@ msg_type_t proc_type(client_t *ctx, wire_t *wire)
             break;
         case TYPE_TEXT:
             proc_text(wire->data);
-            disp_username(&ctx->username);
+            disp_username(ctx->username);
+            break;
+        case TYPE_STAT:
+            proc_stat(wire->data);
+            disp_username(ctx->username);
             break;
         default:
             return TYPE_ERROR;

@@ -42,3 +42,5 @@ typedef struct status_t {
 } status_t;
 
 #define S(s) (s8_t) { (uint8_t *)s, lengthof(s) }
+
+bool s8_equal(s8_t a, s8_t b);

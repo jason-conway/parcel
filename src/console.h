@@ -12,11 +12,13 @@
 #include "xplatform.h"
 #include "xutils.h"
 #include "slice.h"
+#include "s8.h"
 
 typedef struct line_t {
     const char *prompt;
     size_t prompt_len;  // Rendered length
     size_t prompt_size; // Prompt size in bytes
+    s8_t _line;
     char *line;
     size_t line_len;  // Rendered length
     size_t line_size; // Line size in bytes

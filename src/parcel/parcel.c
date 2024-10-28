@@ -41,14 +41,9 @@ int main(int argc, char **argv)
 
     char port[PORT_MAX_LENGTH] = "2315";
 
-    client_t *client = xcalloc(sizeof(client_t));
-    if (!client) {
-        xalert("Error allocating client memory\n");
-        return 1;
-    }
-
-    pthread_mutex_init(&client->mutex_lock, NULL);
-    client->shctx = client;
+    client_t client = { 0 };
+    atomic_store(&client.keep_alive, true);
+    pthread_mutex_init(&client.lock, NULL);
 
     xgetopt_t xgo = { 0 };
     for (ptrdiff_t opt; (opt = xgetopt(&xgo, argc, argv, "lha:p:u:")) != -1;) {
@@ -69,15 +64,14 @@ int main(int argc, char **argv)
                 break;
             case 'u':
                 if (strlen(xgo.arg) < USERNAME_MAX_LENGTH) {
-                    client->username.length = strlen(xgo.arg);
-                    memcpy(client->username.data, xgo.arg, client->username.length);
+                    size_t len = strlen(xgo.arg);
+                    memcpy(client.username, xgo.arg, len);
                     break;
                 }
                 xwarn("Username argument too long\n");
                 break;
             case 'l':
-                if (!xgetlogin(client->username.data, USERNAME_MAX_LENGTH)) {
-                    client->username.length = strlen(client->username.data);
+                if (!xgetlogin(client.username, USERNAME_MAX_LENGTH)) {
                     break;
                 }
                 xwarn("Could not determine login name\n");
@@ -95,22 +89,22 @@ int main(int argc, char **argv)
     }
 
     if (argc < 5) {
-        prompt_args(address, &client->username);
+        prompt_args(address, client.username);
     }
 
-    if (!connect_server(client, address, port)) {
+    if (!connect_server(&client, address, port)) {
         return -1;
     }
 
     pthread_t recv_ctx;
-    if (pthread_create(&recv_ctx, NULL, recv_thread, (void *)client)) {
+    if (pthread_create(&recv_ctx, NULL, recv_thread, (void *)&client)) {
         xalert("Unable to create receiver thread\n");
         return -1;
     }
 
     int thread_status[2] = { 0, 0 };
 
-    thread_status[0] = send_thread((void *)client);
+    thread_status[0] = send_thread((void *)&client);
 
     if (pthread_join(recv_ctx, (void **)&thread_status[1])) {
         xalert("Unable to join receiver thread\n");

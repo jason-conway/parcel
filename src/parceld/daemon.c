@@ -148,7 +148,7 @@ static bool transfer_message(server_t *srv, size_t sender_index, msg_t *msg)
             continue;
         }
         debug_print("Sending to socket %zu\n", i);
-        if (xsendall(srv->sockets.sfds[i], msg->data, msg->length) < 0) {
+        if (!xsendall(srv->sockets.sfds[i], msg->data, msg->length)) {
             return false;
         }
     }

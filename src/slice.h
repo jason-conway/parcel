@@ -31,9 +31,9 @@ typedef struct slice_t {
     bool dynamic;
 } slice_t;
 
-bool slice_append(slice_t *s, void *data, size_t len);
+bool slice_append(slice_t *s, const void *data, size_t len);
 
-#define STATIC_SLICE(mem)   { (mem), sizeof(mem), 0, false }
+#define STATIC_SLICE(mem)   { (void *)(mem), sizeof(mem), 0, false }
 #define DYNAMIC_SLICE()     { NULL, 0, 0, true }
 
 
@@ -43,3 +43,5 @@ bool slice_append(slice_t *s, void *data, size_t len);
 #define SLICE_APPEND_STR(s, str) slice_append(s, str, strlen(str))
 
 #define SLICE_APPEND_U8(s, c) slice_append(s, (uint8_t []){(c)}, 1)
+
+#define SLICE_APPEND_S8(s, str) slice_append(s, str.data, str.len)

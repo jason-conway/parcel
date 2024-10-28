@@ -67,16 +67,26 @@ void wire_set_header(wire_t *wire, header_t *h)
     memcpy(&wire->header, h, sizeof(header_t));
 }
 
-void file_msg_set_filesize(file_msg_t *f, size_t size)
+void wire_set_file_msg_size(file_msg_t *f, size_t size)
 {
-    wire_unpack64(f->filesize, size);
+    wire_unpack64(f->size, size);
 }
-size_t file_msg_get_filesize(file_msg_t *f)
+size_t wire_get_file_msg_size(file_msg_t *f)
 {
-    return wire_pack64(f->filesize);
+    return wire_pack64(f->size);
+}
+
+void wire_set_file_msg_filename(file_msg_t *f, const char *filename, size_t len)
+{
+    memcpy(f->filename, filename, len);
+}
+void wire_set_file_msg_data(file_msg_t *f, const void *data, size_t len)
+{
+    memcpy(f->data, data, len);
 }
 
 // MARK: msg_type
+
 void wire_set_msg_type(wire_t *wire, msg_type_t msg_type)
 {
     wire_unpack64(wire->header.type, msg_type);
@@ -95,37 +105,65 @@ void wire_set_ctrl_msg_type(ctrl_msg_t *ctrl, ctrl_msg_type_t msg_type)
     wire_unpack64(ctrl->type, msg_type);
 }
 
-ctrl_msg_type_t wire_get_ctrl_type(ctrl_msg_t *ctrl)
+ctrl_msg_type_t wire_get_ctrl_msg_type(ctrl_msg_t *ctrl)
 {
     return wire_pack64(ctrl->type);
 }
 
 // MARK: ctrl_msg_args
 
-uint64_t wire_get_ctrl_args(ctrl_msg_t *ctrl)
+uint64_t wire_get_ctrl_msg_args(ctrl_msg_t *ctrl)
 {
     return wire_pack64(ctrl->args);
 }
 
-void wire_set_ctrl_args(ctrl_msg_t *ctrl, uint64_t args)
+void wire_set_ctrl_msg_args(ctrl_msg_t *ctrl, uint64_t args)
 {
     wire_unpack64(ctrl->args, args);
 }
 
-void wire_set_ctrl_renewal(ctrl_msg_t *ctrl, const uint8_t *renewed_key)
+// MARK: ctrl_msg_key
+
+void wire_set_ctrl_msg_key(ctrl_msg_t *ctrl, const uint8_t *renewed_key)
 {
     memcpy(ctrl->renewed_key, renewed_key, KEY_LEN);
 }
 
-uint64_t wire_get_raw(uint8_t *src)
+// MARK: stat_msg
+
+void wire_set_stat_msg_user(stat_msg_t *stat, const char *user)
 {
-    return wire_pack64(src);
+    memcpy(stat->user, user, sizeof(stat->user));
 }
 
-void wire_set_raw(uint8_t *dst, uint64_t src)
+void wire_set_stat_msg_data(stat_msg_t *stat, const void *data)
 {
-    wire_unpack64(dst, src);
+    memcpy(stat->data, data, sizeof(stat->data));
 }
+
+void wire_set_stat_msg_type(stat_msg_t *stat, stat_msg_type_t type)
+{
+    wire_unpack64(stat->type, type);
+}
+
+stat_msg_type_t wire_get_stat_msg_type(stat_msg_t *stat)
+{
+    return wire_pack64(stat->type);
+}
+
+// MARK: text_msg
+
+void wire_set_text_msg_user(text_msg_t *text, const char *user)
+{
+    memcpy(text->user, user, sizeof(text->user));
+}
+
+void wire_set_text_msg_data(text_msg_t *text, const void *data, size_t len)
+{
+    memcpy(text->data, data, len);
+}
+
+// MARK: decrypt_header
 
 header_t wire_decrypt_header(aes128_t *aes128, wire_t *wire)
 {
@@ -159,27 +197,34 @@ wire_t *new_wire(void)
     return xcalloc(RECV_MAX_BYTES);
 }
 
-/**
- * @brief Lower-level wire init function
- *
- * @param[in] data data to be on the wire
- * @param[in] type type of wire being initiated
- * @param[inout] len length of data added to wire, function updates value to be the total wire length
- * @return initalized wire_t
- */
+static bool wire_init_iv(wire_t *wire)
+{
+    return xgetrandom(wire->iv, BLOCK_LEN) == BLOCK_LEN;
+}
+
+static void wire_set_data(wire_t *wire, const void *data, size_t len)
+{
+    memcpy(wire->data, data, len);
+}
+
+
+// len should point to the length of the data to be added
+// len is updated to the total wire length
 wire_t *init_wire(void *data, uint64_t type, size_t *len)
 {
     const uint64_t data_length = get_aligned_len(*len);
     const size_t wire_length = sizeof(wire_t) + data_length;
     wire_t *wire = xcalloc(wire_length);
 
-    if (xgetrandom(wire->iv, BLOCK_LEN) < 0) {
-        return xfree(wire);
+    if (!wire_init_iv(wire)) {
+        xfree(wire);
+        return NULL;
     }
+
     wire_set_length(wire, *len);
     wire_set_msg_type(wire, type);
+    wire_set_data(wire, data, *len);
 
-    memcpy(wire->data, data, *len);
     *len = wire_length;
     return wire;
 }

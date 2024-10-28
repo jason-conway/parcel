@@ -133,13 +133,13 @@ static bool send_ctrl_key(sock_t *sockets, size_t count, uint8_t *ctrl_key)
     memset(&ctrl_message, 0, len);
 
     wire_set_ctrl_msg_type(&ctrl_message, CTRL_DHKE);
-    wire_set_ctrl_args(&ctrl_message, count - 1);
+    wire_set_ctrl_msg_args(&ctrl_message, count - 1);
 
     uint8_t renewed_key[32];
     if (xgetrandom(renewed_key, KEY_LEN) < 0) {
         return false;
     }
-    wire_set_ctrl_renewal(&ctrl_message, renewed_key);
+    wire_set_ctrl_msg_key(&ctrl_message, renewed_key);
 
     wire_t *wire = init_wire(&ctrl_message, TYPE_CTRL, &len);
     encrypt_wire(wire, ctrl_key);
@@ -159,6 +159,35 @@ static bool send_ctrl_key(sock_t *sockets, size_t count, uint8_t *ctrl_key)
     return true;
 }
 
+/*
+ *    A          B          C          D          E          F
+ *    |          |          |          |          |          |
+ *    |          |          |          |          |          |
+ *    |-Qa------>|-Qb------>|-Qc------>|-Qd------>|-Qe------>|
+ *    |          |          |          |          |          |
+ *    |<--------------------------------------------------Qf-|
+ *    |          |          |          |          |          |
+ *    |          |          |          |          |          |
+ *    |-Qfa----->|-Qab----->|-Qbc----->|-Qcd----->|-Qde----->|
+ *    |          |          |          |          |          |
+ *    |<-------------------------------------------------Qef-|
+ *    |          |          |          |          |          |
+ *    |          |          |          |          |          |
+ *    |-Qefa---->|-Qfab---->|-Qabc---->|-Qbcd---->|-Qcde---->|
+ *    |          |          |          |          |          |
+ *    |<------------------------------------------------Qdef-|
+ *    |          |          |          |          |          |
+ *    |          |          |          |          |          |
+ *    |-Qdefa--->|-Qefab--->|-Qfabc--->|-Qabcd--->|-Qbcde--->|
+ *    |          |          |          |          |          |
+ *    |<-----------------------------------------------Qcdef-|
+ *    |          |          |          |          |          |
+ *    |          |          |          |          |          |
+ *    |-Qcdefa-->|-Qdefab-->|-Qefabc-->|-Qfabcd-->|-Qabcde-->|
+ *    |          |          |          |          |          |
+ *    |<----------------------------------------------Qbcdef-|
+ *    |          |          |          |          |          |
+ */
 static bool rotate_intermediates(sock_t *sockets, size_t count)
 {
     for (size_t i = 1; i <= count; i++) {
