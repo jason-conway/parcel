@@ -26,10 +26,7 @@ bool init_daemon(server_t *ctx)
         return false;
     }
 
-    if (!(ctx->sockets.sfds = xcalloc(sizeof(sock_t) * ctx->sockets.max_nsfds))) {
-        xalert("xcalloc()");
-        return false;
-    }
+    ctx->sockets.sfds = xcalloc(sizeof(sock_t) * ctx->sockets.max_nsfds);
 
     struct addrinfo hints = {
         .ai_family = AF_INET,
@@ -90,7 +87,7 @@ static size_t socket_index(server_t *srv, sock_t socket)
 {
     for (size_t i = 1; i <= srv->sockets.max_nsfds; i++) {
         if (srv->sockets.sfds[i] == socket) {
-            debug_print("Got socket index %zu\n", i);
+            log_trace("got socket index %zu", i);
             return i;
         }
     }
@@ -103,12 +100,12 @@ static int add_client(server_t *srv)
     socklen_t len[] = { sizeof(struct sockaddr_storage) };
     sock_t new_client;
     if (xaccept(&new_client, srv->sockets.sfds[0], (struct sockaddr *)&client_sockaddr, len) < 0) {
-        debug_print("%s\n", "Could not accept new client");
+        log_error("unable to accept new client");
         return -1;
     }
 
     if (srv->sockets.nsfds + 1 == srv->sockets.max_nsfds) {
-        xwarn("Daemon at full capacity... rejecting new connection\n");
+        log_warn("rejecting new connection");
         return 1;
     }
 
@@ -119,17 +116,17 @@ static int add_client(server_t *srv)
     char address[INET_ADDRSTRLEN];
     in_port_t port;
     if (!xgetpeeraddr(new_client, address, &port)) {
-        debug_print("%s\n", "Could not get human-readable IP for new client");
+        log_error("unable to determine human-readable IP for new client");
         return -1;
     }
 
     // Copy new connection's socket to the next free slot
-    debug_print("%s\n", "Add socket to empty slot");
+    log_debug("adding socket to empty slot");
     for (size_t i = 1; i < srv->sockets.max_nsfds; i++) {
-        debug_print("Slot %zu %s\n", i, !srv->sockets.sfds[i] ? "free" : "in use");
+        log_trace("slot[%zu]: %s", i, !srv->sockets.sfds[i] ? "free" : "in use");
         if (!srv->sockets.sfds[i]) {
             srv->sockets.sfds[i] = new_client;
-            debug_print("Connection from %s port %u added to slot %zu\n", address, port, i);
+            log_debug("connection from %s:%u added to slot %zu", address, port, i);
             break;
         }
     }
@@ -145,9 +142,10 @@ static bool transfer_message(server_t *srv, size_t sender_index, msg_t *msg)
 {
     for (size_t i = 1; i <= srv->sockets.nsfds; i++) {
         if (i == sender_index) {
+            log_trace("skipping message orgin");
             continue;
         }
-        debug_print("Sending to socket %zu\n", i);
+        log_trace("forwarding message to socket %zu", i);
         if (!xsendall(srv->sockets.sfds[i], msg->data, msg->length)) {
             return false;
         }
@@ -158,7 +156,7 @@ static bool transfer_message(server_t *srv, size_t sender_index, msg_t *msg)
 static int disconnect_client(server_t *ctx, size_t client_index)
 {
     FD_CLR(ctx->sockets.sfds[client_index], &ctx->descriptors.fds);
-    const int closed = xclose(ctx->sockets.sfds[client_index]);
+    const int ret = xclose(ctx->sockets.sfds[client_index]);
 
     // Replace this slot with the ending slot
     if (ctx->sockets.nsfds == 1) {
@@ -169,53 +167,46 @@ static int disconnect_client(server_t *ctx, size_t client_index)
         ctx->sockets.sfds[ctx->sockets.nsfds] = 0;
     }
     ctx->sockets.nsfds--;
-    return closed;
+    return ret;
 }
 
 static bool recv_client(server_t *srv, size_t sender_index)
 {
-    msg_t *msg = xcalloc(sizeof(msg_t));
-    if (!msg) {
-        xalert("xcalloc()\n");
-        return false;
-    }
+    msg_t msg = { 0 };
 
-    if ((msg->length = xrecv(srv->sockets.sfds[sender_index], msg->data, sizeof(msg->data), 0)) <= 0) {
-        if (msg->length) {
-            xwarn("Client %zu disconnected improperly\n", sender_index);
+    if ((msg.length = xrecv(srv->sockets.sfds[sender_index], msg.data, RECV_MAX_BYTES, 0)) <= 0) {
+        if (msg.length) {
+            log_warn("client %zu disconnected improperly", sender_index);
         }
         else {
-            char address[INET_ADDRSTRLEN];
+            char address[INET_ADDRSTRLEN] = { 0 };
             in_port_t port;
             if (!xgetpeeraddr(srv->sockets.sfds[sender_index], address, &port)) {
-                xwarn("Unable to determine IP and port of client %zu, despite proper disconnect\n", sender_index);
+                log_error("unable to determine IP and port of client %zu, despite proper disconnect", sender_index);
             }
-            debug_print("Connection from %s port %d ended\n", address, port);
+            log_info("connection from %s:%d has ended", address, port);
         }
 
         if (disconnect_client(srv, sender_index)) {
-            xalert("Error closing socket\n");
-            xfree(msg);
+            log_error("error closing socket");
             return false;
         }
 
-        debug_print("Active connections: %zu\n", srv->sockets.nsfds);
+        log_info("active connections: %zu", srv->sockets.nsfds);
 
         if (!n_party_server(srv->sockets.sfds, srv->sockets.nsfds, srv->server_key)) {
-            xalert("Catastrophic key exchange failure\n");
-            xfree(msg);
+            log_fatal("catastrophic key exchange");
             return false;
         }
     }
     else {
-        if (!transfer_message(srv, sender_index, msg)) {
-            xalert("Error broadcasting message from slot %zu\n", sender_index);
-            xfree(msg);
+        if (!transfer_message(srv, sender_index, &msg)) {
+            log_error("error broadcasting message from slot %zu", sender_index);
             return false;
         }
-        debug_print("Fanout of slot %zu's message complete\n", sender_index);
+        log_debug("message fanout from slot %zu complete", sender_index);
     }
-    xfree(msg);
+
     return true;
 }
 
@@ -231,15 +222,15 @@ bool display_daemon_info(server_t *ctx)
         // "=> %s:%s\n"
 
     // char *public_ip = xgetpublicip();
-    printf(header, ctx->sockets.max_nsfds);
+    fprintf(stdout, header, ctx->sockets.max_nsfds);
     // printf(header, ctx->sockets.max_nsfds, public_ip ? public_ip : "error", ctx->server_port);
     // xfree(public_ip);
 
     if (xgetifaddrs("=> ", ctx->server_port)) {
-        xalert("Failed to obtain local interfaces\n");
+        log_warn("failed to obtain a list of local interfaces");
         return false;
     }
-    printf("\033[1mDaemon started...\033[0m\n");
+    fprintf(stdout, "\033[1mDaemon started...\033[0m\n");
     return true;
 }
 
@@ -248,41 +239,42 @@ int main_thread(void *ctx)
     signal(SIGINT, catch_sigint);
 
     server_t *server = (server_t *)ctx;
-    fd_set read_fds;
-    FD_ZERO(&read_fds);
+    fd_set rdy;
+    FD_ZERO(&rdy);
 
     for (;;) {
-        read_fds = server->descriptors.fds;
-        if (select(server->descriptors.nfds + 1, &read_fds, NULL, NULL, NULL) < 0) {
-            xalert("n_party_server()\n");
+        rdy = server->descriptors.fds;
+        if (select(server->descriptors.nfds + 1, &rdy, NULL, NULL, NULL) < 0) {
+            log_fatal("error waiting for selection");
             return -1;
         }
 
         for (size_t i = 0; i <= server->descriptors.nfds; i++) {
             sock_t fd;
-            if ((fd = xfd_isset(&server->descriptors.fds, &read_fds, i))) {
+            if ((fd = xfd_isset(&server->descriptors.fds, &rdy, i))) {
                 if (fd == server->sockets.sfds[0]) {
-                    debug_print("%s\n", "Pending connection from unknown client");
+                    log_debug("pending connection from unknown client");
                     switch (add_client(server)) {
                         case -1:
-                            xalert("n_party_server()\n");
+                            log_fatal("key exchange failure");
                             return -1;
                         case 1:
-                            debug_print("%s\n", "Incoming connection was rejected");
+                            log_warn("incoming connection was rejected");
                             goto jmpout;
                         case 0:
+                            log_debug("connection added - starting key regeneration");
                             if (!n_party_server(server->sockets.sfds, server->sockets.nsfds, server->server_key)) {
-                                xalert("n_party_server()\n");
+                                log_fatal("key regeneration failure");
                                 return -1;
                             }
-                            debug_print("%s\n", "Connection added successfully");
+                            log_debug("connection added successfully");
                             break;
                     }
                 }
                 else {
                     const size_t sender_index = socket_index(server, fd);
                     if (!recv_client(server, sender_index)) {
-                        xalert("recv_client()\n");
+                        // [note] reason for failure logged internally
                         return -1;
                     }
                 }

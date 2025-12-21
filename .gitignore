@@ -1,5 +1,6 @@
 .DS_Store
 build/*
+bin/*
 .vscode
 etc/resources/*.res
 etc/utf8/EastAsianWidth.txt

@@ -263,7 +263,6 @@ int decrypt_wire(wire_t *wire, size_t *len, const uint8_t *key)
 
     // Decrypt only the length
     if (!wire_verify_header(&cmac, wire)) {
-        debug_print("%s", "error: header verification failed\n");
         return WIRE_INVALID_KEY;
     }
 
@@ -282,13 +281,13 @@ int decrypt_wire(wire_t *wire, size_t *len, const uint8_t *key)
 
     // Verify MAC prior to decrypting in full
     if (!wire_verify_mac(&cmac, wire, aligned_len)) {
-        debug_print("%s", "error: mac verification failed\n");
+        log_fatal("mac verification failed");
         return WIRE_CMAC_ERROR;
     }
 
     wire_decrypt_data(&cipher, wire, aligned_len);
     wire_set_header(wire, &h);
 
-    debug_print("%s", "decrypt okay\n");
+    log_trace("wire decrypted");
     return WIRE_OK;
 }

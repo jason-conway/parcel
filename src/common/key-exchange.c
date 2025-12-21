@@ -49,37 +49,39 @@ static void point_kx(uint8_t *shared_key, const uint8_t *secret_key, const uint8
 bool two_party_client(sock_t socket, uint8_t *ctrl_key)
 {
     // Diffie-Hellman keys
-    uint8_t secret_key[KEY_LEN];
-    uint8_t public_key[KEY_LEN];
+    uint8_t secret_key[KEY_LEN] = { 0 };
+    uint8_t public_key[KEY_LEN] = { 0 };
+
     point_d(secret_key);
     point_q(secret_key, public_key, NULL);
 
     // Send public key to begin
-    if (xsend(socket, public_key, KEY_LEN, 0) != KEY_LEN) {
-        debug_print("%s\n", "Did not send full key length");
+    if (!xsendall(socket, public_key, KEY_LEN)) {
+        log_fatal("failed to send public key to server");
         return false;
     }
 
-    uint8_t server_public_key[KEY_LEN];
-    if (xrecv(socket, server_public_key, KEY_LEN, 0) != KEY_LEN) {
-        debug_print("%s\n", "Did not receive full key length");
+    uint8_t server_public_key[KEY_LEN] = { 0 };
+    if (!xrecvall(socket, server_public_key, KEY_LEN)) {
+        log_fatal("failed to receive server's public key");
         return false;
     }
 
-    uint8_t shared_secret[KEY_LEN];
+    uint8_t shared_secret[KEY_LEN] = { 0 };
     point_kx(shared_secret, secret_key, server_public_key);
 
     ssize_t key_exchange_wire_length = sizeof(wire_t) + KEY_LEN;
     wire_t *wire = xcalloc(key_exchange_wire_length);
 
-    if (xrecv(socket, wire, key_exchange_wire_length, 0) != key_exchange_wire_length) {
-        debug_print("Did not receive full key_exchange_wire_length (%zi)\n", key_exchange_wire_length);
+    if (!xrecvall(socket, wire, key_exchange_wire_length)) {
+        log_fatal("failed to receive wire from server");
         return false;
     }
 
     // Shared secret gets hashed in point_kx()
     size_t data_length = 0;
     if (decrypt_wire(wire, &data_length, shared_secret)) {
+        log_fatal("decryption failure");
         return false;
     }
 
@@ -91,33 +93,33 @@ bool two_party_client(sock_t socket, uint8_t *ctrl_key)
 bool two_party_server(sock_t socket, uint8_t *session_key)
 {
     // Receive public key from the client
-    uint8_t public_key[KEY_LEN];
-    if (xrecv(socket, public_key, KEY_LEN, 0) != KEY_LEN) {
-        debug_print("%s\n", "Did not receive full key length");
+    uint8_t public_key[KEY_LEN] = { 0 };
+    if (!xrecvall(socket, public_key, KEY_LEN)) {
+        log_fatal("failed to receive public key from client");
         return false;
     }
 
     // Generate a single-use secret key for the key pair
-    uint8_t secret_key[KEY_LEN];
+    uint8_t secret_key[KEY_LEN] = { 0 };
     point_d(secret_key);
 
     // Compute a single-use public key and our shared secret with the client
-    uint8_t server_public_key[KEY_LEN];
+    uint8_t server_public_key[KEY_LEN] = { 0 };
     point_q(secret_key, server_public_key, NULL);
 
-    if (xsend(socket, server_public_key, KEY_LEN, 0) != KEY_LEN) {
-        debug_print("%s\n", "Did not send full key length");
+    if (!xsendall(socket, server_public_key, KEY_LEN)) {
+        log_fatal("did not send full key length");
         return false;
     }
 
-    uint8_t shared_secret[KEY_LEN];
+    uint8_t shared_secret[KEY_LEN] = { 0 };
     point_kx(shared_secret, secret_key, public_key);
 
     size_t len = KEY_LEN;
     wire_t *wire = init_wire(session_key, TYPE_TEXT, &len);
     encrypt_wire(wire, shared_secret);
-    if (xsend(socket, wire, len, 0) != (ssize_t)len) {
-        debug_print("Did not send full session_key (%zu)\n", len);
+    if (!xsendall(socket, wire, len)) {
+        log_fatal("failed to send session key to client");
         return false;
     }
 
@@ -135,7 +137,7 @@ static bool send_ctrl_key(sock_t *sockets, size_t count, uint8_t *ctrl_key)
     wire_set_ctrl_msg_type(&ctrl_message, CTRL_DHKE);
     wire_set_ctrl_msg_args(&ctrl_message, count - 1);
 
-    uint8_t renewed_key[32];
+    uint8_t renewed_key[32] = { 0 };
     if (xgetrandom(renewed_key, KEY_LEN) < 0) {
         return false;
     }
@@ -148,8 +150,9 @@ static bool send_ctrl_key(sock_t *sockets, size_t count, uint8_t *ctrl_key)
     memcpy(ctrl_key, renewed_key, KEY_LEN);
 
     for (size_t i = 1; i <= count; i++) {
-        debug_print("Sending CTRL key to socket %zu\n", i);
-        if (xsend(sockets[i], wire, len, 0) < 0) {
+        log_trace("sending control key to socket %zu", i);
+        if (!xsendall(sockets[i], wire, len)) {
+            log_fatal("failed to send control key to socket %zu", i);
             xfree(wire);
             return false;
         }
@@ -191,19 +194,18 @@ static bool send_ctrl_key(sock_t *sockets, size_t count, uint8_t *ctrl_key)
 static bool rotate_intermediates(sock_t *sockets, size_t count)
 {
     for (size_t i = 1; i <= count; i++) {
-        uint8_t intermediate_key[KEY_LEN];
-        debug_print("Receiving intermediate key from socket %zu\n", i);
-        ssize_t r = xrecv(sockets[i], intermediate_key, KEY_LEN, 0);
-        if (r != KEY_LEN) {
-            debug_print("error: received %zi bytes from socket %zu\n", r, i);
+        uint8_t intermediate_key[KEY_LEN] = { 0 };
+        log_trace("receiving intermediate key from socket %zu", i);
+        if (!xrecvall(sockets[i], intermediate_key, KEY_LEN)) {
+            log_fatal("failed to receive intermediate key from socket %zu", i);
             return false;
         }
 
-        const size_t next = (i == count) ? 1 : i + 1; // Rotate right, skip server's socket
-        debug_print("Sending intermediate key to socket %zu\n", next);
-        ssize_t s = xsend(sockets[next], intermediate_key, KEY_LEN, 0);
-        if (s != KEY_LEN) {
-            debug_print("error: sent %zi bytes to socket %zu\n", s, next);
+        // Rotate right, skip server's socket
+        const size_t next = (i == count) ? 1 : i + 1; 
+        log_trace("sending intermediate key to socket %zu", next);
+        if (!xsendall(sockets[next], intermediate_key, KEY_LEN)) {
+            log_fatal("failed to send intermediate key to socket %zu", next);
             return false;
         }
     }
@@ -212,23 +214,29 @@ static bool rotate_intermediates(sock_t *sockets, size_t count)
 
 bool n_party_server(sock_t *sockets, size_t connection_count, uint8_t *ctrl_key)
 {
-    if (connection_count < 2) {
+    assert(connection_count != 0);
+
+    const size_t rounds = connection_count - 1;
+    if (rounds < 1) {
+        log_info("skipping `n_party_server`");
         return true;
     }
 
-    debug_print("%s\n", "Sending CTRL to signal start of sequence");
+    log_trace("sending CTRL to signal start of sequence");
     if (!send_ctrl_key(sockets, connection_count, ctrl_key)) {
-        printf("> Error sending starting control keys\n");
+        log_fatal("failed to send control key");
         return false;
     }
-    debug_print("%s\n", "CTRL signals sent");
+    log_trace("all control keys sent");
+    log_debug("starting %zu-party DHKE sequence", connection_count);
+    log_debug("%zu-round%s required", rounds, rounds > 1 ? "s" : "");
 
-    for (size_t i = 0; i < connection_count - 1; i++) {
-        debug_print("Starting exchange round %zu of %zu\n", i + 1, connection_count - 1);
+    for (size_t i = 0; i < rounds; i++) {
+        log_trace("starting exchange round %zu of %zu", i + 1, rounds);
         if (!rotate_intermediates(sockets, connection_count)) {
             return false;
         }
-        debug_print("Finished round %zu\n", i + 1);
+        log_trace("round %zu complete", i + 1);
     }
 
     return true;
@@ -237,41 +245,42 @@ bool n_party_server(sock_t *sockets, size_t connection_count, uint8_t *ctrl_key)
 // An N-Party Diffie-Hellman Key Exchange
 bool n_party_client(sock_t socket, uint8_t *session_key, size_t rounds)
 {
-    uint8_t secret_key[KEY_LEN];
-    uint8_t public_key[KEY_LEN];
+    uint8_t secret_key[KEY_LEN] = { 0 };
+    uint8_t public_key[KEY_LEN] = { 0 };
 
     point_d(secret_key);
     point_q(secret_key, public_key, NULL);
 
     // Send our public key to the client on our right
-    if (xsend(socket, public_key, KEY_LEN, 0) != KEY_LEN) {
-        debug_print("%s\n", "Did not send full key length");
+    if (!xsendall(socket, public_key, KEY_LEN)) {
+        log_fatal("failed to send public key (round 0)");
         return false;
     }
-    debug_print("%s\n", "Public key sent");
+
+    log_debug("sent public key");
 
     for (size_t i = 0; i < rounds; i++) {
-        debug_print("Starting round %zu\n", i + 1);
-        uint8_t intermediate_public[KEY_LEN];
-        if (xrecv(socket, intermediate_public, KEY_LEN, 0) != KEY_LEN) {
-            debug_print("Did not receive full key during round %zu\n", i + 1);
+        log_trace("starting round %zu", i + 1);
+        uint8_t intermediate_public[KEY_LEN] = { 0 };
+        if (!xrecvall(socket, intermediate_public, KEY_LEN)) {
+            log_fatal("failed to receive intermediate key (round %zu)", i + 1);
             return false;
         }
-        debug_print("Received key for round %zu\n", i + 1);
-        uint8_t shared_secret[KEY_LEN];
+
+        log_trace("received key for round %zu", i + 1);
+        uint8_t shared_secret[KEY_LEN] = { 0 };
         point_kx(shared_secret, secret_key, intermediate_public);
 
         if (i == rounds - 1) {
             sha256_key_digest(shared_secret, session_key);
-            debug_print("%s\n", "Exchange complete");
+            log_debug("key exchange complete");
             return true;
         }
-
-        if (xsend(socket, shared_secret, KEY_LEN, 0) != KEY_LEN) {
-            debug_print("Did not send full key during round %zu\n", i);
+        if (!xsendall(socket, shared_secret, KEY_LEN)) {
+            log_fatal("failed to send intermediate key (round %zu)", i);
             return false;
         }
-        debug_print("Sent intermediate for round %zu\n", i + 1);
+        log_trace("sent intermediate key (round %zu)", i + 1);
     }
     return true;
 }

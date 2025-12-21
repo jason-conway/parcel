@@ -111,9 +111,9 @@ bool xsendall(sock_t socket, const void *data, size_t len);
  * @param sockfd File descriptor of the connected socket
  * @param data Message buffer to place received data into
  * @param len Number of bytes to recieve
- * @return Number of bytes remaining, i.e., 0 on success
+ * @return false on failure
  */
-ssize_t xrecvall(sock_t socket, void *data, size_t len);
+bool xrecvall(sock_t socket, void *data, size_t len);
 
 /**
  * @brief Convert ascii to long, checking that the converted value is between the provided bounds

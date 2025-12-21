@@ -13,6 +13,7 @@
 #include "wire.h"
 #include "x25519.h"
 #include "xplatform.h"
+#include "log.h"
 
 enum KeyExchangeStatus {
     DHKE_ERROR = -1,

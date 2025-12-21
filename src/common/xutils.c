@@ -18,8 +18,7 @@ char *xstrdup(const char *str)
         return NULL;
     }
     size_t length = strlen(str) + 1;
-    char *s = xmalloc(length);
-    return memcpy(s, str, length);
+    return memcpy(xmalloc(length), str, length);
 }
 
 char *_xstrcat(const char **strs, size_t count)
@@ -92,19 +91,19 @@ bool xsendall(sock_t socket, const void *data, size_t len)
     return true;
 }
 
-ssize_t xrecvall(sock_t socket, void *data, size_t len)
+bool xrecvall(sock_t socket, void *data, size_t len)
 {
     uint8_t *s = data;
     for (size_t i = 0; i < len;) {
         ssize_t bytes_recv = xrecv(socket, &s[i], len - i, 0);
         switch (bytes_recv) {
             case -1:
-                return -1;
+                return false;
             default:
                 i += bytes_recv;
         }
     }
-    return 0;
+    return true;
 }
 
 bool xgetpeeraddr(sock_t socket, char *address, in_port_t *port)
@@ -401,8 +400,10 @@ void *xmemrchr(const void *src, int c, size_t len)
 
 void *xmemdup(void *mem, size_t len)
 {
-    void *_mem = xmalloc(len);
-    return mem ? memcpy(_mem, mem, len) : NULL;
+    if (mem && len) {
+        return memcpy(xmalloc(len), mem, len);
+    }
+    return NULL;
 }
 
 void xmemcpy_locked(pthread_mutex_t *lock, void *dst, void *src, size_t len)

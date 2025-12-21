@@ -10,6 +10,7 @@
  */
 
 #include "xplatform.h"
+#include "log.h"
 
 /**
  * @section BSD / Winsock wrappers
@@ -121,12 +122,10 @@ int xgetifaddrs(const char *prefix, const char *suffix)
 
     const bool status = !!getifaddrs(&interfaces);
     if (status) {
-        debug_print("getifaddrs() returned %d, falling back on \"hostname.local\"\n", status);
-        const size_t HOST_MAX = 255;
-        char hostname[HOST_MAX];
-        memset(hostname, 0, HOST_MAX);
-        if (!gethostname(hostname, HOST_MAX)) {
-            printf("%s%s.local:%s\n", prefix, hostname, suffix);
+        log_warn("getifaddrs() returned %d, falling back on \"hostname.local\"", status);
+        char hostname[255] = { 0 };
+        if (!gethostname(hostname, sizeof(hostname))) {
+            fprintf(stdout, "%s%s.local:%s\n", prefix, hostname, suffix);
             return 0;
         }
         return -1;
@@ -141,7 +140,7 @@ int xgetifaddrs(const char *prefix, const char *suffix)
             if (getnameinfo(node->ifa_addr, sizeof(struct sockaddr_in), interface_name, NI_MAXHOST, NULL, 0, NI_NUMERICHOST)) {
                 goto free_interfaces;
             }
-            printf("%s%s:%s\n", prefix, interface_name, suffix);
+            fprintf(stdout, "%s%s:%s\n", prefix, interface_name, suffix);
         }
     }
     failure = false;
@@ -152,15 +151,9 @@ free_interfaces:
 #elif _WIN32
     ULONG ip_adapter_len = sizeof(IP_ADAPTER_INFO);
     IP_ADAPTER_INFO *adapter_info = xmalloc(ip_adapter_len);
-    if (!adapter_info) {
-        return -1;
-    }
     if (GetAdaptersInfo(adapter_info, &ip_adapter_len) == ERROR_BUFFER_OVERFLOW) {
         xfree(adapter_info);
         adapter_info = xmalloc(ip_adapter_len);
-        if (!adapter_info) {
-            return -1;
-        }
     }
     if (GetAdaptersInfo(adapter_info, &ip_adapter_len)) {
         xfree(adapter_info);
@@ -305,13 +298,16 @@ void *xmalloc(size_t len)
 #if __unix__ || __APPLE__
     void *mem = malloc(len);
     if (!mem) {
-        perror("[error] out of memory");
         exit(EXIT_FAILURE);
     }
     return mem;
 
 #elif _WIN32
-    return HeapAlloc(GetProcessHeap(), 0, len);
+    void *mem = HeapAlloc(GetProcessHeap(), 0, len);
+    if (!mem) {
+        ExitThread(EXIT_FAILURE);
+    }
+    return mem;
 #endif
 }
 
@@ -321,7 +317,11 @@ void *xcalloc(size_t len)
     void *mem = xmalloc(len);
     return memset(mem, 0, len);
 #elif _WIN32
-    return HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, len);
+    void *mem = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, len);
+    if (!mem) {
+        ExitThread(EXIT_FAILURE);
+    }
+    return mem;
 #endif
 }
 
@@ -330,17 +330,15 @@ void *xrealloc(void *mem, size_t len)
 #if __unix__ || __APPLE__
     void *_mem = realloc(mem, len);
     if (!_mem) {
-        free(mem);
-        perror("[error] out of memory");
+        xfree(mem);
         exit(EXIT_FAILURE);
     }
     return _mem;
 #elif _WIN32
-    // Act as malloc() when mem is null
     void *_mem = (!mem) ? HeapAlloc(GetProcessHeap(), 0, len) : HeapReAlloc(GetProcessHeap(), 0, mem, len);
     if (!_mem) {
-        (void)HeapFree(GetProcessHeap(), 0, mem);
-        return NULL;
+        xfree(mem);
+        ExitThread(EXIT_FAILURE);
     }
     return _mem;
 #endif
@@ -350,12 +348,15 @@ void *xfree(void *mem)
 {
 #if __unix__ || __APPLE__
     if (mem) {
+        memset(mem, 0, alloc_size(mem));
         free(mem);
     }
     return NULL;
 #elif _WIN32
     if (mem) {
-        (void)HeapFree(GetProcessHeap(), 0, mem);
+        const size_t sz = HeapSize(GetProcessHeap(), 0, mem);
+        SecureZeroMemory(mem, sz);
+        HeapFree(GetProcessHeap(), 0, mem);
     }
     return NULL;
 #endif

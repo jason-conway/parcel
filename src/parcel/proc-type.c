@@ -93,7 +93,7 @@ static int proc_ctrl(client_t *ctx, void *data)
         case CTRL_EXIT:
             break;
         case CTRL_DHKE:
-            debug_print("%s", "> Received DHKE ctrl msg\n");
+            log_info("received DHKE ctrl msg");
             if (!n_party_client(ctx->socket, session, wire_get_ctrl_msg_args(ctrl))) {
                 return DHKE_ERROR;
             }
@@ -124,7 +124,7 @@ static int proc_ctrl(client_t *ctx, void *data)
 msg_type_t proc_type(client_t *ctx, wire_t *wire)
 {
     msg_type_t type = wire_get_msg_type(wire);
-    debug_print("msg_type: %d\n", (int)type);
+    log_trace("msg_type: %d", (int)type);
     switch (type) {
         case TYPE_CTRL: // Forward wire along to proc_ctrl()
             switch (proc_ctrl(ctx, wire->data)) {
@@ -133,13 +133,13 @@ msg_type_t proc_type(client_t *ctx, wire_t *wire)
                 case CTRL_DHKE:
                     break;
                 case CTRL_ERROR:
-                    xalert("proc_ctrl()\n");
+                    log_fatal("proc_ctrl()");
                     return TYPE_ERROR;
             }
             break;
         case TYPE_FILE:
             if (!proc_file(wire->data)) {
-                xalert("proc_file()\n");
+                log_fatal("proc_file()");
                 return TYPE_ERROR;
             }
             break;

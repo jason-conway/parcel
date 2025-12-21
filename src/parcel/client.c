@@ -54,7 +54,6 @@ static void get_prompt(slice_t *s, client_t *ctx)
 
 bool announce_connection(client_t *ctx)
 {
-    // debug_print("announcing connection for username: %s\n", ctx->username);
     char user[USERNAME_MAX_LENGTH] = { 0 };
     client_get_user(user, ctx);
 
@@ -68,7 +67,7 @@ bool announce_connection(client_t *ctx)
 
     size_t len = sizeof(stat_msg_t);
     wire_t *wire = init_wire(&stat, TYPE_STAT, &len);
-    
+
     encrypt_wire(wire, keys.session);
 
     if (!xsendall(socket, wire, len)) {
@@ -195,20 +194,20 @@ static ssize_t decrypt_received_message(client_t *ctx, wire_t *wire, size_t byte
     switch (decrypt_wire(wire, &length, ctx->keys.session)) {
         case WIRE_INVALID_KEY:
             if (decrypt_wire(wire, &length, ctx->keys.ctrl)) {
-                xalert("> Recveived corrupted control key from server\n");
+                log_fatal("received corrupted control key from server");
                 return -1;
             }
             break;
         case WIRE_PARTIAL:
-            debug_print("> Received %zu bytes but header specifies %zu bytes total\n", bytes_recv, length + bytes_recv);
+            log_debug("received %zu bytes but header specifies %zu bytes total", bytes_recv, length + bytes_recv);
             if (recv_remaining(ctx, &wire, bytes_recv, length)) {
                 xalert("recv_remaining()\n");
                 return -1;
             }
-            debug_print("%s\n", "> received remainder of wire");
+            log_debug("received remainder of wire");
             break;
         case WIRE_CMAC_ERROR:
-            xalert("> CMAC error\n");
+            log_fatal("CMAC error");
             return -1;
         case WIRE_OK:
             break;
@@ -259,7 +258,7 @@ void *recv_thread(void *ctx)
 bool connect_server(client_t *client, const char *ip, const char *port)
 {
     if (xstartup()) {
-        xalert("xstartup()\n");
+        log_fatal("WSAStartup failure");
         return false;
     }
 
@@ -270,7 +269,7 @@ bool connect_server(client_t *client, const char *ip, const char *port)
 
     struct addrinfo *srv_addr;
     if (xgetaddrinfo(ip, port, &hints, &srv_addr)) {
-        xalert("xgetaddrinfo()\n");
+        log_fatal("failed to get addresses and ports for host");
         return false;
     }
 
@@ -281,7 +280,7 @@ bool connect_server(client_t *client, const char *ip, const char *port)
         }
         if (connect(client->socket, node->ai_addr, node->ai_addrlen)) {
             if (xclose(client->socket)) {
-                xalert("Unable to close socket\n");
+                log_fatal("unable to close socket");
                 return false;
             }
             continue;
@@ -290,17 +289,15 @@ bool connect_server(client_t *client, const char *ip, const char *port)
     }
 
     if (!node) {
-        xalert("Could not connect to server\n");
+        xalert("could not connect to server\n");
         return false;
     }
 
     freeaddrinfo(srv_addr);
 
     if (!two_party_client(client->socket, client->keys.ctrl)) {
-        xalert("Failed to perform initial key exchange with server\n");
-        if (xclose(client->socket)) {
-            xalert("Unable to close socket\n");
-        }
+        // [note] error logged internally 
+        xclose(client->socket);
         return false;
     }
 

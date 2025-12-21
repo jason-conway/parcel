@@ -15,6 +15,7 @@
 #include "sha256.h"
 #include "xplatform.h"
 #include "xutils.h"
+#include "log.h"
 
 typedef enum msg_type_t {
     TYPE_ERROR = -1,

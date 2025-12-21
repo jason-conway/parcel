@@ -43,7 +43,7 @@ int main(int argc, char **argv)
                 break;
             case 'q':
                 if (xstrrange(xgo.arg, (long *)&server.max_queue, 0, MAX_QUEUE)) {
-                    debug_print("Using a max queue of %zu\n", server.max_queue);
+                    log_info("using a max queue of %zu", server.max_queue);
                     break;
                 }
                 xwarn("Specified queue limit is outside allowed range\n");
@@ -51,7 +51,7 @@ int main(int argc, char **argv)
                 break;
             case 'm':
                 if (xstrrange(xgo.arg, (long *)&server.sockets.max_nsfds, 0, SUPPORTED_CONNECTIONS)) {
-                    debug_print("Connection max set to %zu\n", server.sockets.max_nsfds);
+                    log_info("connection max set to %zu", server.sockets.max_nsfds);
                     break;
                 }
                 xwarn("Specified connection limit is outside allowed range\n");
@@ -61,11 +61,10 @@ int main(int argc, char **argv)
                 usage(stdout);
                 return 0;
             case 'v':
-                puts("\033[1m"
-                     "parcel " STR(PARCEL_VERSION) "\033[0m");
+                fprintf(stdout, "\033[1mparcel " STR(PARCEL_VERSION) "\033[0m\n");
                 return 0;
             case ':':
-                puts("Option is missing an argument");
+                fprintf(stderr, "option is missing an argument\n");
                 return 1;
             default:
                 usage(stderr);

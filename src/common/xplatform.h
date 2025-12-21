@@ -26,47 +26,60 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <assert.h>
 
 #if __unix__ || __APPLE__
-#include <unistd.h>
-#include <sys/ioctl.h>
-#include <termios.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <netdb.h>
-#include <ifaddrs.h>
-#include <dirent.h>
-#include <termios.h>
-#include <sys/time.h>
-#include <poll.h>
-typedef int sock_t;
-typedef struct termios console_t;
+    #include <unistd.h>
+    #include <sys/ioctl.h>
+    #include <termios.h>
+    #include <sys/socket.h>
+    #include <netinet/in.h>
+    #include <arpa/inet.h>
+    #include <netdb.h>
+    #include <ifaddrs.h>
+    #include <dirent.h>
+    #include <termios.h>
+    #include <sys/time.h>
+    #include <poll.h>
+
+    #if __APPLE__
+        #include <malloc/malloc.h>
+        #define alloc_size(mem) malloc_size(mem)
+    #elif __unix__
+        #include <malloc.h>
+        #define alloc_size(mem) malloc_usable_size(mem)
+    #endif
+
+
+    typedef int sock_t;
+    typedef struct termios console_t;
 #endif
 
 #if _WIN32
-#define WIN32_LEAN_AND_MEAN
-#include <winsock2.h>
-#include <ws2ipdef.h>
-#include <ws2tcpip.h>
-#include <mstcpip.h>
-#include <iphlpapi.h>
-#include <ntsecapi.h>
-#include <winbase.h>
-#include <io.h>
-#include <direct.h>
-#include <conio.h>
-#ifdef _MSC_VER
-    #pragma comment(lib, "ws2_32.lib")
-    #pragma comment(lib, "advapi32")
-    #pragma comment(lib, "IPHLPAPI.lib")
-#endif
-#ifndef SHUT_RDWR
-    #define SHUT_RDWR SD_BOTH
-#endif
-typedef USHORT in_port_t;
-typedef SOCKET sock_t;
-typedef DWORD console_t;
+    #define WIN32_LEAN_AND_MEAN
+    #include <winsock2.h>
+    #include <ws2ipdef.h>
+    #include <ws2tcpip.h>
+    #include <mstcpip.h>
+    #include <iphlpapi.h>
+    #include <ntsecapi.h>
+    #include <winbase.h>
+    #include <io.h>
+    #include <direct.h>
+    #include <conio.h>
+    #ifdef _MSC_VER
+        #pragma comment(lib, "ws2_32.lib")
+        #pragma comment(lib, "advapi32")
+        #pragma comment(lib, "IPHLPAPI.lib")
+        typedef SSIZE_T ssize_t;
+    #endif
+    #ifndef SHUT_RDWR
+        #define SHUT_RDWR SD_BOTH
+    #endif
+
+    typedef USHORT in_port_t;
+    typedef SOCKET sock_t;
+    typedef DWORD console_t;
 #endif
 
 typedef unsigned int bitfield;
@@ -78,14 +91,8 @@ typedef unsigned int bitfield;
 #define STR(a)  XSTR(a)
 #define XSTR(a) #a
 
-// #ifdef DEBUG
-    #define debug_print(fmt, ...) \
-        do { \
-            fprintf(stderr, "%s:%d:%s(): " fmt, __FILE__, __LINE__, __func__, __VA_ARGS__); \
-        } while (0)
-// #else
-//     #define debug_print(fmt, ...)
-// #endif
+#define countof(a)   (sizeof(a) / sizeof(*(a)))
+#define lengthof(s)  (countof(s) - 1)
 
 /**
  * @brief Platform-specific malloc(3)
