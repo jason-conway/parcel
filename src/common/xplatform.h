@@ -88,11 +88,21 @@ typedef unsigned int bitfield;
     #define PARCEL_VERSION 0.9.2
 #endif
 
+#ifndef ROUND_DOWN
+    #define ROUND_DOWN(n, d) ((n) & -(0 ? (n) : (d)))
+#endif
+#ifndef ROUND_UP
+    #define ROUND_UP(n, d) ROUND_DOWN((n) + (d) - 1, (d))
+#endif
+
 #define STR(a)  XSTR(a)
 #define XSTR(a) #a
 
 #define countof(a)   (sizeof(a) / sizeof(*(a)))
 #define lengthof(s)  (countof(s) - 1)
+
+#define pointer_offset(ptr, ofs)    (void *)((char *)(ptr) + (ptrdiff_t)(ofs))
+#define pointer_diff(first, second) (ptrdiff_t)((uint8_t *)(first) - (uint8_t *)(second))
 
 /**
  * @brief Platform-specific malloc(3)
@@ -152,6 +162,11 @@ int xstartup(void);
 int xgetlogin(char *username, size_t len);
 ssize_t xgetrandom(void *dst, size_t len);
 size_t xfilesize(const char *filename);
+mode_t xgetmode(const char *filename);
+gid_t xgetgid(const char *filename);
+uid_t xgetuid(const char *filename);
+bool xchmod(const char *filename, mode_t mode);
+
 char *xget_dir(char *file);
 int xmkdir(const char *path, mode_t mode);
 char *xgethome(void);

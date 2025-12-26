@@ -2,7 +2,7 @@
 
 typedef struct log_t {
     void *udata;
-    int level;
+    loglvl_t level;
     bool quiet;
 } log_t;
 

@@ -229,6 +229,50 @@ char *xget_dir(char *file)
     return xstrcat(home, parcel_dir, files_dir, file);
 }
 
+const char *xconstbasename(const char *path)
+{
+    const char *s = path;
+    for (; *s; s++);
+    for (; s > path && s[-1] != '/' && s[-1] != '\\'; s--);
+    return s;
+}
+
+bool xfiletype(const char *filename)
+{
+    FILE *fp = fopen(filename, "rb");
+    if (!fp) {
+        return false;
+    }
+
+    // Only checking the first 8k
+    uint8_t data[8192] = { 0 };
+    size_t len = fread(data, 1, sizeof(data), fp);
+    fclose(fp);
+
+    if (!len) {
+        return false;
+    }
+
+    // NULL byte check
+    for (size_t i = 0; i < len; i++) {
+        if (!data[i]) {
+            return true;
+        }
+    }
+
+    // Heuristic ratio of printable bytes
+    size_t ascii = 0;
+    for (size_t i = 0; i < len; i++) {
+        uint8_t c = data[i];
+        if ((c >= 0x20 && c <= 0x7e) || c == '\t' || c == '\n' || c == '\r') {
+            ascii++;
+        }
+    }
+
+    return ((100 * ascii) / len) < 70;
+}
+
+
 size_t xbasename(const char *path, char *filename)
 {
     const size_t path_length = strnlen(path, FILENAME_MAX);

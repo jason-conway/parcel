@@ -10,6 +10,38 @@
  */
 
 #include "key-exchange.h"
+#include "wire-ctrl.h"
+#include "wire-raw.h"
+#include "wire.h"
+#include "xplatform.h"
+#include "xutils.h"
+#include <stddef.h>
+#include <string.h>
+#include "cable.h"
+
+bool ke_snd(sock_t sock, key_type_t type, const uint8_t *key)
+{
+    ke_t ke = { .type = (uint8_t)type };
+    memcpy(ke.key, key, KEY_LEN);
+    xhexdump(&ke, sizeof(ke_t));
+    return xsendall(sock, &ke, sizeof(ke_t));
+}
+
+bool ke_rcv(sock_t sock, key_type_t type, uint8_t *key)
+{
+    ke_t ke = { 0 };
+    if (!xrecvall(sock, &ke, sizeof(ke_t))) {
+        log_fatal("failed to receive key");
+        return false;
+    }
+    if (ke.type != (uint8_t)type) {
+        log_fatal("invalid type");
+        return false;
+    }
+    xhexdump(&ke, sizeof(ke_t));
+    memcpy(key, ke.key, KEY_LEN);
+    return true;
+}
 
 void sha256_key_digest(const uint8_t *key, uint8_t *hash)
 {
@@ -56,13 +88,13 @@ bool two_party_client(sock_t socket, uint8_t *ctrl_key)
     point_q(secret_key, public_key, NULL);
 
     // Send public key to begin
-    if (!xsendall(socket, public_key, KEY_LEN)) {
+    if (!ke_snd(socket, KEY_CLIENT_PUBLIC, public_key)) {
         log_fatal("failed to send public key to server");
         return false;
     }
 
     uint8_t server_public_key[KEY_LEN] = { 0 };
-    if (!xrecvall(socket, server_public_key, KEY_LEN)) {
+    if (!ke_rcv(socket, KEY_SERVER_PUBLIC, server_public_key)) {
         log_fatal("failed to receive server's public key");
         return false;
     }
@@ -70,23 +102,26 @@ bool two_party_client(sock_t socket, uint8_t *ctrl_key)
     uint8_t shared_secret[KEY_LEN] = { 0 };
     point_kx(shared_secret, secret_key, server_public_key);
 
-    ssize_t key_exchange_wire_length = sizeof(wire_t) + KEY_LEN;
-    wire_t *wire = xcalloc(key_exchange_wire_length);
-
-    if (!xrecvall(socket, wire, key_exchange_wire_length)) {
-        log_fatal("failed to receive wire from server");
+    size_t len = 0;
+    cable_t *cable = recv_cable(socket, &len);
+    if (!cable) {
+        log_fatal("failed to receive cable from server");
         return false;
     }
 
+    size_t wire_len = 0;
+    wire_t *wire = get_cabled_wire(cable, &wire_len);
+    xhexdump(wire, wire_len);
     // Shared secret gets hashed in point_kx()
-    size_t data_length = 0;
-    if (decrypt_wire(wire, &data_length, shared_secret)) {
+    if (decrypt_wire(wire, wire_len, shared_secret)) {
         log_fatal("decryption failure");
+        free_cabled_wire(wire);
         return false;
     }
 
+    assert(wire_get_type(wire) == TYPE_SESSION_KEY);
     memcpy(ctrl_key, wire->data, KEY_LEN);
-    xfree(wire);
+    free_cabled_wire(wire);
     return true;
 }
 
@@ -94,7 +129,7 @@ bool two_party_server(sock_t socket, uint8_t *session_key)
 {
     // Receive public key from the client
     uint8_t public_key[KEY_LEN] = { 0 };
-    if (!xrecvall(socket, public_key, KEY_LEN)) {
+    if (!ke_rcv(socket, KEY_CLIENT_PUBLIC, public_key)) {
         log_fatal("failed to receive public key from client");
         return false;
     }
@@ -107,7 +142,7 @@ bool two_party_server(sock_t socket, uint8_t *session_key)
     uint8_t server_public_key[KEY_LEN] = { 0 };
     point_q(secret_key, server_public_key, NULL);
 
-    if (!xsendall(socket, server_public_key, KEY_LEN)) {
+    if (!ke_snd(socket, KEY_SERVER_PUBLIC, server_public_key)) {
         log_fatal("did not send full key length");
         return false;
     }
@@ -116,50 +151,44 @@ bool two_party_server(sock_t socket, uint8_t *session_key)
     point_kx(shared_secret, secret_key, public_key);
 
     size_t len = KEY_LEN;
-    wire_t *wire = init_wire(session_key, TYPE_TEXT, &len);
-    encrypt_wire(wire, shared_secret);
-    if (!xsendall(socket, wire, len)) {
-        log_fatal("failed to send session key to client");
-        return false;
-    }
+    session_key_t sk;
+    memcpy(&sk, session_key, sizeof(session_key_t));
+    wire_t *wire = init_wire_from_session_key(&sk);
 
+    xhexdump(wire, len);
+    bool ok = transmit_cabled_wire(socket, shared_secret, wire);
+    if (!ok) {
+        log_fatal("failed to send session key to client");
+    }
     xfree(wire);
-    return true;
+    return ok;
 }
 
-static bool send_ctrl_key(sock_t *sockets, size_t count, uint8_t *ctrl_key)
+
+static bool server_send_ctrl_key(sock_t *sockets, size_t count, uint8_t *ctrl_key)
 {
-    ctrl_msg_t ctrl_message;
-    size_t len = sizeof(ctrl_msg_t);
-
-    memset(&ctrl_message, 0, len);
-
-    wire_set_ctrl_msg_type(&ctrl_message, CTRL_DHKE);
-    wire_set_ctrl_msg_args(&ctrl_message, count - 1);
-
     uint8_t renewed_key[32] = { 0 };
     if (xgetrandom(renewed_key, KEY_LEN) < 0) {
         return false;
     }
-    wire_set_ctrl_msg_key(&ctrl_message, renewed_key);
 
-    wire_t *wire = init_wire(&ctrl_message, TYPE_CTRL, &len);
-    encrypt_wire(wire, ctrl_key);
+    cable_t *cable = init_ctrl_key_cable(count - 1, renewed_key, ctrl_key);
+    size_t len = cable_get_total_len(cable);
 
-    // Update key
     memcpy(ctrl_key, renewed_key, KEY_LEN);
 
+    bool ok = true;
     for (size_t i = 1; i <= count; i++) {
         log_trace("sending control key to socket %zu", i);
-        if (!xsendall(sockets[i], wire, len)) {
+        if (!xsendall(sockets[i], cable, len)) {
             log_fatal("failed to send control key to socket %zu", i);
-            xfree(wire);
-            return false;
+            ok = false;
+            break;
         }
     }
 
-    xfree(wire);
-    return true;
+    xfree(cable);
+    return ok;
 }
 
 /*
@@ -196,7 +225,7 @@ static bool rotate_intermediates(sock_t *sockets, size_t count)
     for (size_t i = 1; i <= count; i++) {
         uint8_t intermediate_key[KEY_LEN] = { 0 };
         log_trace("receiving intermediate key from socket %zu", i);
-        if (!xrecvall(sockets[i], intermediate_key, KEY_LEN)) {
+        if (!ke_rcv(sockets[i], KEY_EX_INTERMEDIATE, intermediate_key)) {
             log_fatal("failed to receive intermediate key from socket %zu", i);
             return false;
         }
@@ -204,7 +233,7 @@ static bool rotate_intermediates(sock_t *sockets, size_t count)
         // Rotate right, skip server's socket
         const size_t next = (i == count) ? 1 : i + 1; 
         log_trace("sending intermediate key to socket %zu", next);
-        if (!xsendall(sockets[next], intermediate_key, KEY_LEN)) {
+        if (!ke_snd(sockets[next], KEY_EX_INTERMEDIATE, intermediate_key)) {
             log_fatal("failed to send intermediate key to socket %zu", next);
             return false;
         }
@@ -223,7 +252,7 @@ bool n_party_server(sock_t *sockets, size_t connection_count, uint8_t *ctrl_key)
     }
 
     log_trace("sending CTRL to signal start of sequence");
-    if (!send_ctrl_key(sockets, connection_count, ctrl_key)) {
+    if (!server_send_ctrl_key(sockets, connection_count, ctrl_key)) {
         log_fatal("failed to send control key");
         return false;
     }
@@ -252,7 +281,7 @@ bool n_party_client(sock_t socket, uint8_t *session_key, size_t rounds)
     point_q(secret_key, public_key, NULL);
 
     // Send our public key to the client on our right
-    if (!xsendall(socket, public_key, KEY_LEN)) {
+    if (!ke_snd(socket, KEY_EX_INTERMEDIATE, public_key)) {
         log_fatal("failed to send public key (round 0)");
         return false;
     }
@@ -262,7 +291,7 @@ bool n_party_client(sock_t socket, uint8_t *session_key, size_t rounds)
     for (size_t i = 0; i < rounds; i++) {
         log_trace("starting round %zu", i + 1);
         uint8_t intermediate_public[KEY_LEN] = { 0 };
-        if (!xrecvall(socket, intermediate_public, KEY_LEN)) {
+        if (!ke_rcv(socket, KEY_EX_INTERMEDIATE, intermediate_public)) {
             log_fatal("failed to receive intermediate key (round %zu)", i + 1);
             return false;
         }
@@ -276,7 +305,7 @@ bool n_party_client(sock_t socket, uint8_t *session_key, size_t rounds)
             log_debug("key exchange complete");
             return true;
         }
-        if (!xsendall(socket, shared_secret, KEY_LEN)) {
+        if (!ke_snd(socket, KEY_EX_INTERMEDIATE, shared_secret)) {
             log_fatal("failed to send intermediate key (round %zu)", i);
             return false;
         }

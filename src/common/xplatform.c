@@ -254,7 +254,7 @@ ssize_t xgetrandom(void *dst, size_t len)
     if (!fread(dst, len, 1, random)) {
         return -1;
     }
-    (void)fclose(random);
+    fclose(random);
     return len;
 #elif _WIN32
     return !RtlGenRandom(dst, len) ? -1 : (ssize_t)len;
@@ -269,6 +269,42 @@ int xgetlogin(char *username, size_t len)
     LPDWORD length = (LPDWORD)&len;
     return GetUserName(username, length) ? 0 : -1;
 #endif
+}
+
+mode_t xgetmode(const char *filename)
+{
+#if __unix__ || __APPLE__
+    struct stat st;
+    stat(filename, &st);
+#elif _WIN32
+    struct _stat st;
+    _stat(filename, &st);
+#endif
+    return st.st_mode;
+}
+
+gid_t xgetgid(const char *filename)
+{
+#if __unix__ || __APPLE__
+    struct stat st;
+    stat(filename, &st);
+#elif _WIN32
+    struct _stat st;
+    _stat(filename, &st);
+#endif
+    return st.st_gid;
+}
+
+uid_t xgetuid(const char *filename)
+{
+#if __unix__ || __APPLE__
+    struct stat st;
+    stat(filename, &st);
+#elif _WIN32
+    struct _stat st;
+    _stat(filename, &st);
+#endif
+    return st.st_uid;
 }
 
 size_t xfilesize(const char *filename)
@@ -289,6 +325,16 @@ size_t xfilesize(const char *filename)
 #endif
 }
 
+bool xchmod(const char *filename, mode_t mode)
+{
+#if __unix__ || __APPLE__
+    return !chmod(filename, mode & 0777);
+#elif _WIN32
+    int pmode = mode & (_S_IREAD | _S_IWRITE);
+    return !_chmod(filename, pmode);
+#endif
+}
+
 /**
  * @section malloc / calloc wrapper to lessen Windows runtime dependency
  */
@@ -301,7 +347,6 @@ void *xmalloc(size_t len)
         exit(EXIT_FAILURE);
     }
     return mem;
-
 #elif _WIN32
     void *mem = HeapAlloc(GetProcessHeap(), 0, len);
     if (!mem) {

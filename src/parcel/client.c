@@ -10,103 +10,74 @@
  */
 
 #include "client.h"
+#include "cable.h"
+#include "log.h"
+#include "wire-stat.h"
+#include "xplatform.h"
+#include <stddef.h>
+#include <stdio.h>
 
-void client_get_keys(keys_t *dst, client_t *ctx)
+void client_get_keys(client_t *ctx, keys_t *out)
 {
     pthread_mutex_lock(&ctx->lock);
-    memcpy(dst, &ctx->keys, sizeof(*dst));
+    memcpy(out, &ctx->keys, sizeof(keys_t));
     pthread_mutex_unlock(&ctx->lock);
 }
 
-void client_get_user(char *dst, client_t *ctx)
+void client_set_keys(client_t *ctx, keys_t *keys)
 {
     pthread_mutex_lock(&ctx->lock);
-    memcpy(dst, ctx->username, sizeof(ctx->username));
+    memcpy(&ctx->keys, keys, sizeof(keys_t));
+    pthread_mutex_unlock(&ctx->lock);
+}
+
+void client_get_username(client_t *ctx, char *out)
+{
+    pthread_mutex_lock(&ctx->lock);
+    size_t len = strnlen(ctx->username, USERNAME_MAX_LENGTH - 1);
+    memcpy(out, ctx->username, len);
+    out[len] = '\0';
     pthread_mutex_unlock(&ctx->lock);
 }
 
 sock_t client_get_socket(client_t *ctx)
 {
-    sock_t s = 0;
     pthread_mutex_lock(&ctx->lock);
-    s = ctx->socket;
+    sock_t s = ctx->socket;
     pthread_mutex_unlock(&ctx->lock);
     return s;
 }
 
-void disp_username(const char *username)
+void disp_username(client_t *ctx)
 {
-    char msg_prefix[USERNAME_MAX_LENGTH + 3];
-    slice_t s = STATIC_SLICE(msg_prefix);
-    SLICE_APPEND_STR(&s, username);
-    SLICE_APPEND_CONST_STR(&s, ": ");
-    full_write(STDOUT_FILENO, s.data, s.len);
+    char username[USERNAME_MAX_LENGTH] = { 0 };
+    client_get_username(ctx, username);
+    fprintf(stdout, "%s: ", username);
     fflush(stdout);
-}
-
-static void get_prompt(slice_t *s, client_t *ctx)
-{
-    pthread_mutex_lock(&ctx->lock);
-    SLICE_APPEND_STR(s, ctx->username);
-    pthread_mutex_unlock(&ctx->lock);
-    SLICE_APPEND_CONST_STR(s, ": \0");
 }
 
 bool announce_connection(client_t *ctx)
 {
-    char user[USERNAME_MAX_LENGTH] = { 0 };
-    client_get_user(user, ctx);
-
-    keys_t keys = { 0 };
-    client_get_keys(&keys, ctx);
-    sock_t socket = client_get_socket(ctx);
-
-    stat_msg_t stat = { 0 };
-    wire_set_stat_msg_type(&stat, STAT_USER_CONNECT);
-    wire_set_stat_msg_user(&stat, user);
-
-    size_t len = sizeof(stat_msg_t);
-    wire_t *wire = init_wire(&stat, TYPE_STAT, &len);
-
-    encrypt_wire(wire, keys.session);
-
-    if (!xsendall(socket, wire, len)) {
-        xfree(wire);
-        return false;
+    wire_t *wire = client_init_stat_conn_wire(ctx, STAT_USER_CONNECT);
+    bool ok = transmit_wire(ctx, wire);
+    if (!ok) {
+        log_error("error sending wire via cable");
     }
     xfree(wire);
 
-    atomic_store(&ctx->conn_announced, true);
-    return true;
+    atomic_store(&ctx->conn_announced, ok);
+    return ok;
 }
 
 bool send_text_msg(client_t *ctx, void *data, size_t length)
 {
-    char user[USERNAME_MAX_LENGTH] = { 0 };
-    client_get_user(user, ctx);
-
-    keys_t keys = { 0 };
-    client_get_keys(&keys, ctx);
-
-    sock_t socket = client_get_socket(ctx);
-
-    size_t len = sizeof(text_msg_t) + length;
-    text_msg_t *text = xcalloc(len);
-    wire_set_text_msg_user(text, user);
-    wire_set_text_msg_data(text, data, length);
-
-    wire_t *wire = init_wire(text, TYPE_TEXT, &len);
-
-    encrypt_wire(wire, keys.session);
-
-    if (!xsendall(socket, wire, len)) {
-        xfree(text);
-        xfree(wire);
-        return false;
+    wire_t *wire = client_init_text_wire(ctx, data, length);
+    bool ok = transmit_wire(ctx, wire);
+    if (!ok) {
+        log_error("error sending wire via cable");
     }
-    xfree(text);
     xfree(wire);
-    return true;
+    return ok;
 }
 
 static bool is_cmd(const char *msg)
@@ -118,12 +89,8 @@ int send_thread(void *ctx)
 {
     client_t *client = ctx;
     for (;;) {
-        char prompt[USERNAME_MAX_LENGTH + 3];
-        slice_t s = STATIC_SLICE(prompt);
-        get_prompt(&s, client);
-
         size_t length = 0;
-        char *msg = xprompt((const char *)s.data, "text", &length); // xprompt() will never return null by design
+        char *msg = xprompt("> ", "text", &length); // xprompt() will never return null by design
 
         bool run = atomic_load(&client->keep_alive);
         if (!run) {
@@ -148,36 +115,17 @@ int send_thread(void *ctx)
 
 }
 
-static int recv_remaining(client_t *ctx, wire_t **wire, size_t bytes_recv, size_t remaining)
-{
-    size_t wire_size = bytes_recv + remaining;
-    *wire = xrealloc(*wire, wire_size);
-
-    wire_t *dst = *wire;
-    for (size_t i = 0; i < remaining;) {
-        ssize_t received = xrecv(ctx->socket, &dst->data[bytes_recv - sizeof(wire_t) + i], remaining - i, 0);
-        switch (received) {
-            case -1:
-                return -1;
-            default:
-                i += received;
-        }
-    }
-
-    return decrypt_wire(*wire, &wire_size, ctx->keys.session) ? -1 : 0;
-}
-
 wire_t *recv_new_wire(client_t *ctx, size_t *wire_size)
 {
-    wire_t *wire = new_wire();
-    const ssize_t bytes_recv = xrecv(ctx->socket, wire, RECV_MAX_BYTES, 0);
-
-    if (bytes_recv <= 0) {
-        return xfree(wire);
+    sock_t s = client_get_socket(ctx);
+    size_t len = 0;
+    cable_t *cable = recv_cable(s, &len);
+    if (cable) {
+        *wire_size = cable_get_payload_len(cable);
+        return (wire_t *)cable->data;
     }
-
-    *wire_size = bytes_recv;
-    return wire;
+    *wire_size = 0;
+    return NULL;
 }
 
 /**
@@ -191,20 +139,12 @@ wire_t *recv_new_wire(client_t *ctx, size_t *wire_size)
 static ssize_t decrypt_received_message(client_t *ctx, wire_t *wire, size_t bytes_recv)
 {
     size_t length = bytes_recv;
-    switch (decrypt_wire(wire, &length, ctx->keys.session)) {
+    switch (decrypt_wire(wire, length, ctx->keys.session)) {
         case WIRE_INVALID_KEY:
-            if (decrypt_wire(wire, &length, ctx->keys.ctrl)) {
+            if (decrypt_wire(wire, length, ctx->keys.ctrl)) {
                 log_fatal("received corrupted control key from server");
                 return -1;
             }
-            break;
-        case WIRE_PARTIAL:
-            log_debug("received %zu bytes but header specifies %zu bytes total", bytes_recv, length + bytes_recv);
-            if (recv_remaining(ctx, &wire, bytes_recv, length)) {
-                xalert("recv_remaining()\n");
-                return -1;
-            }
-            log_debug("received remainder of wire");
             break;
         case WIRE_CMAC_ERROR:
             log_fatal("CMAC error");
@@ -229,7 +169,7 @@ void *recv_thread(void *ctx)
                 atomic_store(&client->keep_alive, false);
                 xwarn("\n%s\n", "Daemon unexpectedly closed connection");
                 xwarn("%s\n", "Use '/q' to exit");
-                disp_username(client->username);
+                disp_username(client);
             }
             else {
                 xclose(client->socket);
@@ -238,13 +178,13 @@ void *recv_thread(void *ctx)
         }
 
         if (decrypt_received_message(client, wire, bytes_recv) < 0) {
-            xfree(wire);
-            break;
+            free_cabled_wire(wire);
+            continue;
         }
 
         if (proc_type(client, wire) < 0) {
-            xfree(wire);
-            break;
+            free_cabled_wire(wire);
+            continue;
         }
         xfree(wire);
 

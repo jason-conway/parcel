@@ -10,100 +10,109 @@
  */
 
 #include "client.h"
+#include "log.h"
+#include "wire-stat.h"
+#include "wire-text.h"
+#include "wire-file.h"
+#include "wire-ctrl.h"
+#include "wire.h"
+#include "xplatform.h"
+#include <stdio.h>
+
 
 static bool proc_file(void *data)
 {
-    file_msg_t *wire_file = data;
-    printf("\n\033[1mReceived file \"%s\"\033[0m\n", wire_file->filename);
-    char *save_path = xget_dir((char *)wire_file->filename);
-    if (!save_path) {
+    file_msg_t *fm = data;
+    char filename[FILENAME_MAX] = { 0 };
+    if (!file_msg_get_filename(fm, filename)) {
+        log_error("file_msg_t has empty filename field");
         return false;
     }
-    FILE *file = fopen(save_path, "wb");
-    if (!file) {
-        xwarn("> Could not open file \"%s\" for writing\n", wire_file->filename);
+    char sender[FILE_USERNAME_LENGTH] = { 0 };
+    if (file_msg_get_user(fm, sender)) {
+        log_error("file_msg_t has empty username field");
         return false;
     }
-    xfree(save_path);
-
-    const size_t file_data_size = wire_get_file_msg_size(wire_file);
-
-    if (fwrite(wire_file->data, 1, file_data_size, file) != file_data_size) {
-        xwarn("> Error writing to file \"%s\"\n", wire_file->filename);
-        (void)fclose(file);
-        xfree(wire_file->filename);
+    size_t filesize = file_msg_get_payload_length(fm);
+    printf("%s sent a file: %s (%zu kb)\n", sender, filename, filesize >> 10);
+    if (!file_msg_to_file(fm, xgethome())) {
+        log_error("error writing file to disk");
         return false;
     }
-
-    if (fflush(file) || fclose(file)) {
-        xwarn("> Error closing file \"%s\"\n", wire_file->filename);
-        return false;
-    }
-
     return true;
 }
-static void proc_stat(void *data)
-{   
-    uint8_t msg_slice[128];
-    slice_t s = STATIC_SLICE(msg_slice);
 
+static void proc_stat(void *data)
+{
     stat_msg_t *stat = data;
-    stat_msg_type_t type = wire_get_stat_msg_type(stat);
+    stat_msg_type_t type = stat_msg_get_type(stat);
+
+    char username[USERNAME_MAX_LENGTH] = { 0 };
+    if (!stat_msg_get_user(stat, username)) {
+        log_error("empty user field");
+        return;
+    }
+    const char *aux = stat_msg_get_data(stat);
+
+    static const char *msgs[] = {
+        [STAT_USER_CONNECT] = "\033[1m%s is online\033[0m\n",
+        [STAT_USER_DISCONNECT] = "\033[1m%s is offline\033[0m\n",
+        [STAT_USER_RENAME] = "\033[2K\r%s has changed their name to %s\033[0m\n"
+    };
+
     switch (type) {
         case STAT_USER_CONNECT:
-            SLICE_APPEND_CONST_STR(&s, "\033[1m");
-            SLICE_APPEND_STR(&s, (char *)stat->user);
-            SLICE_APPEND_CONST_STR(&s, " is online\033[0m\n\0");
-            break;
         case STAT_USER_DISCONNECT:
-            SLICE_APPEND_CONST_STR(&s, "\033[1m");
-            SLICE_APPEND_STR(&s, (char *)stat->user);
-            SLICE_APPEND_CONST_STR(&s, " is offline\033[0m\n\0");
+            fprintf(stdout, msgs[type], username);
             break;
         case STAT_USER_RENAME:
-            SLICE_APPEND_CONST_STR(&s, "\033[2K\r");
-            SLICE_APPEND_STR(&s, (char *)stat->user);
-            SLICE_APPEND_CONST_STR(&s, " has changed their username to ");
-            SLICE_APPEND_STR(&s, (char *)stat->data);
-            SLICE_APPEND_CONST_STR(&s, "\033[0m\n\0");
+            fprintf(stdout, msgs[type], username, aux);
+            break;
+        default:
             break;
     }
-    full_write(STDOUT_FILENO, s.data, s.len);
 }
 
 static void proc_text(void *data)
 {
     text_msg_t *text = data;
-
-    WRITE_CONST_STR(STDOUT_FILENO, "\033[2K\r");
-    WRITE_STR(STDOUT_FILENO, (const char *)text->user);
-    WRITE_CONST_STR(STDOUT_FILENO, ": ");
-    WRITE_STR(STDOUT_FILENO, (const char *)text->data);
-    WRITE_CONST_STR(STDOUT_FILENO, "\n");
+    text_msg_type_t type = text_msg_get_type(text);
+    if (type != TEXT_MSG_NORMAL) {
+        log_error("invalid type for text message");
+        return;
+    }
+    char username[USERNAME_MAX_LENGTH] = { 0 };
+    if (!text_msg_get_user(text, username)) {
+        log_error("empty user field");
+        return;
+    }
+    const char *aux = text_msg_get_data(text);
+    fprintf(stdout, "\033[2K\r%s: %s\n", username, aux);
 }
 
 static int proc_ctrl(client_t *ctx, void *data)
 {
     ctrl_msg_t *ctrl = data;
-    uint8_t session[32] = { 0 };
+    ctrl_msg_type_t type = ctrl_msg_get_type(ctrl);
 
-    switch (wire_get_ctrl_msg_type(ctrl)) {
-        case CTRL_ERROR:
-            return CTRL_ERROR;
-        case CTRL_EXIT:
-            break;
-        case CTRL_DHKE:
-            log_info("received DHKE ctrl msg");
-            if (!n_party_client(ctx->socket, session, wire_get_ctrl_msg_args(ctrl))) {
-                return DHKE_ERROR;
-            }
-            break;
+    uint8_t session[32] = { 0 };
+    if (type == CTRL_DHKE) {
+        log_info("received DHKE ctrl msg");
+        size_t rounds = ctrl_msg_get_cnt(ctrl);
+        log_debug("rounds: %zu", rounds);
+        sock_t s = client_get_socket(ctx);
+        if (!n_party_client(s, session, rounds)) {
+            return DHKE_ERROR;
+        }
     }
 
-    pthread_mutex_lock(&ctx->lock);
-        memcpy(ctx->keys.ctrl, ctrl->renewed_key, KEY_LEN);
-        memcpy(ctx->keys.session, session, KEY_LEN);
-    pthread_mutex_unlock(&ctx->lock);
+    const void *renewed_key = ctrl_msg_get_data(ctrl);
+
+    keys_t k = { 0 };
+    memcpy(&k.ctrl, renewed_key, KEY_LEN);
+    memcpy(&k.session, session, KEY_LEN);
+
+    client_set_keys(ctx, &k);
 
     bool announced = atomic_load(&ctx->conn_announced);
     if (!announced) {
@@ -121,10 +130,10 @@ static int proc_ctrl(client_t *ctx, void *data)
  * @param wire Wire to process
  * @return Returns a wire_type enum on success, otherwise -1
  */
-msg_type_t proc_type(client_t *ctx, wire_t *wire)
+wire_type_t proc_type(client_t *ctx, wire_t *wire)
 {
-    msg_type_t type = wire_get_msg_type(wire);
-    log_trace("msg_type: %d", (int)type);
+    wire_type_t type = wire_get_type(wire);
+    log_trace("wire_type: %d", (int)type);
     switch (type) {
         case TYPE_CTRL: // Forward wire along to proc_ctrl()
             switch (proc_ctrl(ctx, wire->data)) {
@@ -145,11 +154,11 @@ msg_type_t proc_type(client_t *ctx, wire_t *wire)
             break;
         case TYPE_TEXT:
             proc_text(wire->data);
-            disp_username(ctx->username);
+            disp_username(ctx);
             break;
         case TYPE_STAT:
             proc_stat(wire->data);
-            disp_username(ctx->username);
+            disp_username(ctx);
             break;
         default:
             return TYPE_ERROR;

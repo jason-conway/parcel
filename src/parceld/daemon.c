@@ -10,6 +10,9 @@
  */
 
 #include "daemon.h"
+#include "cable.h"
+#include "wire.h"
+#include <stddef.h>
 
 void catch_sigint(int sig)
 {
@@ -138,15 +141,16 @@ static int add_client(server_t *srv)
     return 0;
 }
 
-static bool transfer_message(server_t *srv, size_t sender_index, msg_t *msg)
+static bool transfer_message(server_t *srv, size_t sender_index, cable_t *cable)
 {
+    size_t len = cable_get_total_len(cable);
     for (size_t i = 1; i <= srv->sockets.nsfds; i++) {
         if (i == sender_index) {
             log_trace("skipping message orgin");
             continue;
         }
         log_trace("forwarding message to socket %zu", i);
-        if (!xsendall(srv->sockets.sfds[i], msg->data, msg->length)) {
+        if (!xsendall(srv->sockets.sfds[i], cable, len)) {
             return false;
         }
     }
@@ -170,43 +174,52 @@ static int disconnect_client(server_t *ctx, size_t client_index)
     return ret;
 }
 
-static bool recv_client(server_t *srv, size_t sender_index)
+bool daemon_handle_disconnect(server_t *srv, size_t client_id, bool clean)
 {
-    msg_t msg = { 0 };
-
-    if ((msg.length = xrecv(srv->sockets.sfds[sender_index], msg.data, RECV_MAX_BYTES, 0)) <= 0) {
-        if (msg.length) {
-            log_warn("client %zu disconnected improperly", sender_index);
-        }
-        else {
-            char address[INET_ADDRSTRLEN] = { 0 };
-            in_port_t port;
-            if (!xgetpeeraddr(srv->sockets.sfds[sender_index], address, &port)) {
-                log_error("unable to determine IP and port of client %zu, despite proper disconnect", sender_index);
-            }
-            log_info("connection from %s:%d has ended", address, port);
-        }
-
-        if (disconnect_client(srv, sender_index)) {
-            log_error("error closing socket");
-            return false;
-        }
-
-        log_info("active connections: %zu", srv->sockets.nsfds);
-
-        if (!n_party_server(srv->sockets.sfds, srv->sockets.nsfds, srv->server_key)) {
-            log_fatal("catastrophic key exchange");
-            return false;
-        }
+    if (!clean) {
+        log_warn("client %zu disconnected improperly", client_id);
     }
     else {
-        if (!transfer_message(srv, sender_index, &msg)) {
-            log_error("error broadcasting message from slot %zu", sender_index);
-            return false;
+        char address[INET_ADDRSTRLEN] = { 0 };
+        in_port_t port;
+        if (!xgetpeeraddr(srv->sockets.sfds[client_id], address, &port)) {
+            log_warn("unable to determine IP and port of client %zu, despite proper disconnect", client_id);
         }
-        log_debug("message fanout from slot %zu complete", sender_index);
+        log_info("connection from %s port %d ended", address, port);
     }
 
+    if (disconnect_client(srv, client_id)) {
+        log_error("error closing socket");
+        return false;
+    }
+    log_info("active connections: %zu", srv->sockets.nsfds);
+    if (!n_party_server(srv->sockets.sfds, srv->sockets.nsfds, srv->server_key)) {
+        log_fatal("catastrophic key exchange");
+        return false;
+    }
+    return true;
+}
+
+static bool recv_client(server_t *srv, size_t sender_index)
+{
+    cable_t *cable = new_cable();
+    ssize_t ret = xrecv(srv->sockets.sfds[sender_index], cable, sizeof(cable_header_t), 0);
+    if (ret <= 0) {
+        xfree(cable);
+        return daemon_handle_disconnect(srv, sender_index, ret == 0);
+    }
+
+    size_t len = cable_recv_data(srv->sockets.sfds[sender_index], &cable);
+    if (!len) {
+        xfree(cable);
+        return false;
+    }
+
+    if (!transfer_message(srv, sender_index, cable)) {
+        log_error("error broadcasting message from slot %zu", sender_index);
+        return false;
+    }
+    log_debug("message fanout from slot %zu complete", sender_index);
     return true;
 }
 

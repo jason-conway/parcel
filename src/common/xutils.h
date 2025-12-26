@@ -93,6 +93,10 @@ char *_xstrcat(const char **strs, size_t count);
  */
 size_t xbasename(const char *path, char *filename);
 
+bool xfiletype(const char *filename);
+
+const char *xconstbasename(const char *path);
+
 bool xfexists(const char *filename);
 
 /**

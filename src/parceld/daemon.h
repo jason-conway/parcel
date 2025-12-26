@@ -17,6 +17,7 @@
 #include "key-exchange.h"
 #include "sha256.h"
 #include "wire.h"
+#include "cable.h"
 
 enum ParceldConstants {
 	SOCK_LEN = sizeof(struct sockaddr),
@@ -44,11 +45,6 @@ typedef struct server_t {
 		size_t max_nsfds; // Maximum number of socket file descriptors
 	} sockets;
 } server_t;
-
-typedef struct msg_t {
-	uint8_t data[RECV_MAX_BYTES];
-	ssize_t length;
-} msg_t;
 
 bool init_daemon(server_t *ctx);
 

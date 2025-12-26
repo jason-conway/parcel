@@ -13,14 +13,17 @@
 
 #include "console.h"
 #include "key-exchange.h"
+#include "wire-file.h"
+#include "wire-stat.h"
 #include "wire.h"
 #include "x25519.h"
 #include "slice.h"
 #include "xplatform.h"
 #include "xutils.h"
 #include <assert.h>
+
 enum ParcelConstants {
-    USERNAME_MAX_LENGTH = 32,
+    USERNAME_MAX_LENGTH = 64,
     PORT_MAX_LENGTH = 6,
     ADDRESS_MAX_LENGTH = 32
 };
@@ -66,7 +69,7 @@ struct client_internal {
 typedef struct client_t client_t;
 struct client_t {
     sock_t socket;
-    char username[32];
+    char username[USERNAME_MAX_LENGTH];
     keys_t keys;
     atomic_bool conn_announced;
     atomic_bool keep_alive;
@@ -81,9 +84,9 @@ bool exec_cmd(client_t *ctx, char *message);
 
 void prompt_args(char *address, char *username);
 
-msg_type_t proc_type(client_t *ctx, wire_t *wire);
+wire_type_t proc_type(client_t *ctx, wire_t *wire);
 
-void disp_username(const char *username);
+void disp_username(client_t *ctx);
 
 bool cmd_exit(client_t *ctx);
 
@@ -94,5 +97,13 @@ int send_thread(void *ctx);
 bool send_text_msg(client_t *client, void *data, size_t length);
 
 sock_t client_get_socket(client_t *ctx);
-void client_get_user(char *dst, client_t *ctx);
-void client_get_keys(keys_t *dst, client_t *ctx);
+void client_get_username(client_t *ctx, char *out);
+
+void client_get_keys(client_t *ctx, keys_t *out);
+void client_set_keys(client_t *ctx, keys_t *keys);
+
+bool transmit_wire(client_t *client, wire_t *wire);
+wire_t *client_init_text_wire(client_t *client, const void *data, size_t len);
+wire_t *client_init_stat_conn_wire(client_t *client, stat_msg_type_t type);
+wire_t *client_init_stat_rename_wire(client_t *client, const char *new);
+wire_t *client_init_file_wire(client_t *client, const char *path);

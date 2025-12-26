@@ -10,45 +10,31 @@
  */
 
 #include "client.h"
+#include "wire-stat.h"
+#include <stdatomic.h>
 
 static bool cmd_username(client_t *ctx)
 {
     size_t new_username_length = USERNAME_MAX_LENGTH;
     char *new_username = xprompt("> New username: ", "username", &new_username_length);
     
-    stat_msg_t stat = { 0 };
-    wire_set_stat_msg_type(&stat, STAT_USER_RENAME);
-    wire_set_stat_msg_data(&stat, new_username);
-
-    pthread_mutex_lock(&ctx->lock);
-    wire_set_stat_msg_user(&stat, ctx->username);
-    pthread_mutex_unlock(&ctx->lock);
-
-    size_t len = sizeof(stat_msg_t);
-    wire_t *wire = init_wire(&stat, TYPE_STAT, &len);
-    
-    keys_t keys = { 0 };
-    client_get_keys(&keys, ctx);
-    sock_t socket = client_get_socket(ctx);
-
-    encrypt_wire(wire, keys.session);
-
-    if (!xsendall(socket, wire, len)) {
-        xfree(wire);
-        xfree(new_username);
-        return false;
+    wire_t *wire = client_init_stat_rename_wire(ctx, new_username);
+    bool ok = transmit_wire(ctx, wire);
+    if (!ok) {
+        log_error("error sending wire via cable");
     }
-
     xfree(wire);
+
     pthread_mutex_lock(&ctx->lock);
-    memset(&ctx->username, 0, USERNAME_MAX_LENGTH);
-    memcpy(&ctx->username, new_username, new_username_length);
+        memset(&ctx->username, 0, USERNAME_MAX_LENGTH);
+        memcpy(&ctx->username, new_username, new_username_length);
     pthread_mutex_unlock(&ctx->lock);
+    
     xfree(new_username);
-    return true;
+    return ok;
 }
 
-size_t file_msg_from_file(file_msg_t **f)
+static bool cmd_send_file(client_t *ctx)
 {
     char *path = xprompt("> File path: ", "path", (size_t[]) { FILE_PATH_MAX_LENGTH });
 
@@ -57,83 +43,25 @@ size_t file_msg_from_file(file_msg_t **f)
         xfree(path);
         return 0;
     }
-
-    size_t size = xfilesize(path);
-    if (!size) {
-        xwarn("> Unable to determine size of file \"%s\"\n", path);
-        xfree(path);
-        return 0;
+    wire_t *wire = client_init_file_wire(ctx, path);
+    bool ok = transmit_wire(ctx, wire);
+    if (!ok) {
+        log_error("error sending wire via cable");
     }
-
-    if (size > FILE_DATA_MAX_SIZE) {
-        const size_t overage = size - FILE_DATA_MAX_SIZE;
-        xwarn("> File \"%s\" is %zu bytes over the maximum size of %d bytes\n", path, overage, FILE_DATA_MAX_SIZE);
-        xfree(path);
-        return 0;
-    }
-
-    FILE *file = fopen(path, "rb");
-    if (!file) {
-        xwarn("> Could not open file \"%s\" for reading\n", path);
-        xfree(path);
-        return 0;
-    }
-
-    size_t len = size + sizeof(file_msg_t);
-    *f = xcalloc(len);
-
-    wire_set_file_msg_size(*f, size);
-    xbasename(path, (char *)((*f)->filename));
-    xfree(path);
-
-    if (fread((*f)->data, 1, size, file) != size) {
-        xwarn("> Error reading contents of file\n");
-        fclose(file);
-        xfree(*f);
-        *f = NULL;
-        return 0;
-    }
-    fclose(file);
-    return len;
-}
-
-// TODO: This should not be fatal
-static bool cmd_send_file(client_t *ctx)
-{
-    file_msg_t *f = NULL;
-    size_t len = file_msg_from_file(&f);
-    if (!len) {
-        return false;
-    }
-
-    wire_t *wire = init_wire(f, TYPE_FILE, &len);
-
-    keys_t keys = { 0 };
-    client_get_keys(&keys, ctx);
-    sock_t socket = client_get_socket(ctx);
-
-    encrypt_wire(wire, keys.session);
-    if (!xsendall(socket, wire, len)) {
-        xfree(f);
-        xfree(wire);
-        return false;
-    }
-
-    xfree(f);
     xfree(wire);
-
-    return true;
+    xfree(path);
+    return ok;
 }
 
 static void cmd_print_enc_info(client_t *ctx)
 {
     keys_t keys = { 0 };
-    client_get_keys(&keys, ctx);
+    client_get_keys(ctx, &keys);
     
-    printf("Session Key: ");
+    fprintf(stdout, "Session Key: ");
     fflush(stdout);
     xmemprint(keys.session, KEY_LEN);
-    printf("Control Key: ");
+    fprintf(stdout, "Control Key: ");
     fflush(stdout);
     xmemprint(keys.ctrl, KEY_LEN);
 }
@@ -150,30 +78,16 @@ static void cmd_not_found(char *message)
 
 bool cmd_exit(client_t *ctx)
 {
-    stat_msg_t stat = { 0 };
-    wire_set_stat_msg_type(&stat, STAT_USER_DISCONNECT);
-    
-    pthread_mutex_lock(&ctx->lock);
-    wire_set_stat_msg_user(&stat, ctx->username);
-    pthread_mutex_unlock(&ctx->lock);
-
-    size_t len = sizeof(stat_msg_t);
-    wire_t *wire = init_wire(&stat, TYPE_STAT, &len);
-    
-    keys_t keys = { 0 };
-    client_get_keys(&keys, ctx);
-    sock_t socket = client_get_socket(ctx);
-
-    encrypt_wire(wire, keys.session);
-
-    if (!xsendall(socket, wire, len)) {
-        xfree(wire);
-        return false;
+    wire_t *wire = client_init_stat_conn_wire(ctx, STAT_USER_DISCONNECT);
+    bool ok = transmit_wire(ctx, wire);
+    if (!ok) {
+        log_error("error sending wire via cable");
     }
     xfree(wire);
-    shutdown(socket, SHUT_RDWR);
+
+    shutdown(ctx->socket, SHUT_RDWR);
     atomic_store(&ctx->keep_alive, false);
-    return true;
+    return ok;
 }
 
 static void cmd_list(void)
