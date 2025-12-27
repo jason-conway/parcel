@@ -165,49 +165,95 @@ Commands are interactive only, no need to supply arguments.
 
 ## Wire Format
 
-The wire consists of six sections: mac, lac, iv, length, type, and data.
+### Cable Framing Layer
 
-`mac` contains the 16-byte MAC of the IV, length, and data sections.
+All wire messages are encapsulated in a cable structure for transmission between
+client and daemon. The cable provides a framing layer that allows the receiver
+to know exactly how much data to expect.
 
-`lac` contains the 16-byte MAC of `length` only.
+The cable structure consists of two components:
 
-`iv` contains the 16-byte Initialization Vector. Required for ciper block
-chaining.
+`magic` contains the 6-byte magic number `.cable` (0x2E 0x63 0x61 0x62 0x6C
+0x65) for validation.
 
-`iv` is sent as plaintext, as it needs only to be random- not secret.
+`length` contains the 8-byte total length of the cable (including the 14-byte
+header and the entire wire payload).
 
-`header` contains two 8-byte fields: `len` and `type`. `len` is the number of
-unpadded bytes in `data`, while `type` indicates how the data in `data` should
-be handled.
+The complete transmission format is:
+
+```u
+[magic (6 bytes) | length (8 bytes) | wire (variable)]
+```
+
+### Wire Structure
+
+The wire consists of an authentication section, header, and data payload.
+
+**Authentication Section (48 bytes):**
+
+`mac_outer` contains the 16-byte MAC of the entire wire (inner MAC, IV, header,
+and data sections).
+
+`mac_inner` contains the 16-byte MAC of the wire header only, preventing length
+oracle attacks.
+
+`iv` contains the 16-byte Initialization Vector required for cipher block
+chaining. Sent as plaintext, as it needs only to be random- not secret.
+
+**Header (16 bytes):**
+
+`magic` contains the 6-byte magic number "rewire" (0x72 0x65 0x77 0x69 0x72
+0x65).
+
+`wire_len` contains the 8-byte total length of the entire wire.
+
+`alignment` is a 1-byte field indicating padding bytes added to align data with
+the AES block size.
+
+`type` is a 1-byte field indicating the message type (see Wire Types below).
+
+**Data:**
 
 `data` contains one or more 16-byte chunks of encrypted data.
 
+The complete wire structure is:
+
+```u
+[mac_outer (16) | mac_inner (16) | iv (16) | magic (6) | wire_len (8) | alignment (1) | type (1) | data (variable)]
+```
+
 ### Wire Types
 
-The possible message types are `TYPE_TEXT`, `TYPE_FILE`, `TYPE_STAT` and
-`TYPE_CTRL`.
-
-#### `TYPE_STAT`
-
-Automatically sent by client
+The following message types are defined:
 
 #### `TYPE_TEXT`
 
-The parcel client can send messages of type `TYPE_TEXT` and `TYPE_FILE`.
+Standard text messages sent between clients. Contains UTF-8 encoded chat messages.
 
-Only the parcel daemon can send `TYPE_CTRL`, which are used to trigger a GDHKE
-sequence to update the key.
+#### `TYPE_FILE`
 
-### Type-Specific Section Layout
+File transfer messages. The `data` section contains a `wire_file_message` struct
+with the filename, file size, and file data.
 
-#### TYPE_CTRL
+#### `TYPE_STAT`
 
-When a message has the type `TYPE_CTRL`, the `data` section will contain a
-populated `wire_ctrl_message` struct- containing a control function, function
-arguments, and the renewed control key.
+Status messages automatically sent by clients to inform others of connection
+state changes (join, leave, username changes).
 
-#### TYPE_FILE
+#### `TYPE_CTRL`
 
-When a message has the type `TYPE_FILE`, the `data` section will contain a
-populated `wire_file_message` struct- containing the filename, the file size,
-and the file data.
+Control messages sent only by the daemon to trigger group key exchange operations.
+The `data` section contains a `wire_ctrl_message` struct with a control function,
+function arguments, and the renewed control key. These messages trigger a GDHKE
+(Group Diffie-Hellman Key Exchange) sequence to update session keys.
+
+#### `TYPE_SESSION_KEY`
+
+Session key distribution messages used during the multi-party key exchange
+protocol. Contains public keys or derived key material for establishing the
+shared session key.
+
+#### `TYPE_NONE` and `TYPE_ERROR`
+
+Internal types used for initialization and error handling. Not transmitted over
+the network.
