@@ -1,9 +1,10 @@
 .DS_Store
+compile_commands.json
+
 build/*
 bin/*
 .vscode
 .cache/
-
 etc/resources/*.res
 etc/utf8/EastAsianWidth.txt
 etc/utf8/UnicodeData.txt
