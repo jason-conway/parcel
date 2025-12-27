@@ -29,7 +29,7 @@ bool init_daemon(server_t *ctx)
         return false;
     }
 
-    ctx->sockets.sfds = xcalloc(sizeof(sock_t) * ctx->sockets.max_nsfds);
+    memset(&ctx->sockets, 0, sizeof(ctx->sockets));
 
     struct addrinfo hints = {
         .ai_family = AF_INET,
@@ -88,7 +88,7 @@ bool init_daemon(server_t *ctx)
 // Return `i` such that `srv`->sockets[i] == `socket`
 static size_t socket_index(server_t *srv, sock_t socket)
 {
-    for (size_t i = 1; i <= srv->sockets.max_nsfds; i++) {
+    for (size_t i = 1; i <= countof(srv->sockets.sfds); i++) {
         if (srv->sockets.sfds[i] == socket) {
             log_trace("got socket index %zu", i);
             return i;
@@ -107,7 +107,7 @@ static int add_client(server_t *srv)
         return -1;
     }
 
-    if (srv->sockets.nsfds + 1 == srv->sockets.max_nsfds) {
+    if (srv->sockets.nsfds + 1 == countof(srv->sockets.sfds)) {
         log_warn("rejecting new connection");
         return 1;
     }
@@ -125,7 +125,7 @@ static int add_client(server_t *srv)
 
     // Copy new connection's socket to the next free slot
     log_debug("adding socket to empty slot");
-    for (size_t i = 1; i < srv->sockets.max_nsfds; i++) {
+    for (size_t i = 1; i < countof(srv->sockets.sfds); i++) {
         log_trace("slot[%zu]: %s", i, !srv->sockets.sfds[i] ? "free" : "in use");
         if (!srv->sockets.sfds[i]) {
             srv->sockets.sfds[i] = new_client;
@@ -135,9 +135,17 @@ static int add_client(server_t *srv)
     }
 
     if (!two_party_server(new_client, srv->server_key)) {
+        log_error("two-party key exchange with new client failed");
         return -1;
     }
 
+    if (srv->sockets.nsfds > 1) {
+        log_debug("connection added - starting key regeneration");
+        if (!n_party_server(srv->sockets.sfds, srv->sockets.nsfds, srv->server_key)) {
+            log_fatal("key regeneration failure");
+            return -1;
+        }
+    }
     return 0;
 }
 
@@ -206,6 +214,7 @@ static bool recv_client(server_t *srv, size_t sender_index)
     ssize_t ret = xrecv(srv->sockets.sfds[sender_index], cable, sizeof(cable_header_t), 0);
     if (ret <= 0) {
         xfree(cable);
+        log_trace("socket %zu disconnected", sender_index);
         return daemon_handle_disconnect(srv, sender_index, ret == 0);
     }
 
@@ -214,7 +223,7 @@ static bool recv_client(server_t *srv, size_t sender_index)
         xfree(cable);
         return false;
     }
-
+    log_trace("received %zu byte cable from slot %zu", len, sender_index);
     if (!transfer_message(srv, sender_index, cable)) {
         log_error("error broadcasting message from slot %zu", sender_index);
         return false;
@@ -228,14 +237,14 @@ bool display_daemon_info(server_t *ctx)
     const char header[] = {
         "\033[32;1m===  parceld " STR(PARCEL_VERSION) "  ===\033[0m\n"
         "\033[1mMaximum active connections:\033[0m\n"
-        "=> %zu\n"
+        "=> " STR(FD_SETSIZE) "\n"
         "\033[1mLocally accessible at:\033[0m\n"
     };
         // "\033[1mPublicly accessible at:\033[0m\n"
         // "=> %s:%s\n"
 
     // char *public_ip = xgetpublicip();
-    fprintf(stdout, header, ctx->sockets.max_nsfds);
+    fprintf(stdout, "%s", header);
     // printf(header, ctx->sockets.max_nsfds, public_ip ? public_ip : "error", ctx->server_port);
     // xfree(public_ip);
 
@@ -275,11 +284,6 @@ int main_thread(void *ctx)
                             log_warn("incoming connection was rejected");
                             goto jmpout;
                         case 0:
-                            log_debug("connection added - starting key regeneration");
-                            if (!n_party_server(server->sockets.sfds, server->sockets.nsfds, server->server_key)) {
-                                log_fatal("key regeneration failure");
-                                return -1;
-                            }
                             log_debug("connection added successfully");
                             break;
                     }
