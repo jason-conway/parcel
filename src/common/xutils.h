@@ -40,11 +40,6 @@ enum style {
     UNDERLINE = '4'
 };
 
-// typedef struct slice_t {
-// 	char *data;
-// 	size_t len;
-// } slice_t;
-
 enum HTTP {
     RESPONSE_LENGTH = 4096
 };
@@ -99,6 +94,8 @@ const char *xconstbasename(const char *path);
 
 bool xfexists(const char *filename);
 
+bool xgetpublicip(char *ip);
+
 /**
  * @brief Send message of len bytes across multiple send() calls if required
  *
@@ -131,10 +128,6 @@ bool xrecvall(sock_t socket, void *data, size_t len);
 bool xstrrange(char *arg, long *larg, long min, long max);
 
 ptrdiff_t xgetopt(xgetopt_t *optctx, int argc, char **argv, const char *optstr);
-
-// slice_t *slice_append(slice_t *slice, const char *data, size_t len);
-
-// bool xgetpublicip(char *ip);
 
 size_t xutoa(uint32_t value, char *str);
 

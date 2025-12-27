@@ -11,6 +11,7 @@
 
 #include "xutils.h"
 #include "xplatform.h"
+#include "log.h"
 
 char *xstrdup(const char *str)
 {
@@ -303,118 +304,124 @@ bool full_write(int fd, const void *data, size_t len)
     return true;
 }
 
-#if 0
-static int http_request(slice_t *request)
+typedef struct req_rsp_t {
+    char *data;
+    size_t len;
+} req_rsp_t;
+
+static bool http_request(req_rsp_t *resp)
 {
     struct addrinfo hints = {
         .ai_family = AF_UNSPEC,
         .ai_socktype = SOCK_STREAM,
     };
 
-    struct addrinfo *host_info;
-    if (xgetaddrinfo("ipinfo.io", "80", &hints, &host_info)) {
+    struct addrinfo *host_info = NULL;
+    const char *addr = "ipinfo.io";
+    const char *port  = "80";
+    if (xgetaddrinfo(addr, port, &hints, &host_info)) {
+        log_error("unable to get addrinfo for %s:%s", addr, port);
         freeaddrinfo(host_info);
         return false;
     }
 
-    sock_t http_socket;
-    if (xsocket(&http_socket, host_info->ai_family, host_info->ai_socktype, host_info->ai_protocol) < 0) {
+    sock_t sock;
+    if (!xsocket(&sock, host_info->ai_family, host_info->ai_socktype, host_info->ai_protocol)) {
+        log_error("failed to create socket for %s:%s", addr, port);
         freeaddrinfo(host_info);
         return false;
     }
 
-    if (connect(http_socket, host_info->ai_addr, host_info->ai_addrlen)) {
-        xclose(http_socket);
+    if (connect(sock, host_info->ai_addr, host_info->ai_addrlen)) {
+        log_error("failed to connect to %s:%s", addr, port);
+        xclose(sock);
         return false;
     }
 
     freeaddrinfo(host_info);
+    log_debug("connected to %s:%s", addr, port);
 
     // https://ipinfo.io/developers#filtering-responses
-    static const char api_request[] = "GET /ip?token=$TOKEN HTTP/1.0\r\nHost: ipinfo.io\r\n\r\n";
-    if (xsendall(http_socket, api_request, sizeof(api_request))) {
-        xclose(http_socket);
+    static const char api[] = "GET /ip?token=$TOKEN HTTP/1.0\r\nHost: ipinfo.io\r\n\r\n";
+    if (!xsendall(sock, api, sizeof(api))) {
+        log_error("failed to send api request to %s:%s", addr, port);
+        xclose(sock);
         return false;
     }
 
     // Receive response
-    for (size_t i = 0; i < request->len;) {
-        ssize_t bytes_recv = 0;
-        if ((bytes_recv = xrecv(http_socket, request->data + i, request->len - i, 0)) <= 0) {
-            if (bytes_recv) {
-                xclose(http_socket);
-                return -1;
-            }
-            if (xclose(http_socket)) {
+    for (size_t i = 0; i < resp->len;) {
+        ssize_t r = 0;
+        if ((r = xrecv(sock, &resp->data[i], resp->len - i, 0)) <= 0) {
+            if (r) {
+                log_error("error receiving data from socket");
+                xclose(sock);
                 return false;
             }
-            request->len = i;
+            if (xclose(sock)) {
+                log_error("error closing socket");
+                return false;
+            }
+            resp->len = i;
             return true;
         }
         else {
-            i += bytes_recv;
+            i += r;
         }
     }
 
-    xclose(http_socket);
+    xclose(sock);
     return false;
 }
 
-static int http_extract_body(slice_t *request)
+static bool http_extract_body(req_rsp_t *r)
 {
-    char *pos_data = request->data;
-    for (size_t i = request->len;;) {
-        char *pos_linefeed = xmemchr(pos_data, '\n', i); // Pointer to the next linefeed
-        if (!pos_linefeed) {
+    char *s = r->data;
+    for (size_t i = r->len;;) {
+        char *lf = xmemchr(s, '\n', i); // Pointer to the next linefeed
+        if (!lf) {
             break; // No linefeeds left
         }
-
-        switch (pos_linefeed - pos_data) {
-            case 1:
-                if (*pos_data == '\r') { // \r\n
+        switch (lf - s) {
             case 0:
-                    request->len = (request->len - (pos_linefeed + 1 - request->data)) + 1; // Set to body length
-                    request->data = pos_linefeed + 1;                                       // Move to first body character
-                    return 0;
+                goto body;
+            case 1:
+                if (*s == '\r') { // \r\n
+            body:
+                    r->len = (r->len - (&lf[1] - r->data)) + 1; // Set to body length
+                    r->data = &lf[1];                           // Move to first body character
+                    return true;
                 }
                 // fallthrough
             default:
-                pos_data = pos_linefeed + 1;                   // Move data pointer to the character after '\n'
-                i = request->len - (pos_data - request->data); // Update remaining length
+                s = &lf[1];                 // Move data pointer to the character after '\n'
+                i = r->len - (s - r->data); // Update remaining length
         }
     }
-    return -1;
+    return false;
 }
 
 bool xgetpublicip(char *ip)
 {
-    char http_response[RESPONSE_LENGTH];
+    char data[RESPONSE_LENGTH] = { 0 };
+    req_rsp_t r = { data, RESPONSE_LENGTH };
 
-    slice_t request = { 
-        .type = SLICE_STATIC,
-        
-    };
-
-    if (http_request(&request)) {
-        xfree(http_response);
+    if (!http_request(&r)) {
         return false;
     }
-
-    if (http_extract_body(&request)) {
-        xfree(http_response);
+    if (!http_extract_body(&r)) {
         return false;
     }
-
+    memcpy(ip, r.data, r.len);
     return true;
 }
-#endif
+
 // Bare-minimum unsigned-int-to-string
 size_t xutoa(uint32_t value, char *str)
 {
     char ascii[11];
-    char *digit;
-
-    for (digit = &ascii[0]; value > 0; value /= 10) {
+    char *digit = &ascii[0];
+    for (; value > 0; value /= 10) {
         *digit++ = '0' + (char)(value % 10);
     }
     for (value = 0; digit != ascii;) {
@@ -427,8 +434,7 @@ size_t xutoa(uint32_t value, char *str)
 void *xmemchr(const void *src, int c, size_t len)
 {
     const unsigned char *s = src;
-    for (; len && *s != (unsigned char)c; s++, len--) {
-    };
+    for (; len && *s != (unsigned char)c; s++, len--);
     return len ? (void *)s : NULL;
 }
 
@@ -502,7 +508,7 @@ void xhexdump(const void *src, size_t len)
         }
 
         uint8_t line[16] = { 0 };
-        memcpy(line, mem + offset, line_len);
+        memcpy(line, &mem[offset], line_len);
 
         // Offset
         for (size_t i = 0; i < 8; i++) {
@@ -548,6 +554,6 @@ void xmemprint(const void *src, size_t len)
         if (i + 4 >= len) {
             hex[8] = '\n';
         }
-        xwrite(STDOUT_FILENO, hex, sizeof(hex));
+        fprintf(stdout, "%s", hex);
     }
 }

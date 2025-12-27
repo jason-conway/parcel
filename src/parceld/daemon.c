@@ -238,20 +238,19 @@ bool display_daemon_info(server_t *ctx)
         "\033[32;1m===  parceld " STR(PARCEL_VERSION) "  ===\033[0m\n"
         "\033[1mMaximum active connections:\033[0m\n"
         "=> " STR(FD_SETSIZE) "\n"
-        "\033[1mLocally accessible at:\033[0m\n"
     };
-        // "\033[1mPublicly accessible at:\033[0m\n"
-        // "=> %s:%s\n"
-
-    // char *public_ip = xgetpublicip();
     fprintf(stdout, "%s", header);
-    // printf(header, ctx->sockets.max_nsfds, public_ip ? public_ip : "error", ctx->server_port);
-    // xfree(public_ip);
 
+    fprintf(stdout, "\033[1mLocally accessible at:\033[0m\n");
     if (xgetifaddrs("=> ", ctx->server_port)) {
         log_warn("failed to obtain a list of local interfaces");
         return false;
     }
+
+    fprintf(stdout, "\033[1mPublicly accessible at:\033[0m\n");
+    char ip[INET_ADDRSTRLEN] = { 0 };
+    bool ok = xgetpublicip(ip);
+    fprintf(stdout, "=> %s:%s\n", ok ? ip : "error", ctx->server_port);
     fprintf(stdout, "\033[1mDaemon started...\033[0m\n");
     return true;
 }

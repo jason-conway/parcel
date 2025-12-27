@@ -11,6 +11,8 @@
 
 #include "slice.h"
 
+typedef bool (*slice_append_fn_t)(slice_t *, const void *, size_t);
+
 static bool slice_append_static(slice_t *s, const void *data, size_t len)
 {
     if (s->cap < s->len + len) {
@@ -38,8 +40,6 @@ static bool slice_append_dynamic(slice_t *s, const void *data, size_t len)
 
 bool slice_append(slice_t *s, const void *data, size_t len)
 {
-    if (s->dynamic) {
-        return slice_append_dynamic(s, data, len);
-    }
-    return slice_append_static(s, data, len);
+    slice_append_fn_t fns[] = { slice_append_static, slice_append_dynamic };
+    return fns[s->dynamic](s, data, len);
 }
