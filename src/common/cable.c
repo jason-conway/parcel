@@ -78,7 +78,6 @@ size_t cable_recv_data(sock_t sock, cable_t **cable)
 bool transmit_cabled_wire(sock_t sock, const uint8_t *key, wire_t *wire)
 {
     size_t len = wire_get_length(wire);
-    log_trace("transmitting cable containing %zu byte wire", len);
     encrypt_wire(wire, key);
     cable_t *cable = init_cable(wire, &len);
     bool ok = xsendall(sock, cable, len);

@@ -42,7 +42,7 @@ static bool proc_file(void *data)
     return true;
 }
 
-static void proc_stat(void *data)
+static bool proc_stat(void *data)
 {
     stat_msg_t *stat = data;
     stat_msg_type_t type = stat_msg_get_type(stat);
@@ -50,7 +50,7 @@ static void proc_stat(void *data)
     char username[USERNAME_MAX_LENGTH] = { 0 };
     if (!stat_msg_get_user(stat, username)) {
         log_error("empty user field");
-        return;
+        return false;
     }
     const char *aux = stat_msg_get_data(stat);
 
@@ -71,26 +71,28 @@ static void proc_stat(void *data)
         default:
             break;
     }
+    return true;
 }
 
-static void proc_text(void *data)
+static bool proc_text(void *data)
 {
     text_msg_t *text = data;
     text_msg_type_t type = text_msg_get_type(text);
     if (type != TEXT_MSG_NORMAL) {
         log_error("invalid type for text message");
-        return;
+        return false;
     }
     char username[USERNAME_MAX_LENGTH] = { 0 };
     if (!text_msg_get_user(text, username)) {
         log_error("empty user field");
-        return;
+        return false;
     }
     const char *aux = text_msg_get_data(text);
     fprintf(stdout, "\033[2K\r\033[90m[%s]\033[0m \033[0;33m➜\033[0m %s\n", username, aux);
+    return true;
 }
 
-static int proc_ctrl(client_t *ctx, void *data)
+static bool proc_ctrl(client_t *ctx, void *data)
 {
     ctrl_msg_t *ctrl = data;
     ctrl_msg_type_t type = ctrl_msg_get_type(ctrl);
@@ -102,7 +104,8 @@ static int proc_ctrl(client_t *ctx, void *data)
         log_debug("rounds: %zu", rounds);
         sock_t s = client_get_socket(ctx);
         if (!n_party_client(s, session, rounds)) {
-            return DHKE_ERROR;
+            log_fatal("n-party key exchange failure (%zu rounds)", rounds);
+            return false;
         }
     }
 
@@ -117,20 +120,14 @@ static int proc_ctrl(client_t *ctx, void *data)
     bool announced = atomic_load(&ctx->conn_announced);
     if (!announced) {
         if (!announce_connection(ctx)) {
-            return CTRL_ERROR;
+            log_fatal("failed to create or send STAT message");
+            return false;
         }
     }
-    return CTRL_DHKE;
+    return true;
 }
 
-/**
- * @brief Process a received and (successfully) decrypted wire
- *
- * @param ctx Client context
- * @param wire Wire to process
- * @return Returns a wire_type enum on success, otherwise -1
- */
-wire_type_t proc_type(client_t *ctx, wire_t *wire)
+bool handle_wire(client_t *ctx, wire_t *wire)
 {
     wire_type_t type = wire_get_type(wire);
     static const char *types[] = {
@@ -141,36 +138,26 @@ wire_type_t proc_type(client_t *ctx, wire_t *wire)
         [TYPE_STAT] = "TYPE_STAT",
         [TYPE_SESSION_KEY] = "TYPE_SESSION_KEY",
     };
-    log_trace("proc_type(%s)", types[type]);
+    log_trace("handle_wire(%s)", types[type]);
 
+    bool ok = true;
     switch (type) {
-        case TYPE_CTRL: // Forward wire along to proc_ctrl()
-            switch (proc_ctrl(ctx, wire->data)) {
-                case CTRL_EXIT:
-                    break;
-                case CTRL_DHKE:
-                    break;
-                case CTRL_ERROR:
-                    log_fatal("proc_ctrl()");
-                    return TYPE_ERROR;
-            }
+        case TYPE_CTRL:
+            ok = proc_ctrl(ctx, wire->data);
             break;
         case TYPE_FILE:
-            if (!proc_file(wire->data)) {
-                log_fatal("proc_file()");
-                return TYPE_ERROR;
-            }
+            ok = proc_file(wire->data);
             break;
         case TYPE_TEXT:
-            proc_text(wire->data);
-            redraw_prompt(ctx);
+            ok = proc_text(wire->data);
             break;
         case TYPE_STAT:
-            proc_stat(wire->data);
-            redraw_prompt(ctx);
+            ok = proc_stat(wire->data);
             break;
         default:
-            return TYPE_ERROR;
+            ok = false;
+            break;
     }
-    return type;
+    redraw_prompt(ctx);
+    return ok;
 }

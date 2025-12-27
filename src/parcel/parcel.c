@@ -35,6 +35,7 @@ static void usage(FILE *f)
 int main(int argc, char **argv)
 {
     signal(SIGINT, catch_sigint);
+    log_init(LOG_WARN);
 
     char address[ADDRESS_MAX_LENGTH];
     memset(address, 0, ADDRESS_MAX_LENGTH);

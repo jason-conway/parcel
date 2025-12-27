@@ -85,7 +85,7 @@ bool exec_cmd(client_t *ctx, char *message);
 
 void prompt_args(char *address, char *username);
 
-wire_type_t proc_type(client_t *ctx, wire_t *wire);
+bool handle_wire(client_t *ctx, wire_t *wire);
 
 void redraw_prompt(client_t *ctx);
 

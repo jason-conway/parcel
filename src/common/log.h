@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <time.h>
 #include <stdint.h>
+#include <pthread.h>
 
 /**
  * @brief Log severity levels
@@ -30,6 +31,8 @@ typedef struct logctx_t {
     int32_t line;
     loglvl_t level;
 } logctx_t;
+
+void log_init(loglvl_t lvl);
 
 /**
  * @brief Core logging function (use the macros below instead of calling directly)

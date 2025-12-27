@@ -245,33 +245,45 @@ bool encrypt_wire(wire_t *wire, const uint8_t *key)
     return true;
 }
 
-int decrypt_wire(wire_t *wire, size_t len, const uint8_t *key)
+bool decrypt_wire(wire_t *wire, size_t len, const uint8_t *key1, const uint8_t *key2)
 {
     aes128_t cipher = { 0 };
     aes128_t cmac = { 0 };
 
+    const uint8_t *key = key1;
+init:
     aes128_init(&cipher, wire->auth.iv, &key[CIPHER_OFFSET]);
     aes128_init_cmac(&cmac, &key[CMAC_OFFSET]);
 
     // Decrypt only the length
     if (!wire_verify_inner_mac(&cmac, wire)) {
-        log_warn("inner mac verification failure");
-        return WIRE_INVALID_KEY;
+        if (key == key1) {
+            if (!key2) {
+                log_fatal("inner mac verification failure");
+                return false;
+            }
+            log_trace("key1 inner mac verification failure, trying key2");
+            key = key2;
+            goto init;
+        }
+        log_fatal("inner mac verification failure");
+        log_fatal("session and ctrl keys out of sync");
+        return false;
     }
 
     header_t h = wire_decrypt_header(&cipher, wire);
     size_t wire_len = header_get_length(&h);
     if (len != wire_len) {
-        log_error("incomplete wire");
-        return WIRE_PARTIAL;
+        log_error("wire length (%zu bytes) doesn't match received length (%zu bytes)", wire_len, len);
+        return false;
     }
 
     size_t aligned_len = header_get_aligned_data_length(&h);
 
     // Verify MAC prior to decrypting in full
     if (!wire_verify_outer_mac(&cmac, wire, wire_len)) {
-        log_fatal("otter mac verification failed");
-        return WIRE_CMAC_ERROR;
+        log_fatal("outer mac verification failure");
+        return false;
     }
 
     wire_decrypt_data(&cipher, wire, aligned_len);
@@ -279,6 +291,5 @@ int decrypt_wire(wire_t *wire, size_t len, const uint8_t *key)
     // copy the decrypted header back into the wire
     wire_set_header(wire, &h);
 
-    log_trace("wire decrypted");
-    return WIRE_OK;
+    return true;
 }

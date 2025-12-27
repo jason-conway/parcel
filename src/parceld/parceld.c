@@ -24,6 +24,8 @@ static void usage(FILE *f)
 
 int main(int argc, char **argv)
 {
+    log_init(LOG_TRACE);
+
     server_t server = {
         .server_port = "2315",
         .max_queue = MAX_QUEUE,

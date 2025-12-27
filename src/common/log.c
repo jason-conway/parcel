@@ -4,6 +4,7 @@ typedef struct log_t {
     void *udata;
     loglvl_t level;
     bool quiet;
+    pthread_mutex_t lock;
 } log_t;
 
 static log_t log;
@@ -43,6 +44,12 @@ static const char *xbasename(const char *path)
     return s;
 }
 
+void log_init(loglvl_t lvl)
+{
+    pthread_mutex_init(&log.lock, NULL);
+    log.level = lvl;
+}
+
 void _log(loglvl_t level, const char *file, int32_t line, const char *fmt, ...)
 {
     logctx_t ev = {
@@ -51,11 +58,12 @@ void _log(loglvl_t level, const char *file, int32_t line, const char *fmt, ...)
         .line = line,
         .level = level,
     };
-
+    pthread_mutex_lock(&log.lock);
     if (!log.quiet && (int32_t)level >= (int32_t)log.level) {
         init_event(&ev, stderr);
         va_start(ev.ap, fmt);
         stdout_callback(&ev);
         va_end(ev.ap);
     }
+    pthread_mutex_unlock(&log.lock);
 }

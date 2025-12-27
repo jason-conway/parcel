@@ -125,44 +125,25 @@ int send_thread(void *ctx)
 
 }
 
-wire_t *recv_new_wire(client_t *ctx, size_t *wire_size)
+cable_t *client_recv_cable(client_t *ctx)
 {
     sock_t s = client_get_socket(ctx);
     size_t len = 0;
-    cable_t *cable = recv_cable(s, &len);
-    if (cable) {
-        *wire_size = cable_get_payload_len(cable);
-        return (wire_t *)cable->data;
-    }
-    *wire_size = 0;
-    return NULL;
+    return recv_cable(s, &len);
 }
 
-/**
- * @brief Decrypts an encrypted wire
- *
- * @param ctx Client context
- * @param wire Wire received
- * @param bytes_recv Number of bytes received
- * @return Returns length of the wire data section, negative on error
- */
-static ssize_t decrypt_received_message(client_t *ctx, wire_t *wire, size_t bytes_recv)
+static wire_t *decrypt_cabled_wire(client_t *ctx, cable_t *cable)
 {
-    size_t length = bytes_recv;
-    switch (decrypt_wire(wire, length, ctx->keys.session)) {
-        case WIRE_INVALID_KEY:
-            if (decrypt_wire(wire, length, ctx->keys.ctrl)) {
-                log_fatal("received corrupted control key from server");
-                return -1;
-            }
-            break;
-        case WIRE_CMAC_ERROR:
-            log_fatal("CMAC error");
-            return -1;
-        case WIRE_OK:
-            break;
+    size_t len = cable_get_payload_len(cable);
+    wire_t *wire = cable_get_data(cable);
+
+    keys_t keys = { 0 };
+    client_get_keys(ctx, &keys);
+    if (!decrypt_wire(wire, len, keys.session, keys.ctrl)) {
+        log_error("wire decryption error");
+        return NULL;
     }
-    return length; // All good
+    return wire;
 }
 
 void *recv_thread(void *ctx)
@@ -170,9 +151,8 @@ void *recv_thread(void *ctx)
     client_t *client = ctx;
 
     for (;;) {
-        size_t bytes_recv = 0;
-        wire_t *wire = recv_new_wire(client, &bytes_recv);
-        if (!wire) {
+        cable_t *cable = client_recv_cable(client);
+        if (!cable) {
             // TODO: cleanly exit without user interaction
             bool run = atomic_load(&client->keep_alive);
             if (run) {
@@ -187,15 +167,16 @@ void *recv_thread(void *ctx)
             }
         }
 
-        if (decrypt_received_message(client, wire, bytes_recv) < 0) {
-            free_cabled_wire(wire);
+        wire_t *wire = decrypt_cabled_wire(client, cable);
+        if (!wire) {
+            xfree(cable);
             continue;
         }
 
-        if (proc_type(client, wire) < 0) {
-            free_cabled_wire(wire);
-            continue;
+        if (!handle_wire(client, wire)) {
+            log_error("encountered error while handling wire");
         }
+
         free_cabled_wire(wire);
 
         nanosleep((struct timespec []) { [0] = { 0, 1000000} }, NULL);

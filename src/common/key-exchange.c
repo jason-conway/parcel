@@ -23,7 +23,7 @@ bool ke_snd(sock_t sock, key_type_t type, const uint8_t *key)
 {
     ke_t ke = { .type = (uint8_t)type };
     memcpy(ke.key, key, KEY_LEN);
-    xhexdump(&ke, sizeof(ke_t));
+    // xhexdump(&ke, sizeof(ke_t));
     return xsendall(sock, &ke, sizeof(ke_t));
 }
 
@@ -38,7 +38,7 @@ bool ke_rcv(sock_t sock, key_type_t type, uint8_t *key)
         log_fatal("invalid type");
         return false;
     }
-    xhexdump(&ke, sizeof(ke_t));
+    // xhexdump(&ke, sizeof(ke_t));
     memcpy(key, ke.key, KEY_LEN);
     return true;
 }
@@ -111,9 +111,9 @@ bool two_party_client(sock_t socket, uint8_t *ctrl_key)
 
     size_t wire_len = 0;
     wire_t *wire = get_cabled_wire(cable, &wire_len);
-    xhexdump(wire, wire_len);
+
     // Shared secret gets hashed in point_kx()
-    if (decrypt_wire(wire, wire_len, shared_secret)) {
+    if (!decrypt_wire(wire, wire_len, shared_secret, NULL)) {
         log_fatal("decryption failure");
         free_cabled_wire(wire);
         return false;
@@ -150,12 +150,10 @@ bool two_party_server(sock_t socket, uint8_t *session_key)
     uint8_t shared_secret[KEY_LEN] = { 0 };
     point_kx(shared_secret, secret_key, public_key);
 
-    size_t len = KEY_LEN;
     session_key_t sk;
     memcpy(&sk, session_key, sizeof(session_key_t));
     wire_t *wire = init_wire_from_session_key(&sk);
 
-    xhexdump(wire, len);
     bool ok = transmit_cabled_wire(socket, shared_secret, wire);
     if (!ok) {
         log_fatal("failed to send session key to client");

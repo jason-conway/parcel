@@ -83,18 +83,20 @@ enum SectionOffsets {
     WIRE_OFFSET_DATA      = offsetof(wire_t, data),
 };
 
-enum DecryptionStatus {
+typedef enum decrypt_status_t {
     WIRE_OK,
     WIRE_CMAC_ERROR,
     WIRE_INVALID_KEY,
     WIRE_PARTIAL,
-};
+} decrypt_status_t;
+
+
 
 wire_t *alloc_wire(void);
 wire_t *init_wire(wire_type_t type, const void *data, size_t *len);
 
 bool encrypt_wire(wire_t *wire, const uint8_t *key);
-int decrypt_wire(wire_t *wire, size_t len, const uint8_t *key);
+bool decrypt_wire(wire_t *wire, size_t len, const uint8_t *key1, const uint8_t *key2);
 
 wire_type_t wire_get_type(const wire_t *ctx);
 
