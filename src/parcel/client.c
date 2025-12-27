@@ -206,7 +206,7 @@ bool connect_server(client_t *client, const char *ip, const char *port)
 
     struct addrinfo *node = NULL;
     for (node = srv_addr; node; node = node->ai_next) {
-        if (xsocket(&client->socket, node->ai_family, node->ai_socktype, node->ai_protocol) < 0) {
+        if (!xsocket(&client->socket, node->ai_family, node->ai_socktype, node->ai_protocol)) {
             continue;
         }
         if (connect(client->socket, node->ai_addr, node->ai_addrlen)) {

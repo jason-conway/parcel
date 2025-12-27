@@ -50,8 +50,8 @@
         #define alloc_size(mem) malloc_usable_size(mem)
     #endif
 
-
     typedef int sock_t;
+    #define INVALID_SOCKET (-1)
     typedef struct termios console_t;
 #endif
 
@@ -82,7 +82,7 @@
     typedef DWORD console_t;
 #endif
 
-typedef unsigned int bitfield;
+typedef uint64_t bitfield;
 
 #ifndef PARCEL_VERSION
     #define PARCEL_VERSION 0.9.2
@@ -138,7 +138,7 @@ void *xrealloc(void *mem, size_t len);
 void *xfree(void *mem);
 
 
-int xsocket(sock_t *xsocket, int domain, int type, int protocol);
+bool xsocket(sock_t *xsocket, int domain, int type, int protocol);
 int xaccept(sock_t *connection_socket, sock_t listening_socket, struct sockaddr *address, socklen_t *len);
 
 ssize_t xsend(sock_t socket, const void *data, size_t len, int flags);

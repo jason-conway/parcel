@@ -58,20 +58,21 @@ int xaccept(sock_t *connection_socket, sock_t listening_socket, struct sockaddr 
 #endif
 }
 
-int xsocket(sock_t *xsocket, int domain, int type, int protocol)
+bool xsocket(sock_t *sock, int domain, int type, int protocol)
 {
 #if __unix__ || __APPLE__
-    *xsocket = socket(domain, type, protocol);
-    return *xsocket;
+    *sock = socket(domain, type, protocol);
+    return *sock >= 0;
 #elif _WIN32
     sock_t sd = socket(domain, type, protocol);
     if (sd == INVALID_SOCKET) {
-        return -1;
+        return false;
     }
-    *xsocket = sd;
-    return 0;
+    *sock = sd;
+    return true;
 #endif
 }
+
 
 int xstartup(void)
 {

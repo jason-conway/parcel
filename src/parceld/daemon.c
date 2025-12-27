@@ -45,7 +45,7 @@ bool init_daemon(server_t *ctx)
 
     struct addrinfo *node = NULL;
     for (node = ai; node; node = node->ai_next) {
-        if (xsocket(&ctx->sockets.sfds[0], node->ai_family, node->ai_socktype, node->ai_protocol) < 0) {
+        if (!xsocket(&ctx->sockets.sfds[0], node->ai_family, node->ai_socktype, node->ai_protocol)) {
             continue;
         }
         if (xsetsockopt(ctx->sockets.sfds[0], SOL_SOCKET, SO_REUSEADDR, (int32_t []){ 1 }, sizeof(int32_t)) < 0) {
