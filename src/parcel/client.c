@@ -48,11 +48,18 @@ sock_t client_get_socket(client_t *ctx)
     return s;
 }
 
-void disp_username(client_t *ctx)
+void fmt_prmpt(client_t *ctx, char *out)
 {
     char username[USERNAME_MAX_LENGTH] = { 0 };
     client_get_username(ctx, username);
-    fprintf(stdout, "%s: ", username);
+    snprintf(out, PROMPT_MAX_LENGTH, "\033[90m[%s]\033[0m \033[0;32m➜\033[0m ", username);
+}
+
+void redraw_prompt(client_t *ctx)
+{
+    static char prompt[PROMPT_MAX_LENGTH];
+    fmt_prmpt(ctx, prompt);
+    fprintf(stdout, "%s", prompt);
     fflush(stdout);
 }
 
@@ -90,7 +97,10 @@ int send_thread(void *ctx)
     client_t *client = ctx;
     for (;;) {
         size_t length = 0;
-        char *msg = xprompt("> ", "text", &length); // xprompt() will never return null by design
+
+        char prompt[PROMPT_MAX_LENGTH] = { 0 };
+        fmt_prmpt(ctx, prompt);
+        char *msg = xprompt(prompt, "text", &length); // xprompt() will never return null by design
 
         bool run = atomic_load(&client->keep_alive);
         if (!run) {
@@ -169,7 +179,7 @@ void *recv_thread(void *ctx)
                 atomic_store(&client->keep_alive, false);
                 xwarn("\n%s\n", "Daemon unexpectedly closed connection");
                 xwarn("%s\n", "Use '/q' to exit");
-                disp_username(client);
+                redraw_prompt(client);
             }
             else {
                 xclose(client->socket);
@@ -186,7 +196,7 @@ void *recv_thread(void *ctx)
             free_cabled_wire(wire);
             continue;
         }
-        xfree(wire);
+        free_cabled_wire(wire);
 
         nanosleep((struct timespec []) { [0] = { 0, 1000000} }, NULL);
     }

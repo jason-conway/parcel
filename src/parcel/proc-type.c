@@ -87,7 +87,7 @@ static void proc_text(void *data)
         return;
     }
     const char *aux = text_msg_get_data(text);
-    fprintf(stdout, "\033[2K\r%s: %s\n", username, aux);
+    fprintf(stdout, "\033[2K\r\033[90m[%s]\033[0m \033[0;33m➜\033[0m %s\n", username, aux);
 }
 
 static int proc_ctrl(client_t *ctx, void *data)
@@ -133,7 +133,16 @@ static int proc_ctrl(client_t *ctx, void *data)
 wire_type_t proc_type(client_t *ctx, wire_t *wire)
 {
     wire_type_t type = wire_get_type(wire);
-    log_trace("wire_type: %d", (int)type);
+    static const char *types[] = {
+        [TYPE_NONE] = "TYPE_NONE",
+        [TYPE_TEXT] = "TYPE_TEXT",
+        [TYPE_FILE] = "TYPE_FILE",
+        [TYPE_CTRL] = "TYPE_CTRL",
+        [TYPE_STAT] = "TYPE_STAT",
+        [TYPE_SESSION_KEY] = "TYPE_SESSION_KEY",
+    };
+    log_trace("proc_type(%s)", types[type]);
+
     switch (type) {
         case TYPE_CTRL: // Forward wire along to proc_ctrl()
             switch (proc_ctrl(ctx, wire->data)) {
@@ -154,11 +163,11 @@ wire_type_t proc_type(client_t *ctx, wire_t *wire)
             break;
         case TYPE_TEXT:
             proc_text(wire->data);
-            disp_username(ctx);
+            redraw_prompt(ctx);
             break;
         case TYPE_STAT:
             proc_stat(wire->data);
-            disp_username(ctx);
+            redraw_prompt(ctx);
             break;
         default:
             return TYPE_ERROR;

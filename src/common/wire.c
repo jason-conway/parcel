@@ -170,9 +170,23 @@ static void wire_set_data(wire_t *wire, const void *data, size_t len)
 // len is updated to the total wire length
 wire_t *init_wire(wire_type_t type, const void *data, size_t *len)
 {
+    static const char *types[] = {
+        [TYPE_NONE] = "TYPE_NONE",
+        [TYPE_TEXT] = "TYPE_TEXT",
+        [TYPE_FILE] = "TYPE_FILE",
+        [TYPE_CTRL] = "TYPE_CTRL",
+        [TYPE_STAT] = "TYPE_STAT",
+        [TYPE_SESSION_KEY] = "TYPE_SESSION_KEY",
+    };
+    log_trace("init_wire(%s)", types[type]);
+
     const size_t data_length = get_aligned_len(*len);
     const size_t alignment = data_length - *len;
     const size_t wire_length = sizeof(wire_t) + data_length;
+
+    log_trace("  payload length: %zu bytes (%zu bytes aligned)", *len, data_length);
+    log_trace("  padding required: %zu bytes", alignment);
+    log_trace("  total wire length: %zu bytes", wire_length);
 
     wire_t *wire = xcalloc(wire_length);
 
@@ -181,6 +195,7 @@ wire_t *init_wire(wire_type_t type, const void *data, size_t *len)
         return NULL;
     }
 
+    wire_set_magic(wire);
     wire_set_alignment(wire, alignment);
     wire_set_length(wire, wire_length);
     wire_set_type(wire, type);

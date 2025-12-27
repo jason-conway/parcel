@@ -71,18 +71,16 @@ size_t cable_recv_data(sock_t sock, cable_t **cable)
         return 0;
     }
     size_t len = cable_get_total_len(*cable);
-    log_info("got cable: %zu bytes", len);
+    log_trace("got cable: %zu bytes", len);
     return len;
 }
 
 bool transmit_cabled_wire(sock_t sock, const uint8_t *key, wire_t *wire)
 {
     size_t len = wire_get_length(wire);
-    log_info("transmitting cable containing %zu byte wire", len);
+    log_trace("transmitting cable containing %zu byte wire", len);
     encrypt_wire(wire, key);
     cable_t *cable = init_cable(wire, &len);
-    log_info("cable size: %zu", len);
-    xhexdump(cable, len);
     bool ok = xsendall(sock, cable, len);
     xfree(cable);
     return ok;
@@ -105,8 +103,7 @@ cable_t *recv_cable(sock_t sock, size_t *cable_length)
         return xfree(cable);
     }
     *cable_length = cable_get_total_len(cable);
-    log_info("got cable: %zu bytes", *cable_length);
-    xhexdump(cable, *cable_length);
+    log_trace("got cable: %zu bytes", *cable_length);
     return cable;
 }
 

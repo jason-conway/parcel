@@ -29,6 +29,7 @@ typedef enum wire_type_t {
     TYPE_SESSION_KEY
 } wire_type_t;
 
+
 typedef struct wire_auth_t {
     uint8_t mac_outer[16]; // message authentication code for an entire wire
     uint8_t mac_inner[16];  // message authentication code for the wire length

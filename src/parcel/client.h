@@ -24,6 +24,7 @@
 
 enum ParcelConstants {
     USERNAME_MAX_LENGTH = 64,
+    PROMPT_MAX_LENGTH = USERNAME_MAX_LENGTH + 30, // 30 bytes of formatting goodness
     PORT_MAX_LENGTH = 6,
     ADDRESS_MAX_LENGTH = 32
 };
@@ -86,7 +87,7 @@ void prompt_args(char *address, char *username);
 
 wire_type_t proc_type(client_t *ctx, wire_t *wire);
 
-void disp_username(client_t *ctx);
+void redraw_prompt(client_t *ctx);
 
 bool cmd_exit(client_t *ctx);
 
