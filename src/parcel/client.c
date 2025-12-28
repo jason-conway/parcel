@@ -95,9 +95,13 @@ static bool is_cmd(const char *msg)
 int send_thread(void *ctx)
 {
     client_t *client = ctx;
+
+    do {
+        nanosleep((struct timespec []) { [0] = { 0, 1000000} }, NULL);
+    } while (!atomic_load(&client->conn_announced));
+
     for (;;) {
         size_t length = 0;
-
         char prompt[PROMPT_MAX_LENGTH] = { 0 };
         fmt_prmpt(ctx, prompt);
         char *msg = xprompt(prompt, "text", &length); // xprompt() will never return null by design
@@ -122,7 +126,7 @@ int send_thread(void *ctx)
         xfree(msg);
         nanosleep((struct timespec []) { [0] = { 0, 1000000} }, NULL);
     }
-
+    return 0;
 }
 
 cable_t *client_recv_cable(client_t *ctx)
@@ -134,9 +138,8 @@ cable_t *client_recv_cable(client_t *ctx)
 
 static wire_t *decrypt_cabled_wire(client_t *ctx, cable_t *cable)
 {
-    size_t len = cable_get_payload_len(cable);
-    wire_t *wire = cable_get_data(cable);
-
+    size_t len = 0;
+    wire_t *wire = get_cabled_wire(cable, &len);
     keys_t keys = { 0 };
     client_get_keys(ctx, &keys);
     if (!decrypt_wire(wire, len, keys.session, keys.ctrl)) {

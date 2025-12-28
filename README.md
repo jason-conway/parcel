@@ -173,8 +173,7 @@ to know exactly how much data to expect.
 
 The cable structure consists of two components:
 
-`magic` contains the 6-byte magic number `.cable` (0x2E 0x63 0x61 0x62 0x6C
-0x65) for validation.
+`magic` contains the 6-byte magic number `parcel` for validation.
 
 `length` contains the 8-byte total length of the cable (including the 14-byte
 header and the entire wire payload).
@@ -202,8 +201,7 @@ chaining. Sent as plaintext, as it needs only to be random- not secret.
 
 **Header (16 bytes):**
 
-`magic` contains the 6-byte magic number "rewire" (0x72 0x65 0x77 0x69 0x72
-0x65).
+`magic` contains the 6-byte magic number "-wire-".
 
 `wire_len` contains the 8-byte total length of the entire wire.
 

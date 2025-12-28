@@ -13,6 +13,38 @@
 #include "xplatform.h"
 #include "log.h"
 
+
+uint64_t xstr_hash(const char *s)
+{   
+    size_t len = strlen(s);
+    uint64_t h = UINT64_C(0xcbf29ce484222325);
+    for (size_t i = 0; i < len; i++) {
+        h ^= s[i];
+        h *= UINT64_C(0x100000001b3);
+    }
+    return h ^ h >> 32;
+}
+
+const char *xhash_color(const char *s)
+{
+    static const char *colors[] = {
+        "\033[0;31m", // red
+        "\033[0;32m", // green
+        "\033[0;33m", // yellow
+        "\033[0;34m", // blue
+        "\033[0;35m", // magenta
+        "\033[0;36m", // cyan
+        "\033[1;31m", // bright red
+        "\033[1;32m", // bright green
+        "\033[1;33m", // bright yellow
+        "\033[1;34m", // bright blue
+        "\033[1;35m", // bright magenta
+        "\033[1;36m", // bright cyan
+    };
+
+    uint32_t hash = xstr_hash(s);
+    return colors[hash % countof(colors)];
+}
 char *xstrdup(const char *str)
 {
     if (!str) {

@@ -44,6 +44,10 @@ enum HTTP {
     RESPONSE_LENGTH = 4096
 };
 
+uint64_t xstr_hash(const char *s);
+
+const char *xhash_color(const char *s);
+
 // Print a formatted string in yellow to stdout
 void xwarn(const char *format, ...);
 

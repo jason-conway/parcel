@@ -210,7 +210,7 @@ bool daemon_handle_disconnect(server_t *srv, size_t client_id, bool clean)
 
 static bool recv_client(server_t *srv, size_t sender_index)
 {
-    cable_t *cable = new_cable();
+    cable_t *cable = alloc_cable();
     ssize_t ret = xrecv(srv->sockets.sfds[sender_index], cable, sizeof(cable_header_t), 0);
     if (ret <= 0) {
         xfree(cable);

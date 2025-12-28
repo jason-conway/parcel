@@ -34,7 +34,7 @@ static bool proc_file(void *data)
         return false;
     }
     size_t filesize = file_msg_get_payload_length(fm);
-    printf("%s sent a file: %s (%zu kb)\n", sender, filename, filesize >> 10);
+    fprintf(stdout, "\n\n\033[90m● %s sent a file: %s (%zu kb)\033[0m\n\n", sender, filename, filesize >> 10);
     if (!file_msg_to_file(fm, xgethome())) {
         log_error("error writing file to disk");
         return false;
@@ -55,9 +55,9 @@ static bool proc_stat(void *data)
     const char *aux = stat_msg_get_data(stat);
 
     static const char *msgs[] = {
-        [STAT_USER_CONNECT] = "\033[1m%s is online\033[0m\n",
-        [STAT_USER_DISCONNECT] = "\033[1m%s is offline\033[0m\n",
-        [STAT_USER_RENAME] = "\033[2K\r%s has changed their name to %s\033[0m\n"
+        [STAT_USER_CONNECT] = "\033[2K\r\033[90m● %s is online\033[0m\n",
+        [STAT_USER_DISCONNECT] = "\033[2K\r\033[90m● %s is offline\033[0m\n",
+        [STAT_USER_RENAME] = "\033[2K\r\033[90m● %s has changed their name to %s\033[0m\n"
     };
 
     switch (type) {
@@ -74,6 +74,7 @@ static bool proc_stat(void *data)
     return true;
 }
 
+
 static bool proc_text(void *data)
 {
     text_msg_t *text = data;
@@ -88,7 +89,8 @@ static bool proc_text(void *data)
         return false;
     }
     const char *aux = text_msg_get_data(text);
-    fprintf(stdout, "\033[2K\r\033[90m[%s]\033[0m \033[0;33m➜\033[0m %s\n", username, aux);
+    const char *color = xhash_color(username);
+    fprintf(stdout, "\033[2K\r%s%s:\033[0m %s\n", color, username, aux);
     return true;
 }
 
@@ -141,23 +143,29 @@ bool handle_wire(client_t *ctx, wire_t *wire)
     log_trace("handle_wire(%s)", types[type]);
 
     bool ok = true;
+    bool redraw = false;
     switch (type) {
         case TYPE_CTRL:
             ok = proc_ctrl(ctx, wire->data);
             break;
         case TYPE_FILE:
             ok = proc_file(wire->data);
+            redraw = true;
             break;
         case TYPE_TEXT:
             ok = proc_text(wire->data);
+            redraw = true;
             break;
         case TYPE_STAT:
             ok = proc_stat(wire->data);
+            redraw = true;
             break;
         default:
             ok = false;
             break;
     }
-    redraw_prompt(ctx);
+    if (redraw) {
+        redraw_prompt(ctx);
+    }
     return ok;
 }

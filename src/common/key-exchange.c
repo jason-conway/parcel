@@ -154,7 +154,7 @@ bool two_party_server(sock_t socket, uint8_t *session_key)
     memcpy(&sk, session_key, sizeof(session_key_t));
     wire_t *wire = init_wire_from_session_key(&sk);
 
-    bool ok = transmit_cabled_wire(socket, shared_secret, wire);
+    bool ok = transmit_cabled_wire(socket, wire, shared_secret);
     if (!ok) {
         log_fatal("failed to send session key to client");
     }

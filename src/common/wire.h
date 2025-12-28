@@ -38,7 +38,7 @@ typedef struct wire_auth_t {
 
 
 typedef struct header_t {
-    uint8_t magic[6]; // 72 65 77 69 72 65
+    uint8_t signature[6]; // 72 65 77 69 72 65
     uint8_t wire_len[8];   // length of entire wire (auth + header + data + padding)
     uint8_t alignment; // padding bytes added to data to align with block size
     uint8_t type;     // type of wire, see enum wire_type
@@ -76,7 +76,7 @@ enum SectionOffsets {
     WIRE_OFFSET_MAC_OUTER = offsetof(wire_t, auth.mac_outer),
     WIRE_OFFSET_MAC_INNER = offsetof(wire_t, auth.mac_inner),
     WIRE_OFFSET_IV        = offsetof(wire_t, auth.iv),
-    WIRE_OFFSET_MAGIC     = offsetof(wire_t, header.magic),
+    WIRE_OFFSET_MAGIC     = offsetof(wire_t, header.signature),
     WIRE_OFFSET_LENGTH    = offsetof(wire_t, header.wire_len),
     WIRE_OFFSET_ALIGNMENT = offsetof(wire_t, header.alignment),
     WIRE_OFFSET_TYPE      = offsetof(wire_t, header.type),

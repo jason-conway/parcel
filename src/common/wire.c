@@ -23,7 +23,6 @@ size_t get_aligned_len(size_t len)
     return ROUND_UP(len, BLOCK_LEN);
 }
 
-
 size_t header_get_alignment(const header_t *header)
 {
     return header->alignment;
@@ -73,7 +72,6 @@ void wire_set_header(wire_t *wire, header_t *hdr)
     memcpy(&wire->header, hdr, sizeof(header_t));
 }
 
-
 void wire_set_length(wire_t *wire, size_t len)
 {
     wire_unpack64(wire->header.wire_len, len);
@@ -84,25 +82,24 @@ void wire_set_alignment(wire_t *wire, size_t alignment)
     wire->header.alignment = alignment;
 }
 
-
-void header_set_magic(header_t *header)
+void header_set_signature(header_t *header)
 {
-    memcpy(header->magic, "rewire", sizeof(header->magic));
+    memcpy(header->signature, "-wire-", sizeof(header->signature));
 }
 
-void wire_set_magic(wire_t *wire)
+void wire_set_signature(wire_t *wire)
 {
-    header_set_magic(&wire->header);
+    header_set_signature(&wire->header);
 }
 
-bool header_check_magic(header_t *header)
+bool header_check_signature(header_t *header)
 {
-    return !memcmp(header->magic, "rewire", sizeof(header->magic));
+    return !memcmp(header->signature, "-wire-", sizeof(header->signature));
 }
 
-bool wire_check_magic(wire_t *wire)
+bool wire_check_signature(wire_t *wire)
 {
-    return header_check_magic(&wire->header);
+    return header_check_signature(&wire->header);
 }
 
 void wire_set_type(wire_t *wire, wire_type_t type)
@@ -123,8 +120,8 @@ header_t wire_decrypt_header(aes128_t *aes128, wire_t *wire)
     header_t h = { 0 };
     memcpy(&h, &wire->header, sizeof(header_t));
     aes128_decrypt(aes128, (void *)&h, BLOCK_LEN);
-    if (!header_check_magic(&h)) {
-        log_error("header magic invalid");
+    if (!header_check_signature(&h)) {
+        log_error("header signature invalid");
         return (header_t) { 0 };
     }
     return h;
@@ -195,7 +192,7 @@ wire_t *init_wire(wire_type_t type, const void *data, size_t *len)
         return NULL;
     }
 
-    wire_set_magic(wire);
+    wire_set_signature(wire);
     wire_set_alignment(wire, alignment);
     wire_set_length(wire, wire_length);
     wire_set_type(wire, type);

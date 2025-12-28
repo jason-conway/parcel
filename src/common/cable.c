@@ -6,15 +6,14 @@
 #include <stddef.h>
 
 
-cable_t *new_cable(void)
+cable_t *alloc_cable(void)
 {
     return xcalloc(sizeof(cable_header_t));
 }
 
-
-void cable_set_magic(cable_t *cable)
+void cable_set_signature(cable_t *cable)
 {
-    memcpy(cable->hdr.magic, ".cable", sizeof(cable->hdr.magic));
+    memcpy(cable->hdr.signature, "parcel", sizeof(cable->hdr.signature));
 }
 
 void cable_set_len(cable_t *cable, size_t len)
@@ -27,11 +26,6 @@ void cable_set_data(cable_t *cable, const void *data, size_t len)
     memcpy(&cable->data, data, len);
 }
 
-void *cable_get_data(cable_t *cable)
-{
-    return cable->data;
-}
-
 size_t cable_get_total_len(cable_t *cable)
 {
     return wire_pack64(cable->hdr.len);
@@ -42,14 +36,9 @@ size_t cable_get_payload_len(cable_t *cable)
     return cable_get_total_len(cable) - sizeof(cable_t);
 }
 
-bool cable_recv_header(sock_t sock, cable_t **cable)
+static bool cable_check_signature(cable_t *cable)
 {
-    return xrecvall(sock, &(*cable)->hdr, sizeof(cable_header_t));
-}
-
-static bool cable_check_magic(cable_t *cable)
-{
-    return !memcmp(cable->hdr.magic, ".cable", sizeof(cable->hdr.magic));
+    return !memcmp(cable->hdr.signature, "parcel", sizeof(cable->hdr.signature));
 }
 
 static bool cable_recv_remaining(sock_t sock, cable_t **cable)
@@ -62,20 +51,23 @@ static bool cable_recv_remaining(sock_t sock, cable_t **cable)
 
 size_t cable_recv_data(sock_t sock, cable_t **cable)
 {
-    if (!cable_check_magic(*cable)) {
-        log_error("invalid magic in cable header");
+    if (!cable_check_signature(*cable)) {
+        log_error("cable signature is invalid");
         return 0;
     }
     if (!cable_recv_remaining(sock, cable)) {
-        log_error("failed to receive remainder of cable");
+        size_t exp = cable_get_payload_len(*cable);
+        log_error("failed to receive cable data (%zu bytes)", exp);
         return 0;
     }
+
+    size_t payload_len = cable_get_payload_len(*cable);
     size_t len = cable_get_total_len(*cable);
-    log_trace("got cable: %zu bytes", len);
+    log_trace("cable_recv_data() len: %zu bytes (payload: %zu bytes)", len, payload_len);
     return len;
 }
 
-bool transmit_cabled_wire(sock_t sock, const uint8_t *key, wire_t *wire)
+bool transmit_cabled_wire(sock_t sock, wire_t *wire, const uint8_t *key)
 {
     size_t len = wire_get_length(wire);
     encrypt_wire(wire, key);
@@ -85,24 +77,37 @@ bool transmit_cabled_wire(sock_t sock, const uint8_t *key, wire_t *wire)
     return ok;
 }
 
+static bool cable_recv_header(sock_t sock, cable_t **cable)
+{
+    return xrecvall(sock, &(*cable)->hdr, sizeof(cable_header_t));
+}
 
 cable_t *recv_cable(sock_t sock, size_t *cable_length)
 {
-    cable_t *cable = new_cable();
+    cable_t *cable = alloc_cable();
     if (!cable_recv_header(sock, &cable)) {
-        log_error("failed to receive cable header");
-        return xfree(cable);
+        log_error("failed to receive cable header ");
+        goto err;
     }
-    if (!cable_check_magic(cable)) {
-        log_error("invalid header");
-        return xfree(cable);
+    if (!cable_check_signature(cable)) {
+        log_error("cable signature is invalid");
+        goto err;
     }
     if (!cable_recv_remaining(sock, &cable)) {
-        log_error("failed to receive remainder of cable");
-        return xfree(cable);
+        size_t exp = cable_get_payload_len(cable);
+        log_error("failed to receive cable data (%zu bytes)", exp);
+        goto err;
     }
+
     *cable_length = cable_get_total_len(cable);
-    log_trace("got cable: %zu bytes", *cable_length);
+    size_t payload_len = cable_get_payload_len(cable);
+    log_trace("recv_cable() len: %zu bytes (payload: %zu bytes)", *cable_length, payload_len);
+
+    if (0) {
+err:
+        cable = xfree(cable);
+    }
+
     return cable;
 }
 
@@ -112,7 +117,7 @@ cable_t *init_cable(wire_t *wire, size_t *len)
 
     cable_t *cable = xcalloc(cable_length);
 
-    cable_set_magic(cable);
+    cable_set_signature(cable);
     cable_set_len(cable, cable_length);
     cable_set_data(cable, wire, *len);
     *len = cable_length;

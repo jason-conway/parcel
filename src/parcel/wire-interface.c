@@ -65,13 +65,12 @@ wire_t *client_init_file_wire(client_t *client, const char *path)
 
 bool transmit_wire(client_t *client, wire_t *wire)
 {
-    size_t len = wire_get_length(wire);
-
     keys_t keys = { 0 };
     client_get_keys(client, &keys);
 
     sock_t sock = client_get_socket(client);
 
+    size_t len = wire_get_length(wire);
     encrypt_wire(wire, keys.session);
     cable_t *cable = init_cable(wire, &len);
 
