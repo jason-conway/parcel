@@ -29,6 +29,8 @@ enum ParcelConstants {
     ADDRESS_MAX_LENGTH = 32
 };
 
+#define SELF_SENDER "::self::"
+
 typedef enum cmd_type_t {
     CMD_AMBIGUOUS = -1,
     CMD_NONE,
@@ -87,7 +89,15 @@ void prompt_args(char *address, char *username);
 
 bool handle_wire(client_t *ctx, wire_t *wire);
 
-void redraw_prompt(client_t *ctx);
+void redraw_prompt(void);
+
+void init_ui_lock(void);
+
+void reset_last_sender(void);
+
+bool need_sender(const char *username);
+
+void update_last_sender(const char *username);
 
 bool cmd_exit(client_t *ctx);
 

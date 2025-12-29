@@ -45,6 +45,7 @@ int main(int argc, char **argv)
     client_t client = { 0 };
     atomic_store(&client.keep_alive, true);
     pthread_mutex_init(&client.lock, NULL);
+    init_ui_lock();
 
     xgetopt_t xgo = { 0 };
     for (ptrdiff_t opt; (opt = xgetopt(&xgo, argc, argv, "lha:p:u:")) != -1;) {

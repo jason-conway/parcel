@@ -48,17 +48,15 @@ sock_t client_get_socket(client_t *ctx)
     return s;
 }
 
-void fmt_prmpt(client_t *ctx, char *out)
+void fmt_prmpt(char *out)
 {
-    char username[USERNAME_MAX_LENGTH] = { 0 };
-    client_get_username(ctx, username);
-    snprintf(out, PROMPT_MAX_LENGTH, "\033[90m[%s]\033[0m \033[0;32m➜\033[0m ", username);
+    snprintf(out, PROMPT_MAX_LENGTH, "\033[0;32m➜\033[0m ");
 }
 
-void redraw_prompt(client_t *ctx)
+void redraw_prompt(void)
 {
     static char prompt[PROMPT_MAX_LENGTH];
-    fmt_prmpt(ctx, prompt);
+    fmt_prmpt(prompt);
     fprintf(stdout, "%s", prompt);
     fflush(stdout);
 }
@@ -102,9 +100,7 @@ int send_thread(void *ctx)
 
     for (;;) {
         size_t length = 0;
-        char prompt[PROMPT_MAX_LENGTH] = { 0 };
-        fmt_prmpt(ctx, prompt);
-        char *msg = xprompt(prompt, "text", &length); // xprompt() will never return null by design
+        char *msg = xprompt("\033[0;32m➜\033[0m ", "text", &length); // xprompt() will never return null by design
 
         bool run = atomic_load(&client->keep_alive);
         if (!run) {
@@ -120,6 +116,15 @@ int send_thread(void *ctx)
         else {
             if (!send_text_msg(client, msg, length)) {
                 // TODO: error case
+            }
+            else {
+                // TODO: rewrite readline logic to clear entire message on enter
+                fprintf(stdout, "\033[1A\033[2K\r");
+                if (need_sender(SELF_SENDER)) {
+                    fprintf(stdout, "\033[90myou\033[0m\n");
+                }
+                fprintf(stdout, "  %s\n", msg);
+                update_last_sender(SELF_SENDER);
             }
         }
 
@@ -162,7 +167,7 @@ void *recv_thread(void *ctx)
                 atomic_store(&client->keep_alive, false);
                 xwarn("\n%s\n", "Daemon unexpectedly closed connection");
                 xwarn("%s\n", "Use '/q' to exit");
-                redraw_prompt(client);
+                redraw_prompt();
             }
             else {
                 xclose(client->socket);

@@ -29,7 +29,7 @@ static bool cmd_username(client_t *ctx)
         memset(&ctx->username, 0, USERNAME_MAX_LENGTH);
         memcpy(&ctx->username, new_username, new_username_length);
     pthread_mutex_unlock(&ctx->lock);
-    
+
     xfree(new_username);
     return ok;
 }
@@ -140,33 +140,38 @@ static cmd_type_t parse_command(char *command)
 bool exec_cmd(client_t *ctx, char *message)
 {
     cmd_type_t cmd = parse_command(message);
+    bool ok = true;
     switch (cmd) {
         default:
             cmd_not_found(message);
-            return true;
+            break;
         case CMD_AMBIGUOUS:
             cmd_ambiguous();
-            return true;
+            break;
         case CMD_LIST:
             cmd_list();
-            return true;
+            break;
         case CMD_CLEAR:
             cmd_clear();
-            return true;
+            break;
         case CMD_VERSION:
             cmd_version();
-            return true;
-
+            break;
         case CMD_ENC_INFO:
             cmd_print_enc_info(ctx);
-            return true;
+            break;
         case CMD_EXIT:
-            return cmd_exit(ctx);
+            ok = cmd_exit(ctx);
+            break;
         case CMD_USERNAME:
-            return cmd_username(ctx);
+            ok = cmd_username(ctx);
+            break;
         case CMD_FILE:
-            return cmd_send_file(ctx);
+            ok = cmd_send_file(ctx);
+            break;
         case CMD_NONE:
-            return true;
+            break;
     }
+    reset_last_sender();
+    return ok;
 }
