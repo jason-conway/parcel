@@ -9,51 +9,56 @@ ifeq ($(OS), Windows_NT)
 	LDLIBS  = -lpthread -lws2_32 -liphlpapi -ladvapi32 -lkernel32 -lshell32
 	PREFIX  = %HOMEPATH%/parcel
 	EXE     = .exe
-	parcel_res = $(build_dir)parcel.res
-	parceld_res =$(build_dir)parceld.res
-	RESCMD_PARCEL  = windres.exe $(res_dir)parcel.rc -O coff -o $(parcel_res)
-	RESCMD_PARCELD = windres.exe $(res_dir)parceld.rc -O coff -o $(parceld_res)
+	PARCEL_RES = $(BUILD_DIR)/parcel.res
+	PARCELD_RES =$(BUILD_DIR)/parceld.res
+	RESCMD_PARCEL  = windres.exe $(RES_DIR)/parcel.rc -O coff -o $(PARCEL_RES)
+	RESCMD_PARCELD = windres.exe $(RES_DIR)/parceld.rc -O coff -o $(PARCELD_RES)
 else
 	LDFLAGS =
 	LDLIBS  = -pthread
 	PREFIX  = /usr/local
 endif
 
-src_dir   = ./src/
-build_dir = ./build/
-res_dir   = ./etc/resources/
+PARCEL_DIR  = ./src/parcel
+PARCELD_DIR = ./src/parceld
+CRYPTO_DIR  = ./src/crypto
+COMMON_DIR  = ./src/common
+BIN_DIR     = ./bin
+BUILD_DIR   = ./build
+RES_DIR     = ./etc/resources
 
-parcel_dir       = $(src_dir)parcel/
-parceld_dir      = $(src_dir)parceld/
+PARCEL_FILES  = $(wildcard $(PARCEL_DIR)/*)
+PARCELD_FILES = $(wildcard $(PARCELD_DIR)/*)
+CRYPTO_FILES  = $(wildcard $(CRYPTO_DIR)/*)
+COMMON_FILES  = $(wildcard $(COMMON_DIR)/*)
 
-parcel_source    = $(src_dir)*.c $(parcel_dir)*.c
-parceld_source   = $(src_dir)*.c $(parceld_dir)*.c
-
-parcel_all       = $(src_dir)*.* $(parcel_dir)*.*
-parceld_all      = $(src_dir)*.* $(parceld_dir)*.*
-
-parcel_includes  = -I$(src_dir) -I$(parcel_dir)
-parceld_includes = -I$(src_dir) -I$(parceld_dir)
+PARCEL_SRCS  = $(filter %.c, $(PARCEL_FILES))
+PARCELD_SRCS = $(filter %.c, $(PARCELD_FILES))
+CRYPTO_SRCS  = $(filter %.c, $(CRYPTO_FILES))
+COMMON_SRCS  = $(filter %.c, $(COMMON_FILES))
+SHARED_SRCS  = $(CRYPTO_SRCS) $(COMMON_SRCS)
 
 all: resources parcel$(EXE) parceld$(EXE)
 
 resources:
-	$(MKDIR) $(build_dir)
+	@mkdir -p $(BUILD_DIR)
 	$(RESCMD_PARCEL)
 	$(RESCMD_PARCELD)
 
-parcel$(EXE): $(parcel_all)
-	$(CC) $(CFLAGS) $(parcel_includes) $(parcel_source) $(parcel_res) -o $(build_dir)$@ $(LDLIBS) $(LDFLAGS) $(FFLAGS)
+parcel$(EXE): $(PARCEL_SRCS) $(SHARED_SRCS)
+	@mkdir -p $(BIN_DIR)
+	$(CC) $(CFLAGS) -I$(CRYPTO_DIR) -I$(COMMON_DIR) $(PARCEL_RES) -o $(BIN_DIR)/$@ $^ $(LDLIBS) $(LDFLAGS) $(FFLAGS)
 
-parceld$(EXE): $(parceld_all)
-	$(CC) $(CFLAGS) $(parceld_includes) $(parceld_source) $(parceld_res) -o $(build_dir)$@ $(LDLIBS) $(LDFLAGS) $(FFLAGS)
+parceld$(EXE): $(PARCELD_SRCS) $(SHARED_SRCS)
+	@mkdir -p $(BIN_DIR)
+	$(CC) $(CFLAGS) -I$(CRYPTO_DIR) -I$(COMMON_DIR) $(PARCELD_RES) -o $(BIN_DIR)/$@ $^ $(LDLIBS) $(LDFLAGS) $(FFLAGS)
 
-install: parcel parceld
-	install -m 755 $(build_dir)parcel$(EXE) $(PREFIX)/bin
-	install -m 755 $(build_dir)parceld$(EXE) $(PREFIX)/bin
+install: parcel$(EXE) parceld$(EXE)
+	install -m 755 $(BIN_DIR)parcel$(EXE) $(PREFIX)/bin
+	install -m 755 $(BIN_DIR)parceld$(EXE) $(PREFIX)/bin
 
 clean:
-	rm -f $(build_dir)*
+	rm -f $(BUILD_DIR)* $(BIN_DIR)
 
 uninstall:
 	rm -f $(PREFIX)/bin/parcel$(EXE)

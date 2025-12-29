@@ -5,6 +5,7 @@
 [![CI](https://github.com/jason-conway/parcel/actions/workflows/CI-make.yml/badge.svg)](https://github.com/jason-conway/parcel/actions/workflows/CI-make.yml)
 [![CodeFactor](https://www.codefactor.io/repository/github/jason-conway/parcel/badge)](https://www.codefactor.io/repository/github/jason-conway/parcel)
 [![goto counter](https://img.shields.io/github/search/jason-conway/parcel/goto.svg)](https://github.com/jason-conway/parcel/search?q=goto)
+
 ## Supported Platforms
 
 Linux, BSD, Darwin/macOS, Windows, and iOS (*kind of*) on x86-64, x86, AArch32, and AArch64 architectures.
@@ -15,16 +16,16 @@ Linux, BSD, Darwin/macOS, Windows, and iOS (*kind of*) on x86-64, x86, AArch32, 
 
 After cloning the repository, simply
 
-```console
-$ make install
+```sh
+make install
 ```
 
 to build and install both `parcel` and `parceld` under `/usr/local/bin`.
 
 Optionally, `PREFIX` can be set in order to change the install location.
 
-```console
-$ make PREFIX=~/.parcel install
+```sh
+make PREFIX=~/.parcel install
 ```
 
 #### iOS
@@ -33,48 +34,76 @@ Both the parcel client and daemon run without modification on iOS devices using 
 
 ### Windows
 
-The simplest way to build parcel on Windows is using [w64devkit](https://github.com/skeeto/w64devkit). The [pre-built *mini* release](https://github.com/skeeto/w64devkit/releases/) variant is just over 50 MB and contains everything needed to build parcel from source.
+The simplest way to build parcel on Windows is using
+[w64devkit](https://github.com/skeeto/w64devkit).
+
+The [pre-built *mini* release](https://github.com/skeeto/w64devkit/releases/)
+variant is just over 50 MB and contains everything needed to build parcel from
+source.
 
 Once cloned, simply
 
-```console
-$ make install
+```sh
+make install
 ```
 
-Note that, by default, the binaries will be installed at %HOMEPATH%\parcel
+Note that, by default, the binaries will be installed at `%HOMEPATH%\parcel`
 
 #### Windows Binaries
 
-Alternatively, download [prebuilt binaries](https://github.com/jason-conway/parcel/releases/) from Github. Please note, however, that these builds are cross-compiled for x86_64 Windows from an AArch64 MacBook Pro and only **minimally tested** using Wine through Rosetta 2 on an unsupported version of macOS.
+Alternatively, download [prebuilt binaries](https://github.com/jason-conway/parcel/releases/)
+from Github.
+
+Please note, however, that these builds are cross-compiled for x86_64 Windows
+from an AArch64 MacBook Pro and only **minimally tested** using Wine through
+Rosetta 2 on an unsupported version of macOS.
 
 ## Usage
 
 Print usage information with `-h`:
 
+```u
     usage: parcel [-lhd] [-a ADDR] [-p PORT] [-u NAME]
       -a ADDR  server address (www.example.com, 111.222.333.444)
       -p PORT  server port (default: 2315)
       -u NAME  username displayed alongside sent messages
       -l       use computer login as username
       -h       print this usage information
+```
 
-If the target server is on the default port, then the only required arguments are server address and username. Passing the flag `-l` on launch sets the username as the computer login.
+If the target server is on the default port, then the only required arguments
+are server address and username. Passing the flag `-l` on launch sets the
+username as the computer login.
 
 If a required argument is not provided, then it is prompted at startup.
 
 ## Security
 
-Parcel encrypts and decrypts message data using [AES128](https://nvlpubs.nist.gov/nistpubs/fips/nist.fips.197.pdf). Messages are authenticated using [CMAC (OMAC1)](https://datatracker.ietf.org/doc/html/rfc4493) to guarantee message authenticity and data integrity. The CMAC tag authenticates ciphertext rather than plaintext, allowing the message to be authenticated prior to decryption.
+Parcel encrypts and decrypts message data using
+[AES128](https://nvlpubs.nist.gov/nistpubs/fips/nist.fips.197.pdf).
+
+Messages are authenticated using
+[CMAC (OMAC1)](https://datatracker.ietf.org/doc/html/rfc4493)
+to guarantee message authenticity and data integrity. The CMAC tag authenticates
+ciphertext rather than plaintext, allowing the message to be authenticated prior
+to decryption.
 
 ### Key Exchange
 
-The parcel daemon, `parceld`, generates a random 32-byte control key at startup. After establishing a secured channel, this key is shared with the client and used to decrypt `TYPE_CTRL` messages from the daemon. 
+The parcel daemon, `parceld`, generates a random 32-byte control key at startup.
+After establishing a secured channel, this key is shared with the client and
+used to decrypt `TYPE_CTRL` messages from the daemon.
 
-The control key is used only once, with `TYPE_CTRL` messages containing the next control keys as part of its encrypted contents.
+The control key is used only once, with `TYPE_CTRL` messages containing the next
+control keys as part of its encrypted contents.
 
-Upon recieving and decrypting a control message, the parcel clients perform a multi-party [Elliptic-curve Diffie-Hellman](https://en.wikipedia.org/wiki/Elliptic-curve_Diffie%E2%80%93Hellman) key exchange using [Curve25519](https://en.wikipedia.org/wiki/Curve25519), at which point all clients posess a new shared key.
+Upon recieving and decrypting a control message, the parcel clients perform a
+multi-party
 
-A new group key is derived whenever the number of clients changes.
+[Elliptic-curve Diffie-Hellman](https://en.wikipedia.org/wiki/Elliptic-curve_Diffie%E2%80%93Hellman)
+key exchange using [Curve25519](https://en.wikipedia.org/wiki/Curve25519),
+at which point all clients posess a new shared key. A new group key is derived
+whenever the number of clients changes.
 
 ## Frequently Asked Questions
 
@@ -82,18 +111,38 @@ A new group key is derived whenever the number of clients changes.
 
 ## Windows Considerations
 
-`parcel` uses standard [ANSI X3.64 (ISO 6429)](https://nvlpubs.nist.gov/nistpubs/Legacy/FIPS/fipspub86.pdf) escape sequences for in-band signaling. Despite having been standardized since 1979, they lacked proper support in Windows until the Windows 10 Anniversery Update in 2016. If you're running this version or newer, parcel *should* properly configure the console automatically. In the unlikely case that parcel is unable to configure the console, you can try adding the following registry key to [globally enable Virtual Terminal Processing](https://superuser.com/questions/413073/windows-console-with-ansi-colors-handling).
+`parcel` uses standard
+[ANSI X3.64 (ISO 6429)](https://nvlpubs.nist.gov/nistpubs/Legacy/FIPS/fipspub86.pdf)
+escape sequences for in-band signaling. Despite having been standardized since 1979,
+they lacked proper support in Windows until the Windows 10 Anniversery Update in 2016.
+
+If you're running this version or newer, parcel *should* properly configure the
+console automatically. In the unlikely case that parcel is unable to configure
+the console, you can try adding the following registry key to
+[globally enable Virtual Terminal Processing](https://superuser.com/questions/413073/windows-console-with-ansi-colors-handling).
 
 ```ps1
 REG ADD HKCU\CONSOLE /f /v VirtualTerminalLevel /t REG_DWORD /d 1
 ```
 
-If an earlier version of Windows is being used or if parcel is being run from a different shell, the extra console configuration will fail silently and parcel will continue as normal.
+If an earlier version of Windows is being used or if parcel is being run from a
+different shell, the extra console configuration will fail silently and parcel
+will continue as normal.
 
-The number of active clients supported by `parceld` is determined by `FD_SETSIZE`. As a result, `parceld` supports a maximum of 64 active clients when running on Windows.
+The number of active clients supported by `parceld` is determined by
+`FD_SETSIZE`. As a result, `parceld` supports a maximum of 64 active clients
+when running on Windows.
 
-Windows support for UTF-8 has been improving in recent years, with Windows Version 1903 introducing the ability to [set UTF-8 as an active process's codepage](https://docs.microsoft.com/en-us/windows/apps/design/globalizing/use-utf8-code-page). Parcel takes advantage of this and embeds the required XML to set the process codepage directly into the application binary. Additionally, the console's codepage is set to UTF-8 at runtime, although this only works for console output... because despite UTF-8 becoming standarized in 1993, there remains no way to read UTF-8 input in Windows.
-To combat this, UTF-16 input is read in one character at a time using `ReadConsoleW()` and encoded as UTF-8 with `WideCharToMultiByte()`. It might not be ideal but gets the job done.
+Windows support for UTF-8 has been improving in recent years, with Windows
+Version 1903 introducing the ability to
+[set UTF-8 as an active process's codepage](https://docs.microsoft.com/en-us/windows/apps/design/globalizing/use-utf8-code-page).
+Parcel takes advantage of this and embeds the required XML to set the process
+codepage directly into the application binary. Additionally, the console's
+codepage is set to UTF-8 at runtime, although this only works for console
+output... because despite UTF-8 becoming standarized in 1993, there remains no
+way to read UTF-8 input in Windows. To combat this, UTF-16 input is read in one
+character at a time using `ReadConsoleW()` and encoded as UTF-8 with
+`WideCharToMultiByte()`. It might not be ideal but gets the job done.
 
 ## Client-Side Commands
 
@@ -109,39 +158,100 @@ All commands start with a slash followed by the command itself.
 | `/clear`    | Clear the screen                        |
 | `/version`  | Display application version             |
 
-Commands can be parsed once enough has been typed to become unambiguous, i.e., the username command can be entered as `/u`, clear can be `/c`, etcetera.
+Commands can be parsed once enough has been typed to become unambiguous, i.e.,
+the username command can be entered as `/u`, clear can be `/c`, etcetera.
 
 Commands are interactive only, no need to supply arguments.
 
-
 ## Wire Format
 
-The wire consists of six sections: mac, lac, iv, length, type, and data
+### Cable Framing Layer
 
-`mac` contains the 16-byte MAC of the IV, length, and data sections.
+All wire messages are encapsulated in a cable structure for transmission between
+client and daemon. The cable provides a framing layer that allows the receiver
+to know exactly how much data to expect.
 
-`lac` contains the 16-byte MAC of `length` only.
+The cable structure consists of two components:
 
-`iv` contains the 16-byte Initialization Vector. required for ciper block chaining. Since `data` is encrypted in CBC mode, the IV only needs to be random- not secret, so it is sent as plaintext.
+`magic` contains the 6-byte magic number `parcel` for validation.
 
-`length` containts the number the bytes in the `data` section.
+`length` contains the 8-byte total length of the cable (including the 14-byte
+header and the entire wire payload).
 
-`type` indicates the type of data contained in the `data` section. 
+The complete transmission format is:
 
-`data` contains one or more 16-byte chunks of encrypted data
+```u
+[magic (6 bytes) | length (8 bytes) | wire (variable)]
+```
+
+### Wire Structure
+
+The wire consists of an authentication section, header, and data payload.
+
+**Authentication Section (48 bytes):**
+
+`mac_outer` contains the 16-byte MAC of the entire wire (inner MAC, IV, header,
+and data sections).
+
+`mac_inner` contains the 16-byte MAC of the wire header only, preventing length
+oracle attacks.
+
+`iv` contains the 16-byte Initialization Vector required for cipher block
+chaining. Sent as plaintext, as it needs only to be random- not secret.
+
+**Header (16 bytes):**
+
+`magic` contains the 6-byte magic number "-wire-".
+
+`wire_len` contains the 8-byte total length of the entire wire.
+
+`alignment` is a 1-byte field indicating padding bytes added to align data with
+the AES block size.
+
+`type` is a 1-byte field indicating the message type (see Wire Types below).
+
+**Data:**
+
+`data` contains one or more 16-byte chunks of encrypted data.
+
+The complete wire structure is:
+
+```u
+[mac_outer (16) | mac_inner (16) | iv (16) | magic (6) | wire_len (8) | alignment (1) | type (1) | data (variable)]
+```
 
 ### Wire Types
 
-The possible message types are `TYPE_TEXT`, `TYPE_FILE`, and `TYPE_CTRL`.
+The following message types are defined:
 
-The parcel client can send messages of type `TYPE_TEXT` and `TYPE_FILE`. Only the parcel daemon can send `TYPE_CTRL`, which are used to trigger a GDHKD sequence to update the key.
+#### `TYPE_TEXT`
 
-### Type-Specific Section Layout
+Standard text messages sent between clients. Contains UTF-8 encoded chat messages.
 
-#### TYPE_CTRL
+#### `TYPE_FILE`
 
-When a message has the type `TYPE_CTRL`, the `data` section will contain a populated `wire_ctrl_message` struct- containing a control function, function arguments, and the renewed control key.
+File transfer messages. The `data` section contains a `wire_file_message` struct
+with the filename, file size, and file data.
 
-#### TYPE_FILE
+#### `TYPE_STAT`
 
-When a message has the type `TYPE_FILE`, the `data` section will contain a populated `wire_file_message` struct- containing the filename, the file size, and the file data.
+Status messages automatically sent by clients to inform others of connection
+state changes (join, leave, username changes).
+
+#### `TYPE_CTRL`
+
+Control messages sent only by the daemon to trigger group key exchange operations.
+The `data` section contains a `wire_ctrl_message` struct with a control function,
+function arguments, and the renewed control key. These messages trigger a GDHKE
+(Group Diffie-Hellman Key Exchange) sequence to update session keys.
+
+#### `TYPE_SESSION_KEY`
+
+Session key distribution messages used during the multi-party key exchange
+protocol. Contains public keys or derived key material for establishing the
+shared session key.
+
+#### `TYPE_NONE` and `TYPE_ERROR`
+
+Internal types used for initialization and error handling. Not transmitted over
+the network.

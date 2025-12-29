@@ -96,11 +96,11 @@ static void aes_key_expansion(uint8_t *round_key, const uint8_t *key)
 
         // Rotate and substitute
         if (!(i % AES_WORD_COUNT)) {
-            const uint8_t _word = word[0];
+            const uint8_t w = word[0];
             word[0] = word[1];
             word[1] = word[2];
             word[2] = word[3];
-            word[3] = _word;
+            word[3] = w;
 
             for (size_t j = 0; j < 4; j++) {
                 word[j] = sbox_lookup(word[j], false);
@@ -120,10 +120,10 @@ static void aes_generate_subkey(uint8_t *key)
 {
     uint8_t msb = key[0] & 0x80;
     for (size_t i = 0; i < 15; i++) {
-        key[i] = (uint8_t)(key[i] << 1U) | (key[i + 1] >> 7U);
+        key[i] = (uint8_t)(key[i] << 1u) | (key[i + 1] >> 7u);
     }
 
-    key[15] = (uint8_t)(key[15] << 1U);
+    key[15] = (uint8_t)(key[15] << 1u);
     if (msb) {
         key[15] ^= 0x87; // const_Rb
     }
@@ -152,31 +152,31 @@ static void aes_substitute_bytes(state_t *ctx, bool invert)
 // Cyclically shift the last three rows of the State with different offsets
 static void aes_shift_rows(state_t *ctx, bool invert)
 {
-    uint8_t *r1map = invert ? (uint8_t[]) { 3, 2, 1, 0 } : (uint8_t[]) { 0, 1, 2, 3 };
-    uint8_t *r3map = invert ? (uint8_t[]) { 0, 3, 2, 1 } : (uint8_t[]) { 0, 1, 2, 3 };
+    uint8_t *r1x = invert ? (uint8_t[]) { 3, 2, 1, 0 } : (uint8_t[]) { 0, 1, 2, 3 };
+    uint8_t *r3x = invert ? (uint8_t[]) { 0, 3, 2, 1 } : (uint8_t[]) { 0, 1, 2, 3 };
 
     // Cycle the first row 1 column to the left or right
-    uint8_t s = ctx->s[r1map[0]][1];
-    ctx->s[r1map[0]][1] = ctx->s[r1map[1]][1];
-    ctx->s[r1map[1]][1] = ctx->s[r1map[2]][1];
-    ctx->s[r1map[2]][1] = ctx->s[r1map[3]][1];
-    ctx->s[r1map[3]][1] = s;
+    uint8_t s         = ctx->s[r1x[0]][1];
+    ctx->s[r1x[0]][1] = ctx->s[r1x[1]][1];
+    ctx->s[r1x[1]][1] = ctx->s[r1x[2]][1];
+    ctx->s[r1x[2]][1] = ctx->s[r1x[3]][1];
+    ctx->s[r1x[3]][1] = s;
 
     // Cycle the second row 2 columns
-    s = ctx->s[0][2];
+    s            = ctx->s[0][2];
     ctx->s[0][2] = ctx->s[2][2];
     ctx->s[2][2] = s;
 
-    s = ctx->s[1][2];
+    s            = ctx->s[1][2];
     ctx->s[1][2] = ctx->s[3][2];
     ctx->s[3][2] = s;
 
     // Cycle the third row 3 columns to the left or right
-    s = ctx->s[0][3];
-    ctx->s[r3map[0]][3] = ctx->s[r3map[3]][3];
-    ctx->s[r3map[3]][3] = ctx->s[r3map[2]][3];
-    ctx->s[r3map[2]][3] = ctx->s[r3map[1]][3];
-    ctx->s[r3map[1]][3] = s;
+    s                 = ctx->s[r3x[0]][3];
+    ctx->s[r3x[0]][3] = ctx->s[r3x[3]][3];
+    ctx->s[r3x[3]][3] = ctx->s[r3x[2]][3];
+    ctx->s[r3x[2]][3] = ctx->s[r3x[1]][3];
+    ctx->s[r3x[1]][3] = s;
 }
 
 // Mix the contents of the state's columns to produce new columns
@@ -201,7 +201,7 @@ static void aes_mix_columns(state_t *ctx, bool invert)
             for (size_t j = 0; j < 4; j++) {
                 // XOR s[i][3] with the previous s[i][0]
                 uint8_t c = ctx->s[i][j] ^ ((j == 3) ? c0 : ctx->s[i][j + 1]);
-                c = (uint8_t)(c << 1U) ^ (((c >> 7) & 1) * 0x1b);
+                c = (uint8_t)(c << 1u) ^ (((c >> 7) & 1u) * 0x1b);
                 ctx->s[i][j] ^= c ^ s;
             }
         }
@@ -247,6 +247,17 @@ void aes128_cmac(const aes128_t *ctx, const uint8_t *msg, size_t length, uint8_t
 
     // MAC generation (pg 7 RFC 4493)
     uint8_t block[AES_BLOCK_SIZE] = { 0 };
+
+    // Handle zero-length message
+    if (!length) {
+        aes_generate_subkey(L);
+        L[0] ^= AES_KEY_BITS;
+        xor128(block, L);
+        aes_xcrypt((state_t *)block, ctx->round_key, false);
+        memcpy(mac, block, AES_BLOCK_SIZE);
+        return;
+    }
+
     for (; length; length -= AES_BLOCK_SIZE) {
         if (length < AES_BLOCK_SIZE) {
             aes_generate_subkey(L);
