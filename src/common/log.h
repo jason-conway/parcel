@@ -7,9 +7,6 @@
 #include <stdint.h>
 #include <pthread.h>
 
-/**
- * @brief Log severity levels
- */
 typedef enum loglvl_t {
     LOG_TRACE,
     LOG_DEBUG,
@@ -19,9 +16,6 @@ typedef enum loglvl_t {
     LOG_FATAL
 } loglvl_t;
 
-/**
- * @brief Context structure for log events
- */
 typedef struct logctx_t {
     va_list ap;
     const char *fmt;
@@ -32,16 +26,13 @@ typedef struct logctx_t {
     loglvl_t level;
 } logctx_t;
 
+// Initialize the logger mutex and set starting loglevel
 void log_init(loglvl_t lvl);
 
-/**
- * @brief Core logging function (use the macros below instead of calling directly)
- * @param level The severity level of the message
- * @param file Source file name
- * @param line Source line number
- * @param fmt Printf-style format string
- * @param ... Format arguments
- */
+// Change the current loglevel
+// Called after `log_init(...)`
+void log_set_loglvl(loglvl_t lvl);
+
 void _log(loglvl_t level, const char *file, int32_t line, const char *fmt, ...);
 
 /**

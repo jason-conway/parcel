@@ -9,6 +9,8 @@
  *
  */
 
+#pragma once
+
 #include "xplatform.h"
 #include "xutils.h"
 #include "slice.h"

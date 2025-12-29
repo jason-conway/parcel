@@ -41,7 +41,7 @@ typedef struct server_t {
     } descriptors;
     struct sfd_set_t {
         sock_t sfds[FD_SETSIZE]; // Socket file descriptors
-        size_t nsfds; // Number of socket file descriptors
+        size_t cnt; // Number of socket file descriptors
     } sockets;
 } server_t;
 

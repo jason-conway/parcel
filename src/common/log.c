@@ -44,6 +44,13 @@ static const char *xbasename(const char *path)
     return s;
 }
 
+void log_set_loglvl(loglvl_t lvl)
+{
+    pthread_mutex_lock(&log.lock);
+    log.level = lvl;
+    pthread_mutex_unlock(&log.lock);
+}
+
 void log_init(loglvl_t lvl)
 {
     pthread_mutex_init(&log.lock, NULL);

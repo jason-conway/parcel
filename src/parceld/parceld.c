@@ -24,7 +24,7 @@ static void usage(FILE *f)
 
 int main(int argc, char **argv)
 {
-    log_init(LOG_TRACE);
+    log_init(LOG_ERROR);
 
     server_t server = {
         .server_port = "2315",

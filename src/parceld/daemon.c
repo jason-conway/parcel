@@ -97,6 +97,7 @@ static size_t socket_index(server_t *srv, sock_t socket)
     return 0;
 }
 
+// TODO: enumerate ACCEPT_XXX return values
 static int add_client(server_t *srv)
 {
     struct sockaddr_storage client_sockaddr;
@@ -107,14 +108,14 @@ static int add_client(server_t *srv)
         return -1;
     }
 
-    if (srv->sockets.nsfds + 1 == countof(srv->sockets.sfds)) {
+    if (srv->sockets.cnt + 1 == countof(srv->sockets.sfds)) {
         log_warn("rejecting new connection");
         return 1;
     }
 
     FD_SET(new_client, &srv->descriptors.fds); // Add descriptor to set and update max
     srv->descriptors.nfds = xfd_count(new_client, srv->descriptors.nfds);
-    srv->sockets.nsfds++;
+    srv->sockets.cnt++;
 
     char address[INET_ADDRSTRLEN];
     in_port_t port;
@@ -139,9 +140,9 @@ static int add_client(server_t *srv)
         return -1;
     }
 
-    if (srv->sockets.nsfds > 1) {
+    if (srv->sockets.cnt > 1) {
         log_debug("connection added - starting key regeneration");
-        if (!n_party_server(srv->sockets.sfds, srv->sockets.nsfds, srv->server_key)) {
+        if (!n_party_server(srv->sockets.sfds, srv->sockets.cnt, srv->server_key)) {
             log_fatal("key regeneration failure");
             return -1;
         }
@@ -152,7 +153,7 @@ static int add_client(server_t *srv)
 static bool transfer_message(server_t *srv, size_t sender_index, cable_t *cable)
 {
     size_t len = cable_get_total_len(cable);
-    for (size_t i = 1; i <= srv->sockets.nsfds; i++) {
+    for (size_t i = 1; i <= srv->sockets.cnt; i++) {
         if (i == sender_index) {
             log_trace("skipping message orgin");
             continue;
@@ -171,14 +172,14 @@ static int disconnect_client(server_t *ctx, size_t client_index)
     const int ret = xclose(ctx->sockets.sfds[client_index]);
 
     // Replace this slot with the ending slot
-    if (ctx->sockets.nsfds == 1) {
+    if (ctx->sockets.cnt == 1) {
         ctx->sockets.sfds[client_index] = 0;
     }
     else {
-        ctx->sockets.sfds[client_index] = ctx->sockets.sfds[ctx->sockets.nsfds];
-        ctx->sockets.sfds[ctx->sockets.nsfds] = 0;
+        ctx->sockets.sfds[client_index] = ctx->sockets.sfds[ctx->sockets.cnt];
+        ctx->sockets.sfds[ctx->sockets.cnt] = 0;
     }
-    ctx->sockets.nsfds--;
+    ctx->sockets.cnt--;
     return ret;
 }
 
@@ -200,8 +201,8 @@ bool daemon_handle_disconnect(server_t *srv, size_t client_id, bool clean)
         log_error("error closing socket");
         return false;
     }
-    log_info("active connections: %zu", srv->sockets.nsfds);
-    if (!n_party_server(srv->sockets.sfds, srv->sockets.nsfds, srv->server_key)) {
+    log_info("active connections: %zu", srv->sockets.cnt);
+    if (!n_party_server(srv->sockets.sfds, srv->sockets.cnt, srv->server_key)) {
         log_fatal("catastrophic key exchange");
         return false;
     }
@@ -220,6 +221,7 @@ static bool recv_client(server_t *srv, size_t sender_index)
 
     size_t len = cable_recv_data(srv->sockets.sfds[sender_index], &cable);
     if (!len) {
+        // [note] cause logged by function
         xfree(cable);
         return false;
     }
@@ -262,6 +264,8 @@ int main_thread(void *ctx)
     server_t *server = (server_t *)ctx;
     fd_set rdy;
     FD_ZERO(&rdy);
+
+    log_set_loglvl(LOG_TRACE);
 
     for (;;) {
         rdy = server->descriptors.fds;
