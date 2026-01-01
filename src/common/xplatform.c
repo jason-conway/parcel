@@ -181,6 +181,23 @@ int xgetpeername(sock_t socket, struct sockaddr *address, socklen_t *len)
 #endif
 }
 
+bool xgetpeeraddr(sock_t socket, char *address, in_port_t *port)
+{
+    struct sockaddr_in sa;
+    socklen_t len = sizeof(sa);
+    if (xgetpeername(socket, (struct sockaddr *)&sa, &len)) {
+        return false;
+    }
+#if __unix__ || __APPLE__
+    inet_ntop(AF_INET, &sa.sin_addr, address, INET_ADDRSTRLEN);
+#elif _WIN32
+    DWORD addr_len = MAX_PATH;
+    WSAAddressToStringA((SOCKADDR *)&sa, len, NULL, addr, &addr_len);
+#endif
+    *port = ntohs(sa.sin_port);
+    return true;
+}
+
 /**
  * @section FD_SET related functions
  */

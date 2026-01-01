@@ -155,18 +155,6 @@ bool xrecvall(sock_t socket, void *data, size_t len)
     return true;
 }
 
-bool xgetpeeraddr(sock_t socket, char *address, in_port_t *port)
-{
-    struct sockaddr_in client_sockaddr;
-    socklen_t len = sizeof(client_sockaddr);
-    if (xgetpeername(socket, (struct sockaddr *)&client_sockaddr, &len)) {
-        return false;
-    }
-    (void)inet_ntop(AF_INET, &client_sockaddr.sin_addr, address, INET_ADDRSTRLEN);
-    *port = ntohs(client_sockaddr.sin_port);
-    return true;
-}
-
 bool xstrrange(char *arg, long *larg, long min, long max)
 {
     long _larg = strtol(arg, NULL, 10);
