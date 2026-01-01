@@ -5,55 +5,51 @@
  * @version 0.9.2
  * @date 2022-01-26
  *
- * @copyright Copyright (c) 2022 - 2024 Jason Conway. All rights reserved.
+ * @copyright Copyright (c) 2022 - 2026 Jason Conway. All rights reserved.
  *
  */
 
 #include "xplatform.h"
 #include "log.h"
 
-/**
- * @section BSD / Winsock wrappers
- */
-
-ssize_t xsend(sock_t socket, const void *data, size_t len, int flags)
+ssize_t xsend(sock_t sock, const void *data, size_t len, int flags)
 {
 #if __unix__ || __APPLE__
-    return send(socket, data, len, flags);
+    return send(sock, data, len, flags);
 #elif _WIN32
-    return send(socket, (const char *)data, (int)len, flags);
+    return send(sock, (const char *)data, (int)len, flags);
 #endif
 }
 
-ssize_t xrecv(sock_t socket, void *data, size_t len, int flags)
+ssize_t xrecv(sock_t sock, void *data, size_t len, int flags)
 {
 #if __unix__ || __APPLE__
-    return recv(socket, data, len, flags);
+    return recv(sock, data, len, flags);
 #elif _WIN32
-    return recv(socket, (char *)data, (int)len, flags);
+    return recv(sock, (char *)data, (int)len, flags);
 #endif
 }
 
-int xclose(sock_t socket)
+int xclose(sock_t sock)
 {
 #if __unix__ || __APPLE__
-    return close(socket);
+    return close(sock);
 #elif _WIN32
-    return closesocket(socket);
+    return closesocket(sock);
 #endif
 }
 
-int xaccept(sock_t *connection_socket, sock_t listening_socket, struct sockaddr *address, socklen_t *len)
+int xaccept(sock_t *sock, sock_t listen, struct sockaddr *addr, socklen_t *len)
 {
 #if __unix__ || __APPLE__
-    *connection_socket = accept(listening_socket, address, len);
-    return *connection_socket;
+    *sock = accept(listen, addr, len);
+    return *sock;
 #elif _WIN32
-    sock_t sd = accept(listening_socket, address, (int *)len);
+    sock_t sd = accept(listen, addr, (int *)len);
     if (sd == INVALID_SOCKET) {
         return -1;
     }
-    *connection_socket = sd;
+    *sock = sd;
     return 0;
 #endif
 }
@@ -72,7 +68,6 @@ bool xsocket(sock_t *sock, int domain, int type, int protocol)
     return true;
 #endif
 }
-
 
 int xstartup(void)
 {
@@ -100,14 +95,14 @@ int xgetaddrinfo(const char *node, const char *service, const struct addrinfo *h
 #endif
 }
 
-int xsetsockopt(sock_t socket, int level, int optname, const void *optval, socklen_t optlen)
+int xsetsockopt(sock_t sock, int level, int optname, const void *optval, socklen_t optlen)
 {
 #if __unix__ || __APPLE__
-    return setsockopt(socket, level, optname, optval, optlen);
+    return setsockopt(sock, level, optname, optval, optlen);
 #elif _WIN32
     const char *opt = optval;
     optlen = sizeof(*opt);
-    if (setsockopt(socket, level, optname, opt, optlen)) {
+    if (setsockopt(sock, level, optname, opt, optlen)) {
         (void)WSACleanup();
         return -1;
     }
@@ -172,24 +167,24 @@ free_interfaces:
 #endif
 }
 
-int xgetpeername(sock_t socket, struct sockaddr *address, socklen_t *len)
+int xgetpeername(sock_t sock, struct sockaddr *addr, socklen_t *len)
 {
 #if __unix__ || __APPLE__
-    return getpeername(socket, address, len);
+    return getpeername(sock, addr, len);
 #elif _WIN32
-    return getpeername(socket, address, (int *)len);
+    return getpeername(sock, addr, (int *)len);
 #endif
 }
 
-bool xgetpeeraddr(sock_t socket, char *address, in_port_t *port)
+bool xgetpeeraddr(sock_t sock, char *addr, in_port_t *port)
 {
     struct sockaddr_in sa;
     socklen_t len = sizeof(sa);
-    if (xgetpeername(socket, (struct sockaddr *)&sa, &len)) {
+    if (xgetpeername(sock, (struct sockaddr *)&sa, &len)) {
         return false;
     }
 #if __unix__ || __APPLE__
-    inet_ntop(AF_INET, &sa.sin_addr, address, INET_ADDRSTRLEN);
+    inet_ntop(AF_INET, &sa.sin_addr, addr, INET_ADDRSTRLEN);
 #elif _WIN32
     DWORD addr_len = MAX_PATH;
     WSAAddressToStringA((SOCKADDR *)&sa, len, NULL, addr, &addr_len);
@@ -197,10 +192,6 @@ bool xgetpeeraddr(sock_t socket, char *address, in_port_t *port)
     *port = ntohs(sa.sin_port);
     return true;
 }
-
-/**
- * @section FD_SET related functions
- */
 
 sock_t xfd_isset(fd_set *fds, fd_set *set, size_t index)
 {
@@ -257,10 +248,6 @@ size_t xfd_init_count(sock_t fd)
     return 1;
 #endif
 }
-
-/**
- * @section unistd / win32 wrappers and portable implementations
- */
 
 ssize_t xgetrandom(void *dst, size_t len)
 {
@@ -352,10 +339,6 @@ bool xchmod(const char *filename, mode_t mode)
     return !_chmod(filename, pmode);
 #endif
 }
-
-/**
- * @section malloc / calloc wrapper to lessen Windows runtime dependency
- */
 
 void *xmalloc(size_t len)
 {

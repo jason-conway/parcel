@@ -12,7 +12,7 @@
  * @version 0.9.4
  * @date 2022-02-01
  *
- * @copyright Copyright (c) 2025 Jason Conway. All rights reserved.
+ * @copyright Copyright (c) 2026 Jason Conway. All rights reserved.
  *
  */
 

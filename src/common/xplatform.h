@@ -5,7 +5,7 @@
  * @version 0.9.2
  * @date 2022-01-26
  *
- * @copyright Copyright (c) 2022 - 2024 Jason Conway. All rights reserved.
+ * @copyright Copyright (c) 2022 - 2026 Jason Conway. All rights reserved.
  *
  */
 
@@ -28,6 +28,7 @@
 #include <sys/types.h>
 #include <assert.h>
 #include <errno.h>
+#include "std.h"
 
 #if __unix__ || __APPLE__
     #include <unistd.h>
@@ -87,23 +88,6 @@ typedef uint64_t bitfield;
     #define PARCEL_VERSION 0.9.2
 #endif
 
-#ifndef ROUND_DOWN
-    #define ROUND_DOWN(n, d) ((n) & -(0 ? (n) : (d)))
-#endif
-#ifndef ROUND_UP
-    #define ROUND_UP(n, d) ROUND_DOWN((n) + (d) - 1, (d))
-#endif
-
-#define STR(a)  XSTR(a)
-#define XSTR(a) #a
-#ifndef countof
-    #define countof(a)   (sizeof(a) / sizeof(*(a)))
-    #define lengthof(s)  (countof(s) - 1)
-#endif
-
-#define pointer_offset(ptr, ofs)    (void *)((char *)(ptr) + (ptrdiff_t)(ofs))
-#define pointer_diff(first, second) (ptrdiff_t)((uint8_t *)(first) - (uint8_t *)(second))
-
 /**
  * @brief Platform-specific malloc(3)
  *
@@ -138,11 +122,11 @@ void *xrealloc(void *mem, size_t len);
 void *xfree(void *mem);
 
 
-bool xsocket(sock_t *xsocket, int domain, int type, int protocol);
-int xaccept(sock_t *connection_socket, sock_t listening_socket, struct sockaddr *address, socklen_t *len);
+bool xsocket(sock_t *sock, int domain, int type, int protocol);
+int xaccept(sock_t *conn, sock_t listen, struct sockaddr *addr, socklen_t *len);
 
-ssize_t xsend(sock_t socket, const void *data, size_t len, int flags);
-ssize_t xrecv(sock_t socket, void *data, size_t len, int flags);
+ssize_t xsend(sock_t sock, const void *data, size_t len, int flags);
+ssize_t xrecv(sock_t sock, void *data, size_t len, int flags);
 
 size_t xfd_count(sock_t fd, size_t count);
 size_t xfd_init_count(sock_t fd);
@@ -150,11 +134,11 @@ sock_t xfd_isset(fd_set *set, fd_set *read_fds, size_t index);
 sock_t xfd_inset(fd_set *set, size_t index);
 
 int xgetaddrinfo(const char *node, const char *service, const struct addrinfo *hints, struct addrinfo **res);
-int xgetpeername(sock_t socket, struct sockaddr *address, socklen_t *len);
-bool xgetpeeraddr(sock_t socket, char *address, in_port_t *port);
+int xgetpeername(sock_t sock, struct sockaddr *addr, socklen_t *len);
+bool xgetpeeraddr(sock_t sock, char *addr, in_port_t *port);
 
-int xsetsockopt(sock_t socket, int level, int optname, const void *optval, socklen_t optlen);
-int xclose(sock_t socket);
+int xsetsockopt(sock_t sock, int level, int optname, const void *optval, socklen_t optlen);
+int xclose(sock_t sock);
 
 int xgetifaddrs(const char *prefix, const char *suffix);
 int xstartup(void);

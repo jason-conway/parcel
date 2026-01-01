@@ -5,7 +5,7 @@
  * @version 0.9.2
  * @date 2022-04-06
  *
- * @copyright Copyright (c) 2022 - 2024 Jason Conway. All rights reserved.
+ * @copyright Copyright (c) 2022 - 2026 Jason Conway. All rights reserved.
  *
  */
 
@@ -501,7 +501,7 @@ void xmemcpy_locked(pthread_mutex_t *lock, void *dst, void *src, size_t len)
 
 void xhexdump(const void *src, size_t len)
 {
-    static const char hex[16] = "0123456789abcdef";
+    __nonstring static const char hex[16] = "0123456789abcdef";
 
     //              offset                        bytes                             ascii
     //            00000000  00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  |................|

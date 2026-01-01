@@ -254,8 +254,7 @@ size_t utf8_rendered_length(const char *str)
     size_t len = 0;
     for (size_t i = 0; str[i]; i++) {
         if (str[i] == ESC) {
-            for (; str[i] != 'm'; i++) {
-            };
+            for (; str[i] != 'm'; i++);
             i++; // Increment past 'm' before copying to `stripped`
         }
         if (!str[i]) {

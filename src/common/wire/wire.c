@@ -5,7 +5,7 @@
  * @version 0.9.2
  * @date 2022-02-06
  *
- * @copyright Copyright (c) 2022 - 2024 Jason Conway. All rights reserved.
+ * @copyright Copyright (c) 2022 - 2026 Jason Conway. All rights reserved.
  *
  */
 
@@ -20,7 +20,7 @@
 
 size_t get_aligned_len(size_t len)
 {
-    return ROUND_UP(len, BLOCK_LEN);
+    return round_up(len, BLOCK_LEN);
 }
 
 size_t header_get_alignment(const header_t *header)
