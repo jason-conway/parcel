@@ -19,24 +19,34 @@ else
 	PREFIX  = /usr/local
 endif
 
-PARCEL_DIR  = ./src/parcel
-PARCELD_DIR = ./src/parceld
-CRYPTO_DIR  = ./src/crypto
-COMMON_DIR  = ./src/common
+SRC_DIR     = ./src
+PARCEL_DIR  = $(SRC_DIR)/parcel
+#CONSOLE_DIR  = $(PARCEL_DIR)/console
+PARCELD_DIR = $(SRC_DIR)/parceld
+CRYPTO_DIR  = $(SRC_DIR)/crypto
+COMMON_DIR  = $(SRC_DIR)/common
+WIRE_DIR    = $(COMMON_DIR)/wire
 BIN_DIR     = ./bin
 BUILD_DIR   = ./build
 RES_DIR     = ./etc/resources
 
 PARCEL_FILES  = $(wildcard $(PARCEL_DIR)/*)
+#CONSOLE FILES = $(wildcard $(CONSOLE_DIR)/*)
 PARCELD_FILES = $(wildcard $(PARCELD_DIR)/*)
 CRYPTO_FILES  = $(wildcard $(CRYPTO_DIR)/*)
 COMMON_FILES  = $(wildcard $(COMMON_DIR)/*)
+WIRE_FILES    = $(wildcard $(WIRE_DIR)/*)
 
-PARCEL_SRCS  = $(filter %.c, $(PARCEL_FILES))
+PARCEL_SRCS   = $(filter %.c, $(PARCEL_FILES))
+#CONSOLE_SRCS  = $(filter %.c, $(CONSOLE_FILES))
+
 PARCELD_SRCS = $(filter %.c, $(PARCELD_FILES))
 CRYPTO_SRCS  = $(filter %.c, $(CRYPTO_FILES))
 COMMON_SRCS  = $(filter %.c, $(COMMON_FILES))
-SHARED_SRCS  = $(CRYPTO_SRCS) $(COMMON_SRCS)
+WIRE_SRCS    = $(filter %.c, $(WIRE_FILES))
+
+SHARED_SRCS  = $(CRYPTO_SRCS) $(COMMON_SRCS) $(WIRE_SRCS)
+INCLUDE_DIRS = -I$(CRYPTO_DIR) -I$(COMMON_DIR) -I$(WIRE_DIR) #-I$(CONSOLE_DIR)
 
 all: resources parcel$(EXE) parceld$(EXE)
 
@@ -45,13 +55,13 @@ resources:
 	$(RESCMD_PARCEL)
 	$(RESCMD_PARCELD)
 
-parcel$(EXE): $(PARCEL_SRCS) $(SHARED_SRCS)
+parcel$(EXE): $(PARCEL_SRCS) $(CONSOLE_SRCS) $(SHARED_SRCS)
 	@mkdir -p $(BIN_DIR)
-	$(CC) $(CFLAGS) -I$(CRYPTO_DIR) -I$(COMMON_DIR) $(PARCEL_RES) -o $(BIN_DIR)/$@ $^ $(LDLIBS) $(LDFLAGS) $(FFLAGS)
+	$(CC) $(CFLAGS) $(INCLUDE_DIRS) $(PARCEL_RES) -o $(BIN_DIR)/$@ $^ $(LDLIBS) $(LDFLAGS) $(FFLAGS)
 
 parceld$(EXE): $(PARCELD_SRCS) $(SHARED_SRCS)
 	@mkdir -p $(BIN_DIR)
-	$(CC) $(CFLAGS) -I$(CRYPTO_DIR) -I$(COMMON_DIR) $(PARCELD_RES) -o $(BIN_DIR)/$@ $^ $(LDLIBS) $(LDFLAGS) $(FFLAGS)
+	$(CC) $(CFLAGS) $(INCLUDE_DIRS) $(PARCELD_RES) -o $(BIN_DIR)/$@ $^ $(LDLIBS) $(LDFLAGS) $(FFLAGS)
 
 install: parcel$(EXE) parceld$(EXE)
 	install -m 755 $(BIN_DIR)parcel$(EXE) $(PREFIX)/bin
