@@ -28,6 +28,7 @@ void file_msg_set_user(file_msg_t *fm, const char *user)
     const size_t len = strnlen(user, sizeof(fm->user) - 1);
     memcpy(fm->user, user, len);
 }
+
 bool file_msg_get_user(file_msg_t *fm, char *user)
 {
     const size_t len = strnlen((const char *)fm->user, sizeof(fm->user));
@@ -67,7 +68,7 @@ file_msg_t *file_msg_from_file(const char *user, const char *path)
         return NULL;
     }
 
-    file_msg_type_t type = xfiletype(path) ? FILE_TYPE_BINARY : FILE_TYPE_TEXT;
+    file_msg_type_t type = xfiletype(path) ? FILE_MSG_TYPE_BINARY : FILE_MSG_TYPE_TEXT;
     file_msg_t *fm = init_file_msg(type, size);
 
     file_msg_set_filename(fm, xconstbasename(path));

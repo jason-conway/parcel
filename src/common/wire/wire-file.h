@@ -4,9 +4,9 @@
 #include "wire-gen.h"
 
 typedef enum file_msg_type_t {
-    FILE_TYPE_UNKNOWN,
-    FILE_TYPE_BINARY,
-    FILE_TYPE_TEXT,
+    FILE_MSG_TYPE_UNKNOWN,
+    FILE_MSG_TYPE_BINARY,
+    FILE_MSG_TYPE_TEXT,
 } file_msg_type_t;
 
 enum file_cfg {
