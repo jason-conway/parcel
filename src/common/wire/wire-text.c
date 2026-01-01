@@ -27,7 +27,7 @@ bool text_msg_get_user(text_msg_t *tm, char *user)
 
 text_msg_t *text_msg_from_text(const char *user, const void *data, size_t len)
 {
-    text_msg_t *text_msg = init_text_msg(TEXT_MSG_NORMAL, len);
+    text_msg_t *text_msg = init_text_msg(TEXT_MSG_NORMAL, len + 1);
     text_msg_set_data(text_msg, data, len);
     text_msg_set_user(text_msg, user);
     return text_msg;

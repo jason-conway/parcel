@@ -27,6 +27,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <assert.h>
+#include <errno.h>
 
 #if __unix__ || __APPLE__
     #include <unistd.h>
@@ -67,12 +68,7 @@
     #include <io.h>
     #include <direct.h>
     #include <conio.h>
-    #ifdef _MSC_VER
-        #pragma comment(lib, "ws2_32.lib")
-        #pragma comment(lib, "advapi32")
-        #pragma comment(lib, "IPHLPAPI.lib")
-        typedef SSIZE_T ssize_t;
-    #endif
+
     #ifndef SHUT_RDWR
         #define SHUT_RDWR SD_BOTH
     #endif
@@ -80,6 +76,9 @@
     typedef USHORT in_port_t;
     typedef SOCKET sock_t;
     typedef DWORD console_t;
+    typedef DWORD gid_t;
+    typedef DWORD uid_t;
+    typedef USHORT mode_t;
 #endif
 
 typedef uint64_t bitfield;
@@ -97,9 +96,10 @@ typedef uint64_t bitfield;
 
 #define STR(a)  XSTR(a)
 #define XSTR(a) #a
-
-#define countof(a)   (sizeof(a) / sizeof(*(a)))
-#define lengthof(s)  (countof(s) - 1)
+#ifndef countof
+    #define countof(a)   (sizeof(a) / sizeof(*(a)))
+    #define lengthof(s)  (countof(s) - 1)
+#endif
 
 #define pointer_offset(ptr, ofs)    (void *)((char *)(ptr) + (ptrdiff_t)(ofs))
 #define pointer_diff(first, second) (ptrdiff_t)((uint8_t *)(first) - (uint8_t *)(second))

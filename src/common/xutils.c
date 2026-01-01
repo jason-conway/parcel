@@ -54,6 +54,22 @@ char *xstrdup(const char *str)
     return memcpy(xmalloc(length), str, length);
 }
 
+
+char *xstrndup(const char *str, size_t n)
+{
+    if (!str) {
+        return NULL;
+    }
+    size_t len = strlen(str);
+    if (len > n) {
+        len = n;
+    }
+    char *dup = xmalloc(len + 1);
+    memcpy(dup, str, len);
+    dup[len] = '\0';
+    return dup;
+}
+
 char *_xstrcat(const char **strs, size_t count)
 {
     // Allocate the required length

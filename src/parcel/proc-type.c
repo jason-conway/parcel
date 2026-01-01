@@ -10,7 +10,6 @@
  */
 
 #include "client.h"
-#include "console.h"
 #include "log.h"
 #include "wire-stat.h"
 #include "wire-text.h"

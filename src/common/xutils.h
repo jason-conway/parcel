@@ -72,6 +72,8 @@ bool full_write(int fd, const void *data, size_t len);
  */
 char *xstrdup(const char *str);
 
+char *xstrndup(const char *str, size_t n);
+
 /**
  * @brief Concatenate `count` strings right to left
  *
