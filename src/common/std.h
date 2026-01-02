@@ -55,6 +55,14 @@
     #endif
 #endif
 
+#ifndef __packed
+    #if __has_attribute(packed)
+        #define __packed __attribute__((packed))
+    #else
+        #define __packed
+    #endif
+#endif
+
 #ifndef STR
     #define _STR(...) #__VA_ARGS__
     #define STR(...) _STR(__VA_ARGS__)

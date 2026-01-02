@@ -12,7 +12,11 @@
 #include "daemon.h"
 #include "cable.h"
 #include "wire.h"
-#include <stddef.h>
+
+#define SRV_SOCK(srv) ((srv)->sockets.sfds[DAEMON_SOCKET])
+#define SRV_SOCK_CNT(srv) ((srv)->sockets.cnt)
+#define GET_SOCK(srv, i) ((srv)->sockets.sfds[(i)])
+#define SET_SOCK(srv, i, sock) ((srv)->sockets.sfds[(i)] = (sock))
 
 void catch_sigint(int sig)
 {
@@ -21,15 +25,15 @@ void catch_sigint(int sig)
     exit(EXIT_FAILURE);
 }
 
-bool init_daemon(server_t *ctx)
+bool init_daemon(server_t *srv)
 {
     // WSAStartup (Windows)
     if (xstartup()) {
-        xalert("xstartup()");
+        log_fatal("WSAStartup failure");
         return false;
     }
 
-    memset(&ctx->sockets, 0, sizeof(ctx->sockets));
+    memset(&srv->sockets, 0, sizeof(srv->sockets));
 
     struct addrinfo hints = {
         .ai_family = AF_INET,
@@ -38,23 +42,23 @@ bool init_daemon(server_t *ctx)
     };
 
     struct addrinfo *ai = NULL;
-    if (xgetaddrinfo(NULL, ctx->server_port, &hints, &ai)) {
-        xalert("xgetaddrinfo()");
+    if (xgetaddrinfo(NULL, srv->server_port, &hints, &ai)) {
+        log_fatal("failed to get address info for port %s", srv->server_port);
         return false;
     }
 
     struct addrinfo *node = NULL;
     for (node = ai; node; node = node->ai_next) {
-        if (!xsocket(&ctx->sockets.sfds[0], node->ai_family, node->ai_socktype, node->ai_protocol)) {
+        if (!xsocket(&SRV_SOCK(srv), node->ai_family, node->ai_socktype, node->ai_protocol)) {
             continue;
         }
-        if (xsetsockopt(ctx->sockets.sfds[0], SOL_SOCKET, SO_REUSEADDR, (int32_t []){ 1 }, sizeof(int32_t)) < 0) {
-            xalert("setsockopt()\n");
+        if (xsetsockopt(SRV_SOCK(srv), SOL_SOCKET, SO_REUSEADDR, (int32_t []){ 1 }, sizeof(int32_t)) < 0) {
+            log_fatal("failed to set socket options");
             return false;
         }
-        if (bind(ctx->sockets.sfds[0], node->ai_addr, node->ai_addrlen) < 0) {
-            if (xclose(ctx->sockets.sfds[0])) {
-                xalert("xclose()\n");
+        if (bind(SRV_SOCK(srv), node->ai_addr, node->ai_addrlen) < 0) {
+            if (xclose(SRV_SOCK(srv))) {
+                log_fatal("unable to close server socket after failed bind");
                 return false;
             }
             continue;
@@ -63,23 +67,23 @@ bool init_daemon(server_t *ctx)
     }
 
     if (!node) {
-        xalert("Unable to bind to socket\n");
+        log_fatal("unable to bind to socket");
         return false;
     }
     freeaddrinfo(ai);
 
-    if (listen(ctx->sockets.sfds[0], MAX_QUEUE) < 0) {
-        xalert("listen()\n");
-        xclose(ctx->sockets.sfds[0]);
+    if (listen(SRV_SOCK(srv), MAX_QUEUE) < 0) {
+        log_fatal("failed to begin listen with queue limit: %zu", (size_t)MAX_QUEUE);
+        xclose(SRV_SOCK(srv));
         return false;
     }
 
-    FD_ZERO(&ctx->descriptors.fds);
-    FD_SET(ctx->sockets.sfds[0], &ctx->descriptors.fds);
-    ctx->descriptors.nfds = xfd_init_count(ctx->sockets.sfds[0]);
+    FD_ZERO(&srv->descriptors.fds);
+    FD_SET(SRV_SOCK(srv), &srv->descriptors.fds);
+    srv->descriptors.nfds = xfd_init_count(SRV_SOCK(srv));
 
     // Collect entropy for initial server key
-    if (xgetrandom(ctx->server_key, KEY_LEN) < 0) {
+    if (xgetrandom(srv->server_key, KEY_LEN) < 0) {
         return false;
     }
     return true;
@@ -89,7 +93,7 @@ bool init_daemon(server_t *ctx)
 static size_t socket_index(server_t *srv, sock_t socket)
 {
     for (size_t i = 1; i <= countof(srv->sockets.sfds); i++) {
-        if (srv->sockets.sfds[i] == socket) {
+        if (GET_SOCK(srv, i) == socket) {
             log_trace("got socket index %zu", i);
             return i;
         }
@@ -103,12 +107,12 @@ static int add_client(server_t *srv)
     struct sockaddr_storage client_sockaddr;
     socklen_t len[] = { sizeof(struct sockaddr_storage) };
     sock_t new_client;
-    if (xaccept(&new_client, srv->sockets.sfds[0], (struct sockaddr *)&client_sockaddr, len) < 0) {
+    if (xaccept(&new_client, SRV_SOCK(srv), (struct sockaddr *)&client_sockaddr, len) < 0) {
         log_error("unable to accept new client");
         return -1;
     }
 
-    if (srv->sockets.cnt + 1 == countof(srv->sockets.sfds)) {
+    if (SRV_SOCK_CNT(srv) + 1 == countof(srv->sockets.sfds)) {
         log_warn("rejecting new connection");
         return 1;
     }
@@ -127,9 +131,9 @@ static int add_client(server_t *srv)
     // Copy new connection's socket to the next free slot
     log_debug("adding socket to empty slot");
     for (size_t i = 1; i < countof(srv->sockets.sfds); i++) {
-        log_trace("slot[%zu]: %s", i, !srv->sockets.sfds[i] ? "free" : "in use");
-        if (!srv->sockets.sfds[i]) {
-            srv->sockets.sfds[i] = new_client;
+        log_trace("slot[%zu]: %s", i, !GET_SOCK(srv, i) ? "free" : "in use");
+        if (!GET_SOCK(srv, i)) {
+            SET_SOCK(srv, i, new_client);
             log_debug("connection from %s:%u added to slot %zu", address, port, i);
             break;
         }
@@ -140,7 +144,7 @@ static int add_client(server_t *srv)
         return -1;
     }
 
-    if (srv->sockets.cnt > 1) {
+    if (SRV_SOCK_CNT(srv) > 1) {
         log_debug("connection added - starting key regeneration");
         if (!n_party_server(srv->sockets.sfds, srv->sockets.cnt, srv->server_key)) {
             log_fatal("key regeneration failure");
@@ -153,33 +157,37 @@ static int add_client(server_t *srv)
 static bool transfer_message(server_t *srv, size_t sender_index, cable_t *cable)
 {
     size_t len = cable_get_total_len(cable);
-    for (size_t i = 1; i <= srv->sockets.cnt; i++) {
+    for (size_t i = 1; i <= SRV_SOCK_CNT(srv); i++) {
         if (i == sender_index) {
             log_trace("skipping message orgin");
             continue;
         }
         log_trace("forwarding message to socket %zu", i);
-        if (!xsendall(srv->sockets.sfds[i], cable, len)) {
+        if (!xsendall(GET_SOCK(srv, i), cable, len)) {
             return false;
         }
     }
     return true;
 }
 
-static int disconnect_client(server_t *ctx, size_t client_index)
+static int disconnect_client(server_t *srv, size_t client_index)
 {
-    FD_CLR(ctx->sockets.sfds[client_index], &ctx->descriptors.fds);
-    const int ret = xclose(ctx->sockets.sfds[client_index]);
+    FD_CLR(GET_SOCK(srv, client_index), &srv->descriptors.fds);
+
+    const int ret = xclose(GET_SOCK(srv, client_index));
 
     // Replace this slot with the ending slot
-    if (ctx->sockets.cnt == 1) {
-        ctx->sockets.sfds[client_index] = 0;
+    if (SRV_SOCK_CNT(srv) == 1) {
+        // srv->sockets.sfds[client_index] = 0;
+        SET_SOCK(srv, client_index, 0);
     }
     else {
-        ctx->sockets.sfds[client_index] = ctx->sockets.sfds[ctx->sockets.cnt];
-        ctx->sockets.sfds[ctx->sockets.cnt] = 0;
+        // srv->sockets.sfds[client_index] = srv->sockets.sfds[srv->sockets.cnt];
+        SET_SOCK(srv, client_index, GET_SOCK(srv, SRV_SOCK_CNT(srv)));
+        SET_SOCK(srv, SRV_SOCK_CNT(srv), 0);
+        // srv->sockets.sfds[srv->sockets.cnt] = 0;
     }
-    ctx->sockets.cnt--;
+    srv->sockets.cnt--;
     return ret;
 }
 
@@ -191,7 +199,7 @@ bool daemon_handle_disconnect(server_t *srv, size_t client_id, bool clean)
     else {
         char address[INET_ADDRSTRLEN] = { 0 };
         in_port_t port;
-        if (!xgetpeeraddr(srv->sockets.sfds[client_id], address, &port)) {
+        if (!xgetpeeraddr(GET_SOCK(srv, client_id), address, &port)) {
             log_warn("unable to determine IP and port of client %zu, despite proper disconnect", client_id);
         }
         log_info("connection from %s port %d ended", address, port);
@@ -212,14 +220,14 @@ bool daemon_handle_disconnect(server_t *srv, size_t client_id, bool clean)
 static bool recv_client(server_t *srv, size_t sender_index)
 {
     cable_t *cable = alloc_cable();
-    ssize_t ret = xrecv(srv->sockets.sfds[sender_index], cable, sizeof(cable_header_t), 0);
+    ssize_t ret = xrecv(GET_SOCK(srv, sender_index), cable, sizeof(cable_header_t), 0);
     if (ret <= 0) {
         xfree(cable);
         log_trace("socket %zu disconnected", sender_index);
         return daemon_handle_disconnect(srv, sender_index, ret == 0);
     }
 
-    size_t len = cable_recv_data(srv->sockets.sfds[sender_index], &cable);
+    size_t len = cable_recv_data(GET_SOCK(srv, sender_index), &cable);
     if (!len) {
         // [note] cause logged by function
         xfree(cable);
@@ -261,25 +269,25 @@ int main_thread(void *ctx)
 {
     signal(SIGINT, catch_sigint);
 
-    server_t *server = (server_t *)ctx;
+    server_t *srv = (server_t *)ctx;
     fd_set rdy;
     FD_ZERO(&rdy);
 
     log_set_loglvl(LOG_TRACE);
 
     for (;;) {
-        rdy = server->descriptors.fds;
-        if (select(server->descriptors.nfds + 1, &rdy, NULL, NULL, NULL) < 0) {
+        rdy = srv->descriptors.fds;
+        if (select(srv->descriptors.nfds + 1, &rdy, NULL, NULL, NULL) < 0) {
             log_fatal("error waiting for selection");
             return -1;
         }
 
-        for (size_t i = 0; i <= server->descriptors.nfds; i++) {
+        for (size_t i = 0; i <= srv->descriptors.nfds; i++) {
             sock_t fd;
-            if ((fd = xfd_isset(&server->descriptors.fds, &rdy, i))) {
-                if (fd == server->sockets.sfds[0]) {
+            if ((fd = xfd_isset(&srv->descriptors.fds, &rdy, i))) {
+                if (fd == SRV_SOCK(srv)) {
                     log_debug("pending connection from unknown client");
-                    switch (add_client(server)) {
+                    switch (add_client(srv)) {
                         case -1:
                             log_fatal("key exchange failure");
                             return -1;
@@ -292,8 +300,8 @@ int main_thread(void *ctx)
                     }
                 }
                 else {
-                    const size_t sender_index = socket_index(server, fd);
-                    if (!recv_client(server, sender_index)) {
+                    const size_t sender_index = socket_index(srv, fd);
+                    if (!recv_client(srv, sender_index)) {
                         // [note] reason for failure logged internally
                         return -1;
                     }

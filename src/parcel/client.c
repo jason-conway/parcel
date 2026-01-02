@@ -194,7 +194,7 @@ void *recv_thread(void *ctx)
     return (void *)0;
 }
 
-bool connect_server(client_t *client, const char *ip, const char *port)
+bool connect_server(client_t *ctx, const char *ip, const char *port)
 {
     if (xstartup()) {
         log_fatal("WSAStartup failure");
@@ -214,11 +214,11 @@ bool connect_server(client_t *client, const char *ip, const char *port)
 
     struct addrinfo *node = NULL;
     for (node = srv_addr; node; node = node->ai_next) {
-        if (!xsocket(&client->socket, node->ai_family, node->ai_socktype, node->ai_protocol)) {
+        if (!xsocket(&ctx->socket, node->ai_family, node->ai_socktype, node->ai_protocol)) {
             continue;
         }
-        if (connect(client->socket, node->ai_addr, node->ai_addrlen)) {
-            if (xclose(client->socket)) {
+        if (connect(ctx->socket, node->ai_addr, node->ai_addrlen)) {
+            if (xclose(ctx->socket)) {
                 log_fatal("unable to close socket");
                 return false;
             }
@@ -234,9 +234,9 @@ bool connect_server(client_t *client, const char *ip, const char *port)
 
     freeaddrinfo(srv_addr);
 
-    if (!two_party_client(client->socket, client->keys.ctrl)) {
+    if (!two_party_client(ctx->socket, ctx->keys.ctrl)) {
         // [note] error logged internally 
-        xclose(client->socket);
+        xclose(ctx->socket);
         return false;
     }
 

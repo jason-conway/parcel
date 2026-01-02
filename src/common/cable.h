@@ -11,12 +11,12 @@ typedef struct wire_t wire_t;
 typedef struct cable_header_t {
     uint8_t signature[6]; // "parcel"
     uint8_t len[8];
-} __attribute__((packed)) cable_header_t;
+} __packed cable_header_t;
 
 typedef struct cable_t {
     cable_header_t hdr;
     uint8_t data[];
-} __attribute__((packed)) cable_t;
+} __packed cable_t;
 
 // Allocate an empty cable, only large enough to receive the cable header
 cable_t *alloc_cable(void);

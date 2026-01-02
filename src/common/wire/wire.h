@@ -29,26 +29,24 @@ typedef enum wire_type_t {
     TYPE_SESSION_KEY
 } wire_type_t;
 
-
 typedef struct wire_auth_t {
     uint8_t mac_outer[16]; // message authentication code for an entire wire
     uint8_t mac_inner[16];  // message authentication code for the wire length
     uint8_t iv[16];         // initialization vector for AES context
-} wire_auth_t;
-
+} __packed wire_auth_t;
 
 typedef struct header_t {
-    uint8_t signature[6]; // 72 65 77 69 72 65
+    uint8_t signature[6];
     uint8_t wire_len[8];   // length of entire wire (auth + header + data + padding)
     uint8_t alignment; // padding bytes added to data to align with block size
     uint8_t type;     // type of wire, see enum wire_type
-} header_t;
+} __packed header_t;
 
 typedef struct wire_t {
     wire_auth_t auth;
     header_t header;
-    uint8_t data[];     // wire data
-} __attribute__((packed)) wire_t;
+    uint8_t data[];
+} __packed wire_t;
 
 
 enum cfg {

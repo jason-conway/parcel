@@ -1,6 +1,6 @@
 .POSIX:
 CC     = cc
-CFLAGS = -Wall -Werror -Wextra -Os
+CFLAGS = -Wall -Werror -Wextra -O0
 MKDIR  = mkdir -p
 FFLAGS =
 
@@ -21,7 +21,7 @@ endif
 
 SRC_DIR     = ./src
 PARCEL_DIR  = $(SRC_DIR)/parcel
-#CONSOLE_DIR  = $(PARCEL_DIR)/console
+CONSOLE_DIR = $(PARCEL_DIR)/console
 PARCELD_DIR = $(SRC_DIR)/parceld
 CRYPTO_DIR  = $(SRC_DIR)/crypto
 COMMON_DIR  = $(SRC_DIR)/common
@@ -31,14 +31,14 @@ BUILD_DIR   = ./build
 RES_DIR     = ./etc/resources
 
 PARCEL_FILES  = $(wildcard $(PARCEL_DIR)/*)
-#CONSOLE FILES = $(wildcard $(CONSOLE_DIR)/*)
+CONSOLE_FILES = $(wildcard $(CONSOLE_DIR)/*)
 PARCELD_FILES = $(wildcard $(PARCELD_DIR)/*)
 CRYPTO_FILES  = $(wildcard $(CRYPTO_DIR)/*)
 COMMON_FILES  = $(wildcard $(COMMON_DIR)/*)
 WIRE_FILES    = $(wildcard $(WIRE_DIR)/*)
 
 PARCEL_SRCS   = $(filter %.c, $(PARCEL_FILES))
-#CONSOLE_SRCS  = $(filter %.c, $(CONSOLE_FILES))
+CONSOLE_SRCS  = $(filter %.c, $(CONSOLE_FILES))
 
 PARCELD_SRCS = $(filter %.c, $(PARCELD_FILES))
 CRYPTO_SRCS  = $(filter %.c, $(CRYPTO_FILES))
@@ -46,7 +46,7 @@ COMMON_SRCS  = $(filter %.c, $(COMMON_FILES))
 WIRE_SRCS    = $(filter %.c, $(WIRE_FILES))
 
 SHARED_SRCS  = $(CRYPTO_SRCS) $(COMMON_SRCS) $(WIRE_SRCS)
-INCLUDE_DIRS = -I$(CRYPTO_DIR) -I$(COMMON_DIR) -I$(WIRE_DIR) #-I$(CONSOLE_DIR)
+INCLUDE_DIRS = -I$(CRYPTO_DIR) -I$(COMMON_DIR) -I$(WIRE_DIR) -I$(CONSOLE_DIR)
 
 all: resources parcel$(EXE) parceld$(EXE)
 

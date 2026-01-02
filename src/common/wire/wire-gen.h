@@ -10,7 +10,7 @@
 #ifndef TYPE_END_DEF
     #define TYPE_END_DEF(name, T) \
             uint8_t data[]; \
-        } __attribute__((packed)) name##_t;
+        } __packed name##_t;
 #endif
 
 #ifndef GEN_STD_FUNCS
@@ -94,8 +94,6 @@
         RT name##_get_##field(const name##_t *name); \
         void name##_set_##field(name##_t *name, RT field);
 #endif
-
-
 
 #ifndef GEN_STD_HEADERS
     #define GEN_STD_HEADERS(name, T) \

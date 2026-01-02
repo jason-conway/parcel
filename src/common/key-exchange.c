@@ -23,7 +23,6 @@ bool ke_snd(sock_t sock, key_type_t type, const uint8_t *key)
 {
     ke_t ke = { .type = (uint8_t)type };
     memcpy(ke.key, key, KEY_LEN);
-    // xhexdump(&ke, sizeof(ke_t));
     return xsendall(sock, &ke, sizeof(ke_t));
 }
 
@@ -38,7 +37,6 @@ bool ke_rcv(sock_t sock, key_type_t type, uint8_t *key)
         log_fatal("invalid type");
         return false;
     }
-    // xhexdump(&ke, sizeof(ke_t));
     memcpy(key, ke.key, KEY_LEN);
     return true;
 }
@@ -241,14 +239,12 @@ static bool rotate_intermediates(sock_t *sockets, size_t count)
 
 bool n_party_server(sock_t *sockets, size_t connection_count, uint8_t *ctrl_key)
 {
-    assert(connection_count != 0);
-
-    const size_t rounds = connection_count - 1;
-    if (rounds < 1) {
+    if (connection_count < 2) {
         log_info("skipping `n_party_server`");
         return true;
     }
 
+    const size_t rounds = connection_count - 1;
     log_trace("sending CTRL to signal start of sequence");
     if (!server_send_ctrl_key(sockets, connection_count, ctrl_key)) {
         log_fatal("failed to send control key");

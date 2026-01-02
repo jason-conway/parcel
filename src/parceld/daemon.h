@@ -45,8 +45,8 @@ typedef struct server_t {
     } sockets;
 } server_t;
 
-bool init_daemon(server_t *ctx);
+bool init_daemon(server_t *srv);
 
-bool display_daemon_info(server_t *ctx);
+bool display_daemon_info(server_t *srv);
 
 int main_thread(void *ctx);
