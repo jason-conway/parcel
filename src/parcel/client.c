@@ -99,14 +99,13 @@ int send_thread(void *ctx)
     } while (!atomic_load(&client->conn_announced));
 
     for (;;) {
-        size_t length = 0;
-        char *msg = xprompt("\033[0;32m➜\033[0m ", "text", &length); // xprompt() will never return null by design
-
         bool run = atomic_load(&client->keep_alive);
         if (!run) {
-            xfree(msg);
             return 1;
         }
+
+        size_t length = 0;
+        char *msg = xprompt("\033[0;32m➜\033[0m ", "text", &length); // xprompt() will never return null by design
 
         if (is_cmd(msg)) {
             if (!exec_cmd(client, msg)) {
@@ -168,6 +167,7 @@ void *recv_thread(void *ctx)
                 xwarn("\n%s\n", "Daemon unexpectedly closed connection");
                 xwarn("%s\n", "Use '/q' to exit");
                 redraw_prompt();
+                continue;
             }
             else {
                 xclose(client->socket);

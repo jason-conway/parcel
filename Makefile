@@ -68,7 +68,7 @@ install: parcel$(EXE) parceld$(EXE)
 	install -m 755 $(BIN_DIR)parceld$(EXE) $(PREFIX)/bin
 
 clean:
-	rm -f $(BUILD_DIR)* $(BIN_DIR)
+	rm -rf $(BUILD_DIR)* $(BIN_DIR)
 
 uninstall:
 	rm -f $(PREFIX)/bin/parcel$(EXE)

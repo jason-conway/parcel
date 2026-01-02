@@ -100,18 +100,21 @@ int main(int argc, char **argv)
 
     pthread_t recv_ctx;
     if (pthread_create(&recv_ctx, NULL, recv_thread, (void *)&client)) {
-        xalert("Unable to create receiver thread\n");
+        log_fatal("failed to create receiver thread");
         return -1;
     }
 
-    int thread_status[2] = { 0, 0 };
+    int snd_ok = send_thread((void *)&client);
 
-    thread_status[0] = send_thread((void *)&client);
+    if (!atomic_load(&client.keep_alive)) {
+        pthread_cancel(recv_ctx);
+    }
 
-    if (pthread_join(recv_ctx, (void **)&thread_status[1])) {
-        xalert("Unable to join receiver thread\n");
+    int rcv_ok[1];
+    if (pthread_join(recv_ctx, (void **)&rcv_ok)) {
+        log_error("error joining receiver thread");
         return -1;
     }
 
-    return thread_status[0] | thread_status[1];
+    return snd_ok + *rcv_ok;
 }
